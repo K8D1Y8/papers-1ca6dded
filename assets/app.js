@@ -1,6 +1,5 @@
 // shared page script: reading-progress bar + EN/KO language toggle (default = EN)
 (function () {
-  // reading progress
   var bar = document.getElementById('bar');
   function upd() {
     if (!bar) return;
@@ -11,7 +10,6 @@
   document.addEventListener('scroll', upd, { passive: true });
   upd();
 
-  // language toggle — English is the default; KO shown when body.lang-ko
   var KEY = 'paper-lang';
   function setLang(l) {
     var ko = (l === 'ko');
@@ -25,7 +23,7 @@
   }
   var saved = null;
   try { saved = localStorage.getItem(KEY); } catch (e) {}
-  setLang(saved === 'ko' ? 'ko' : 'en'); // default English
+  setLang(saved === 'ko' ? 'ko' : 'en');
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('.langbtn');
     if (b) setLang(b.getAttribute('data-l'));
@@ -56,67 +54,140 @@
   }
 })();
 
-// "Ask Claude" — select text (or hit the button) to open Claude with the paper context.
-// No API key: it opens Claude Desktop via the claude:// deep link and copies the prompt to the clipboard as a fallback.
+// personal notes: select text → write a private note. Saved per-paper in localStorage (this device only).
 (function () {
-  var paperTitle = (document.title || '').replace(/^5-min paper · /, '').trim();
   var aEl = document.querySelector('a[href*="arxiv.org/abs/"]');
   var arxivId = aEl ? ((aEl.getAttribute('href').match(/abs\/([0-9.]+)/) || [])[1] || '') : '';
-  if (!arxivId) return; // only on paper pages
-  var lastSel = '';
+  if (!arxivId) return;
+  var KEY = 'paper-notes:' + arxivId;
+  var blocks = [].slice.call(document.querySelectorAll('main p, main li, .tldr p, .lead, figcaption, .cap'));
+  function load() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { return []; } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(notes)); } catch (e) {} }
+  var notes = load();
+  var lastSel = null, pop = null;
 
-  function buildPrompt(sel) {
-    var ctx = 'I am reading the paper "' + paperTitle + '" (arXiv:' + arxivId + ', https://arxiv.org/abs/' + arxivId + ').';
-    return sel
-      ? ctx + ' Please explain this part clearly and simply (answer in the language of my question):\n\n"' + sel + '"'
-      : ctx + ' I have a question about it:\n\n';
-  }
-  function ask(sel) {
-    var p = buildPrompt(sel);
-    try { if (navigator.clipboard) navigator.clipboard.writeText(p); } catch (e) {}
-    try { window.location.href = 'claude://claude.ai/new?q=' + encodeURIComponent(p); } catch (e) {}
-    toast(document.body.classList.contains('lang-ko')
-      ? 'Claude 여는 중 — 안 열리면 claude.ai에서 붙여넣기(⌘V). 프롬프트는 복사됨.'
-      : 'Opening Claude — if nothing opens, paste (⌘V) into claude.ai. Prompt copied.');
-  }
-
+  // selection bubble
   var bubble = document.createElement('button');
-  bubble.className = 'askbubble';
-  bubble.textContent = '🤖 Ask Claude';
-  bubble.style.display = 'none';
-  bubble.addEventListener('mousedown', function (e) { e.preventDefault(); }); // keep the selection
-  bubble.addEventListener('click', function () { if (lastSel) ask(lastSel); bubble.style.display = 'none'; });
+  bubble.className = 'notebubble'; bubble.textContent = '📝 Add note'; bubble.style.display = 'none';
+  bubble.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  bubble.addEventListener('click', function () { if (lastSel) openEditor(null, lastSel); bubble.style.display = 'none'; });
   document.body.appendChild(bubble);
 
   document.addEventListener('selectionchange', function () {
-    var s = window.getSelection();
-    var t = s ? s.toString().trim() : '';
-    if (t.length > 3 && s.rangeCount) {
-      lastSel = t;
-      var r = s.getRangeAt(0).getBoundingClientRect();
-      if (r.width || r.height) {
+    if (pop) return;
+    var s = window.getSelection(); var t = s ? s.toString().trim() : '';
+    if (t.length > 2 && s.rangeCount) {
+      var node = s.getRangeAt(0).startContainer;
+      var blk = node.nodeType === 3 ? node.parentElement : node;
+      while (blk && blocks.indexOf(blk) < 0) blk = blk.parentElement;
+      if (blk) {
+        lastSel = { blockIndex: blocks.indexOf(blk), quote: t };
+        var r = s.getRangeAt(0).getBoundingClientRect();
         bubble.style.display = 'block';
         bubble.style.top = (window.scrollY + r.top - 44) + 'px';
-        bubble.style.left = (window.scrollX + Math.max(8, Math.min(r.left, window.innerWidth - 140))) + 'px';
+        bubble.style.left = (window.scrollX + Math.max(8, Math.min(r.left, window.innerWidth - 130))) + 'px';
+        return;
       }
-    } else {
-      bubble.style.display = 'none';
     }
+    bubble.style.display = 'none';
   });
   document.addEventListener('scroll', function () { bubble.style.display = 'none'; }, { passive: true });
 
-  var fab = document.createElement('button');
-  fab.className = 'askfab';
-  fab.innerHTML = '🤖 <span class="t-en">Ask Claude</span><span class="t-ko">클로드에게 질문</span>';
-  fab.addEventListener('click', function () { ask(''); });
+  function closePop() { if (pop) { pop.remove(); pop = null; } }
+  function openEditor(existing, sel) {
+    closePop();
+    var blockIndex = existing ? existing.blockIndex : sel.blockIndex;
+    var quote = existing ? existing.quote : sel.quote;
+    var blk = blocks[blockIndex]; if (!blk) return;
+    pop = document.createElement('div'); pop.className = 'notepop';
+    pop.innerHTML = '<div class="q"></div><textarea placeholder="내 메모 · my note…"></textarea><div class="row"></div>';
+    pop.querySelector('.q').textContent = '“' + quote + '”';
+    var ta = pop.querySelector('textarea'); ta.value = existing ? existing.text : '';
+    var row = pop.querySelector('.row');
+    if (existing) {
+      var del = document.createElement('button'); del.className = 'del'; del.textContent = '삭제';
+      del.onclick = function () { notes = notes.filter(function (x) { return x.id !== existing.id; }); save(); render(); closePop(); };
+      row.appendChild(del);
+    }
+    var cancel = document.createElement('button'); cancel.textContent = '취소'; cancel.onclick = closePop; row.appendChild(cancel);
+    var saveb = document.createElement('button'); saveb.className = 'save'; saveb.textContent = '저장'; row.appendChild(saveb);
+    saveb.onclick = function () {
+      var text = ta.value.trim();
+      if (existing) { existing.text = text; if (!text) notes = notes.filter(function (x) { return x.id !== existing.id; }); }
+      else if (text) { notes.push({ id: 'n' + Date.now() + Math.floor(Math.random() * 999), blockIndex: blockIndex, quote: quote, text: text }); }
+      save(); render(); closePop();
+    };
+    document.body.appendChild(pop);
+    var r = blk.getBoundingClientRect();
+    pop.style.top = (window.scrollY + r.bottom + 6) + 'px';
+    pop.style.left = (window.scrollX + Math.max(8, Math.min(r.left, window.innerWidth - 330))) + 'px';
+    ta.focus();
+  }
+  document.addEventListener('mousedown', function (e) { if (pop && !pop.contains(e.target)) closePop(); }, true);
+
+  function clearMarks() {
+    [].slice.call(document.querySelectorAll('mark.unote, .notebadge')).forEach(function (m) {
+      if (m.classList.contains('notebadge')) { m.remove(); return; }
+      var p = m.parentNode; while (m.firstChild) p.insertBefore(m.firstChild, m); p.removeChild(m); if (p.normalize) p.normalize();
+    });
+  }
+  function wrapQuote(blk, quote, id) {
+    var walker = document.createTreeWalker(blk, NodeFilter.SHOW_TEXT, null);
+    var tn;
+    while ((tn = walker.nextNode())) {
+      var i = tn.nodeValue.indexOf(quote);
+      if (i >= 0) {
+        var range = document.createRange(); range.setStart(tn, i); range.setEnd(tn, i + quote.length);
+        var mk = document.createElement('mark'); mk.className = 'unote'; mk.setAttribute('data-id', id);
+        try { range.surroundContents(mk); return mk; } catch (e) { return null; }
+      }
+    }
+    return null;
+  }
+  var fab = document.createElement('button'); fab.className = 'notesfab';
+  fab.innerHTML = '📝 <span class="t-en">Notes</span><span class="t-ko">메모</span> <span class="ct">0</span>';
+  fab.addEventListener('click', function () { var f = document.querySelector('mark.unote, .notebadge'); if (f) f.scrollIntoView({ block: 'center' }); });
   document.body.appendChild(fab);
 
-  var toastEl;
-  function toast(msg) {
-    if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'asktoast'; document.body.appendChild(toastEl); }
-    toastEl.textContent = msg;
-    toastEl.classList.add('show');
-    clearTimeout(toast._t);
-    toast._t = setTimeout(function () { toastEl.classList.remove('show'); }, 4200);
+  function render() {
+    clearMarks();
+    notes.forEach(function (n) {
+      var blk = blocks[n.blockIndex]; if (!blk) return;
+      var mk = wrapQuote(blk, n.quote, n.id);
+      if (mk) { mk.addEventListener('click', function (e) { e.stopPropagation(); openEditor(n); }); }
+      else {
+        var b = document.createElement('span'); b.className = 'notebadge'; b.textContent = '📝'; b.setAttribute('data-id', n.id);
+        b.addEventListener('click', function (e) { e.stopPropagation(); openEditor(n); }); blk.appendChild(b);
+      }
+    });
+    fab.querySelector('.ct').textContent = notes.length;
   }
+  render();
 })();
+
+// archive index: "All / ⭐ Must Read" tab (Must Read = papers you rated ⭐ Must-read, from localStorage)
+(function () {
+  var tabs = document.querySelector('.tabs');
+  var list = document.querySelector('.list');
+  if (!tabs || !list) return;
+  var rows = [].slice.call(list.querySelectorAll('.rowwrap'));
+  var empty = document.querySelector('.mr-empty');
+  function rated4(ax) { try { return localStorage.getItem('paper-rating:' + ax) === '4'; } catch (e) { return false; } }
+  function apply(mode) {
+    var n = 0;
+    rows.forEach(function (r) {
+      var show = (mode === 'all') || rated4(r.getAttribute('data-arxiv'));
+      r.style.display = show ? '' : 'none';
+      if (show) n++;
+    });
+    [].slice.call(tabs.querySelectorAll('.tab')).forEach(function (t) {
+      t.classList.toggle('on', t.getAttribute('data-mode') === mode);
+    });
+    if (empty) empty.style.display = (mode === 'mustread' && n === 0) ? 'block' : 'none';
+  }
+  [].slice.call(tabs.querySelectorAll('.tab')).forEach(function (t) {
+    t.addEventListener('click', function () { apply(t.getAttribute('data-mode')); });
+  });
+  apply('all');
+})();
+
