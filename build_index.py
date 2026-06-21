@@ -33,12 +33,11 @@ items = sorted((meta(p) for p in glob.glob(os.path.join(PAPERS, "*.html"))),
                key=lambda x: x["sort"], reverse=True)
 
 def card(it):
-    full = ""
-    if it["arxiv"] and os.path.exists(os.path.join(REVIEWS, it["arxiv"] + ".html")):
-        full = ('\n      <a class="full" href="reviews/' + html.escape(it["arxiv"]) +
-                '.html">📖 <span class="t-en">Full Review</span><span class="t-ko">풀 리뷰</span></a>')
+    hasfull = bool(it["arxiv"]) and os.path.exists(os.path.join(REVIEWS, it["arxiv"] + ".html"))
+    full = ('\n      <a class="full" href="reviews/' + html.escape(it["arxiv"]) +
+            '.html"><span class="t-en">Full Review</span><span class="t-ko">풀 리뷰</span></a>') if hasfull else ""
     sub = html.escape(it["topic"]) + ((" · arXiv:" + html.escape(it["arxiv"])) if it["arxiv"] else "")
-    return ('    <div class="rowwrap" data-arxiv="' + html.escape(it["arxiv"]) + '">\n'
+    return ('    <div class="rowwrap" data-arxiv="' + html.escape(it["arxiv"]) + '"' + (' data-full="1"' if hasfull else '') + '>\n'
             '      <a class="row" href="' + html.escape(it["file"]) + '">\n'
             '        <div class="d"><span class="dd">' + html.escape(it["date"]) + '</span></div>\n'
             '        <div class="body">\n'
@@ -75,9 +74,9 @@ doc = f"""<!DOCTYPE html>
 <div class="wrap">
   <div class="tabs">
     <button class="tab on" data-mode="all"><span class="t-en">All</span><span class="t-ko">전체</span></button>
-    <button class="tab" data-mode="mustread">⭐ <span class="t-en">Must Read</span><span class="t-ko">머스트리드</span></button>
+    <button class="tab" data-mode="mustread"><span class="t-en">Must Read</span><span class="t-ko">머스트리드</span></button>
   </div>
-  <p class="mr-empty" style="display:none"><span class="t-en">No ⭐ Must-read papers yet — open a paper and rate it ⭐ <b>Must read</b>.</span><span class="t-ko">아직 ⭐ 머스트리드가 없어요 — 논문을 열어 ⭐ <b>꼭 다시 읽기</b>로 평가하면 여기 모입니다.</span></p>
+  <p class="mr-empty" style="display:none"><span class="t-en">No Must-read papers yet — rate a paper <b>Must read</b>, or add its arXiv ID to mustread.md.</span><span class="t-ko">아직 머스트리드가 없어요 — 논문을 <b>꼭 다시 읽기</b>로 평가하거나 mustread.md에 arXiv ID를 추가하면 모입니다.</span></p>
   <div class="list">
 {cards}
   </div>

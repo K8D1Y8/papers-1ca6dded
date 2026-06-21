@@ -176,7 +176,7 @@
   function apply(mode) {
     var n = 0;
     rows.forEach(function (r) {
-      var show = (mode === 'all') || rated4(r.getAttribute('data-arxiv'));
+      var show = (mode === 'all') || rated4(r.getAttribute('data-arxiv')) || r.getAttribute('data-full') === '1';
       r.style.display = show ? '' : 'none';
       if (show) n++;
     });
