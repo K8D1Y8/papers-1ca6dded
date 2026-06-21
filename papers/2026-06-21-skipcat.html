@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · SkipCat: Rank-Maximized Low-Rank LLM Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Model Compression · Low-Rank</span><span class="t-ko">🗜 Model Compression · Low-Rank</span></span>
+      <span class="chip">🏆 AAAI 2026</span>
+      <span>2026 · 06 · 21</span>
+    </div>
+    <h1>SkipCat: Rank-Maximized Low-Rank LLM Compression<br>
+      <span class="glow t-en">— Keep more rank at the same budget: share projections, skip blocks</span>
+      <span class="glow t-ko">— 같은 예산으로 더 많은 rank 유지: 투영 공유 + 블록 스킵</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Yu-Chen Lu</b> <span class="t-en">et al.</span><span class="t-ko">외</span></span>
+      <span>🏛 NYCU</span>
+      <span>🗓 2025.12.15</span>
+      <span>📄 <a href="https://arxiv.org/abs/2512.13494">arXiv:2512.13494</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Naive SVD compression only helps once you cut rank below half — which wrecks accuracy. <span class="hl">SkipCat keeps MORE effective ranks at the same compression budget</span> by (1) sharing one low-rank projection across same-input matrices (<b>Cat</b>) and (2) skipping a sub-block via a Schur-complement trick (<b>Skip</b>). <b>Training-free</b>, it beats prior low-rank methods — up to <b>+7% zero-shot accuracy</b> at 30% compression on LLaMA2-7B, and SkipCat@30% even beats every baseline@20%.</p>
+    <p class="t-ko">단순 SVD 압축은 rank를 절반 이하로 줄여야 이득이 생기는데, 그러면 정확도가 무너진다. <span class="hl">SkipCat은 같은 압축 예산에서 유효 rank를 더 많이 유지</span>한다 — (1) 같은 입력을 받는 행렬들이 하나의 저랭크 투영을 공유(<b>Cat</b>)하고 (2) Schur 보수(complement) 기법으로 부분 블록 계산을 건너뛴다(<b>Skip</b>). <b>학습 불필요</b>인데 기존 저랭크 기법을 능가 — LLaMA2-7B 30% 압축에서 <b>제로샷 정확도 최대 +7%</b>, SkipCat@30%이 모든 baseline@20%보다도 낫다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Low-rank compression only pays off below half-rank — exactly where accuracy collapses.</p>
+    <p class="lead t-ko">저랭크 압축은 'rank 절반 이하'에서야 이득인데, 거기가 바로 정확도가 붕괴하는 지점이다.</p>
+    <p class="t-en">SVD-based compression replaces a weight with two thin matrices, but it only reduces compute/memory once the rank drops below half the original — and that aggressive truncation discards too much. The question SkipCat asks: <strong>at a fixed compression rate, how do we retain more effective ranks</strong> so accuracy survives?</p>
+    <p class="t-ko">SVD 압축은 가중치를 두 개의 얇은 행렬로 바꾸지만, rank가 원본의 절반 아래로 떨어져야 연산·메모리가 줄어든다 — 그 공격적 절단이 너무 많이 버린다. SkipCat의 질문: <strong>고정된 압축률에서 유효 rank를 어떻게 더 남겨</strong> 정확도를 지킬까?</p>
+    <figure class="fig">
+      <img src="fig/2512.13494/x2.png" alt="SkipCat vs naive low-rank compression illustration">
+      <figcaption class="t-en"><b>Figure 2.</b> SkipCat vs naïve low-rank — (a) original layer, (b) naïve SVD, (c) <b>Cat</b> shares low-rank projections across modules to preserve more ranks at the same rate, (d) <b>Skip</b> skips submatrix computation on top of Cat to keep even more ranks.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> SkipCat vs 단순 저랭크 — (a) 원본 레이어, (b) 단순 SVD, (c) <b>Cat</b>: 모듈 간 저랭크 투영을 공유해 같은 압축률에서 rank를 더 보존, (d) <b>Skip</b>: Cat 위에서 부분행렬 계산을 건너뛰어 rank를 더 많이 유지.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2512.13494</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+7%</div><div class="l"><span class="t-en">zero-shot accuracy gain<br>@30% (vs prior low-rank)</span><span class="t-ko">제로샷 정확도 향상<br>@30% (기존 저랭크 대비)</span></div></div>
+      <div class="stat"><div class="n">2.20%</div><div class="l"><span class="t-en">acc drop @20%<br>(others ≥ 9.95%)</span><span class="t-ko">정확도 하락 @20%<br>(타 기법 ≥ 9.95%)</span></div></div>
+      <div class="stat"><div class="n">6.34%</div><div class="l"><span class="t-en">acc drop @30%<br>(others ≥ 13.54%)</span><span class="t-ko">정확도 하락 @30%<br>(타 기법 ≥ 13.54%)</span></div></div>
+      <div class="stat"><div class="n">30% &gt; 20%</div><div class="l"><span class="t-en">SkipCat@30% beats<br>all baselines@20%</span><span class="t-ko">SkipCat@30%이 모든<br>baseline@20%보다 우위</span></div></div>
+      <div class="stat"><div class="n">3.26×</div><div class="l"><span class="t-en">TTFT speedup @80%<br>(A100)</span><span class="t-ko">TTFT 속도향상 @80%<br>(A100)</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">training needed<br>(also stacks +LoRA)</span><span class="t-ko">학습 불필요<br>(LoRA와도 결합)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — more rank, lower drop</span><span class="t-ko">결과 — rank를 더 남겨 하락을 줄임</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> LLaMA2-7B — perplexity & avg zero-shot accuracy. SkipCat wins on every metric, and SkipCat@30% beats the 20% baselines.</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> LLaMA2-7B — perplexity & 평균 제로샷 정확도. 모든 지표에서 SkipCat 우위, SkipCat@30%이 20% baseline보다도 낫다.</caption>
+        <thead><tr><th>Method</th><th>Wiki2 PPL↓</th><th>C4 PPL↓</th><th>Acc↑</th><th>Drop↓</th></tr></thead>
+        <tbody>
+          <tr><td><span class="t-en">Dense (1.0×)</span><span class="t-ko">Dense (1.0×)</span></td><td>5.47</td><td>7.26</td><td>54.79</td><td>—</td></tr>
+          <tr><td>ASVD (20%)</td><td>9.06</td><td>11.66</td><td>48.81</td><td>5.98</td></tr>
+          <tr><td>SVD-LLM (20%)</td><td>8.82</td><td>13.42</td><td>44.84</td><td>9.95</td></tr>
+          <tr><td>SkipCat (20%)</td><td class="up">6.29</td><td class="up">8.95</td><td class="up">52.59</td><td class="up">2.20</td></tr>
+          <tr><td>SVD-LLM (30%)</td><td>11.75</td><td>19.37</td><td>41.25</td><td>13.54</td></tr>
+          <tr><td>SkipCat (30%)</td><td class="up">7.65</td><td class="up">11.57</td><td class="up">48.46</td><td class="up">6.34</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea — two techniques</span><span class="t-ko">아이디어 — 두 가지 기법</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag"><span class="t-en">① Cat</span><span class="t-ko">① Cat</span></span>
+        <h3>Shared low-rank projection</h3>
+        <p class="t-en">Matrices fed the same input (<span class="term">Q/K/V</span>, <span class="term">gate/up</span>) are concatenated and factorized jointly, so they share ONE low-rank projection — freeing budget to keep more ranks.</p>
+        <p class="t-ko">같은 입력을 받는 행렬(<span class="term">Q/K/V</span>, <span class="term">gate/up</span>)을 이어붙여 함께 분해 → 하나의 저랭크 투영을 공유 → 남는 예산으로 rank를 더 유지.</p>
+      </div>
+      <div class="m">
+        <span class="tag"><span class="t-en">② Skip</span><span class="t-ko">② Skip</span></span>
+        <h3>Block skipping (Schur complement)</h3>
+        <p class="t-en">A <span class="term">Schur-complement</span> reformulation partitions the projection so one sub-block's computation can be skipped — retaining extra ranks at no added budget.</p>
+        <p class="t-ko"><span class="term">Schur 보수</span> 재정식화로 투영을 분할해 한 부분 블록의 계산을 건너뜀 → 추가 예산 없이 rank를 더 확보.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Whiten</span><span class="t-ko">화이트닝</span></b><span class="t-en">Whiten weight matrices using a mixed WikiText-2 + C4 calibration set (512 samples).</span><span class="t-ko">WikiText-2 + C4 혼합 캘리브레이션(512 샘플)으로 가중치 화이트닝.</span></li>
+      <li><b><span class="t-en">Concatenate (Cat)</span><span class="t-ko">병합 (Cat)</span></b><span class="t-en">Concatenate same-input matrices (W_QKV, W_GU) → joint low-rank factorization → shared projection.</span><span class="t-ko">같은 입력 행렬(W_QKV, W_GU) 병합 → 공동 저랭크 분해 → 공유 투영.</span></li>
+      <li><b><span class="t-en">Permute + Skip</span><span class="t-ko">치환 + Skip</span></b><span class="t-en">Column permutation (Strong RRQR) then Schur-complement block skipping; absorb the leading block to avoid FP16 overflow.</span><span class="t-ko">열 치환(Strong RRQR) 후 Schur 보수 블록 스킵; 선행 블록을 흡수해 FP16 오버플로 방지.</span></li>
+      <li><b><span class="t-en">(Optional) stack</span><span class="t-ko">(선택) 결합</span></b><span class="t-en">Optionally combine with 8-bit quantization (HQQ + Hadamard) or LoRA fine-tuning.</span><span class="t-ko">8-bit 양자화(HQQ + Hadamard) 또는 LoRA 미세조정과 결합 가능.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Training-free SOTA.</strong> Beats ASVD, Basis Sharing, Dobi-SVD, SVD-LLM at equal compression — no fine-tuning required.</p><p class="t-ko"><strong>학습 없이 SOTA.</strong> 같은 압축률에서 ASVD·Basis Sharing·Dobi-SVD·SVD-LLM 능가 — 미세조정 불필요.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>More rank = more accuracy.</strong> SkipCat@30% beats every baseline@20% — keeping effective ranks is the lever.</p><p class="t-ko"><strong>rank를 더 남기면 정확도↑.</strong> SkipCat@30%이 모든 baseline@20%보다 낫다 — 유효 rank 유지가 핵심 레버.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Permutation is essential.</strong> Without column permutation, Skip overflows in FP16 (perplexity in the thousands).</p><p class="t-ko"><strong>치환이 필수.</strong> 열 치환 없으면 Skip이 FP16에서 오버플로(perplexity 수천대).</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Generalizes & stacks.</strong> Works on LLaMA2-13B, Qwen3-8B/14B, and composes with quantization and LoRA.</p><p class="t-ko"><strong>일반화·결합.</strong> LLaMA2-13B·Qwen3-8B/14B에서 동작하고 양자화·LoRA와 결합.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the advantage shrinks at very high compression — at 80% the fine-tuned SkipCat accuracy drop (21.97%) is barely below SVD-LLM's (22.47%). SkipCat is strongest in the low-to-moderate compression regime, not as an extreme-compression cure.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 고압축에서 이점이 줄어든다 — 80%에선 미세조정 SkipCat의 정확도 하락(21.97%)이 SVD-LLM(22.47%)보다 근소하게만 낫다. SkipCat은 저~중압축 구간에서 가장 강하고, 극단 압축의 해법은 아니다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2512.13494">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2512.13494">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2512.13494">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2512.13494">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · Model Compression / Low-rank</b> · venue: AAAI 2026.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-06-21.</span>
+    <span class="t-ko">선정 사유 — <b>위시리스트 · Model Compression / Low-rank</b> · 학회: AAAI 2026.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-06-21.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
