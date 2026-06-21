@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Full Review — Latent Collaboration in Multi-Agent Systems</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="fullbadge">📖 <span class="t-en">Full Review</span><span class="t-ko">풀 리뷰</span></span>
+      <span class="chip"><span class="t-en">🧩 Multi-Agent · Latent Comm.</span><span class="t-ko">🧩 Multi-Agent · Latent Comm.</span></span>
+      <span class="chip">⭐ Must Read</span>
+    </div>
+    <h1>Latent Collaboration in Multi-Agent Systems<br>
+      <span class="glow t-en">— Full review: comprehensive walkthrough + adversarial critique</span>
+      <span class="glow t-ko">— 풀 리뷰: 전 내용 정리 + 적대적 비판</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Jiaru Zou</b> <span class="t-en">et al.</span><span class="t-ko">외 11인</span></span>
+      <span>🏛 Princeton · Stanford · UIUC</span>
+      <span>🗓 2025.11.25</span>
+      <span>📄 <a href="https://arxiv.org/abs/2511.20639">arXiv:2511.20639</a></span>
+      <span>📝 <a href="../papers/2026-06-20-latent-collaboration-mas.html"><span class="t-en">5-min summary</span><span class="t-ko">5분 요약</span></a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">LatentMAS is a training-free framework that lets LLM agents in a multi-agent system collaborate entirely in continuous latent space instead of text: each agent reasons by auto-regressively feeding back its last-layer hidden states (aligned to the input space via a linear operator W<sub>a</sub>), and agents communicate losslessly by layer-wise concatenating KV-caches as a shared latent working memory. Backed by theory and experiments on 9 benchmarks with 5 Qwen3/Llama3 models, it lifts accuracy by up to <b>14.6%</b>, cuts output tokens by <b>70.8%–83.7%</b>, and runs <b>4×–4.3×</b> faster.</p>
+    <p class="t-ko">LatentMAS는 멀티에이전트 시스템의 LLM 에이전트들이 텍스트 대신 연속 잠재 공간에서 전적으로 협업하게 하는 학습 불필요(training-free) 프레임워크다. 각 에이전트는 마지막 층 은닉 상태를 자기회귀적으로 되먹이며 추론하고(선형 연산자 W<sub>a</sub>로 입력 공간에 정렬), KV 캐시를 층별로 이어붙인 공유 잠재 작업 메모리로 무손실 통신한다. 이론과 9개 벤치마크·Qwen3/Llama3 5개 모델 실험으로 뒷받침되며, 정확도 최대 <b>14.6%</b> 향상, 출력 토큰 <b>70.8%~83.7%</b> 절감, <b>4×~4.3×</b> 가속.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Overview — the logical flow</span><span class="t-ko">개요 — 전체 논리 흐름</span></h2>
+    <div class="logicflow">
+      <div class="fstage"><div class="fl"><span class="t-en">Problem: text is the bottleneck</span><span class="t-ko">문제: 텍스트가 병목</span></div><div class="fd"><span class="t-en">Existing LLM-MAS use natural-language text as the lingua franca for both reasoning and inter-agent communication, incurring token/latency overhead and lossy re-encoding.</span><span class="t-ko">기존 LLM-MAS는 추론과 에이전트 간 통신 모두에 자연어 텍스트를 공용어로 써서 토큰·지연 비용과 손실 있는 재인코딩을 초래한다.</span></div></div>
+      <div class="fstage"><div class="fl"><span class="t-en">Idea: pure latent collaboration</span><span class="t-ko">아이디어: 순수 잠재 협업</span></div><div class="fd"><span class="t-en">Ask whether MAS can collaborate entirely in continuous latent space; propose LatentMAS, an end-to-end training-free framework unifying latent reasoning and latent communication.</span><span class="t-ko">MAS가 연속 잠재 공간에서 전적으로 협업할 수 있는지 묻고, 잠재 추론과 잠재 통신을 통합한 종단간 학습 불필요 프레임워크 LatentMAS를 제안한다.</span></div></div>
+      <div class="fstage"><div class="fl"><span class="t-en">Mechanism 1: latent thoughts</span><span class="t-ko">메커니즘 1: 잠재 사고</span></div><div class="fd"><span class="t-en">Each agent reasons by auto-regressively feeding its last-layer hidden state back as the next input embedding for m steps, realigned to input space by a linear operator W<sub>a</sub> ≈ W<sub>out</sub><sup>†</sup>W<sub>in</sub>.</span><span class="t-ko">각 에이전트는 마지막 층 은닉 상태를 다음 입력 임베딩으로 m단계 자기회귀적으로 되먹여 추론하며, 선형 연산자 W<sub>a</sub> ≈ W<sub>out</sub><sup>†</sup>W<sub>in</sub>로 입력 공간에 재정렬한다.</span></div></div>
+      <div class="fstage"><div class="fl"><span class="t-en">Mechanism 2: latent working memory</span><span class="t-ko">메커니즘 2: 잠재 작업 메모리</span></div><div class="fd"><span class="t-en">Agents communicate by extracting all L layers' KV-caches (input + latent thoughts) and layer-wise concatenating them into the next agent's caches — no text re-encoding.</span><span class="t-ko">에이전트는 전체 L개 층의 KV 캐시(입력 + 잠재 사고)를 추출해 다음 에이전트 캐시에 층별로 이어붙여 통신하며, 텍스트 재인코딩이 없다.</span></div></div>
+      <div class="fstage"><div class="fl"><span class="t-en">Theory: expressive, lossless, cheaper</span><span class="t-ko">이론: 표현력·무손실·저비용</span></div><div class="fd"><span class="t-en">Thm 3.1: latent thoughts need Ω(d<sub>h</sub>m/log|V|) tokens to match, scaling with d<sub>h</sub>; Thm 3.3: KV transfer is lossless; Thm 3.4: lower per-agent time complexity.</span><span class="t-ko">정리 3.1: 잠재 사고를 텍스트로 대체하려면 Ω(d<sub>h</sub>m/log|V|) 토큰이 필요하고 d<sub>h</sub>에 비례; 정리 3.3: KV 전이는 무손실; 정리 3.4: 에이전트당 시간 복잡도가 더 낮다.</span></div></div>
+      <div class="fstage"><div class="fl"><span class="t-en">Experiments: 9 benchmarks, 5 LLMs</span><span class="t-ko">실험: 9개 벤치마크, 5개 LLM</span></div><div class="fd"><span class="t-en">Math/science, commonsense, and code tasks with Qwen3 (4B/8B/14B) and Llama3 (3B/8B), under both sequential and hierarchical MAS settings.</span><span class="t-ko">수학/과학, 상식, 코드 과제에서 Qwen3(4B/8B/14B)와 Llama3(3B/8B)로, 순차형과 계층형 MAS 설정 모두에서 평가.</span></div></div>
+      <div class="fstage"><div class="fl"><span class="t-en">Results &amp; claims</span><span class="t-ko">결과 및 주장</span></div><div class="fd"><span class="t-en">Up to +14.6% accuracy (avg +14.6%/+13.3% vs single; +2.8%/+4.6% vs TextMAS), −70.8% to −83.7% output tokens, 4×–4.3× faster (2.6×–7× vs vLLM).</span><span class="t-ko">정확도 최대 +14.6%(단일 대비 평균 +14.6%/+13.3%; TextMAS 대비 +2.8%/+4.6%), 출력 토큰 −70.8%~−83.7%, 4×~4.3× 가속(vLLM 대비 2.6×~7×).</span></div></div>
+      <div class="fstage"><div class="fl"><span class="t-en">Analyses validate each part</span><span class="t-ko">분석이 각 요소를 검증</span></div><div class="fd"><span class="t-en">Latent thoughts cover/diversify text-token semantics; W<sub>a</sub> adds +2.3–5.3%; optimal depth ≈40–80 steps; debug mode 96.2% consistent; both latent components needed.</span><span class="t-ko">잠재 사고는 텍스트 토큰 의미를 포괄·다양화하고, W<sub>a</sub>는 +2.3~5.3% 향상, 최적 깊이 ≈40~80단계, 디버그 모드 96.2% 일치, 두 잠재 요소 모두 필요.</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Figures from the paper</span><span class="t-ko">논문 원본 그림</span></h2>
+    <figure class="fig"><img src="../papers/fig/2511.20639/x3.png" alt="LatentMAS framework overview">
+      <figcaption class="t-en"><b>Figure 3.</b> LatentMAS framework overview: each agent generates latent thoughts from last-layer hidden states (with input-output alignment), then transfers them to the next agent via layer-wise shared latent working memory (KV concatenation).</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> LatentMAS 프레임워크 개요: 각 에이전트가 마지막 층 은닉 상태로 잠재 사고를 생성하고(입출력 정렬 포함) 층별 공유 잠재 작업 메모리(KV 연결)로 다음 에이전트에 전달한다.</figcaption>
+      <div class="figsrc">· arXiv:2511.20639</div></figure>
+    <figure class="fig"><img src="../papers/fig/2511.20639/x2.png" alt="Sequential and hierarchical MAS settings">
+      <figcaption class="t-en"><b>Figure 2.</b> The two evaluated MAS settings: sequential chain-of-agents (Planner→Critic→Refiner→Solver) and hierarchical domain experts (Math/Science/Code) aggregated by a Summarizer.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 평가된 두 MAS 설정: 순차형 체인 에이전트(Planner→Critic→Refiner→Solver)와 Summarizer가 집계하는 계층형 도메인 전문가(수학/과학/코드).</figcaption>
+      <div class="figsrc">· arXiv:2511.20639</div></figure>
+    <figure class="fig"><img src="../papers/fig/2511.20639/x4.png" alt="Efficiency gains">
+      <figcaption class="t-en"><b>Figure 4.</b> Efficiency gains (sequential): consistently faster end-to-end inference (avg ×4.0) and far fewer total tokens (avg 70.8% reduction) vs single model and TextMAS.</figcaption>
+      <figcaption class="t-ko"><b>Figure 4.</b> 순차형 효율 향상: 단일 모델·TextMAS 대비 일관되게 빠른 종단간 추론(평균 ×4.0)과 훨씬 적은 총 토큰(평균 70.8% 절감).</figcaption>
+      <div class="figsrc">· arXiv:2511.20639</div></figure>
+    <figure class="fig"><img src="../papers/fig/2511.20639/acc.png" alt="Accuracy gains">
+      <figcaption class="t-en"><b>Figure 9.</b> Accuracy gains across both sequential and hierarchical settings, consistently improving system-level reasoning over single-model and text-based MAS.</figcaption>
+      <figcaption class="t-ko"><b>Figure 9.</b> 순차형·계층형 설정 전반에서 정확도 향상으로, 단일 모델·텍스트 기반 MAS 대비 시스템 수준 추론을 일관되게 개선.</figcaption>
+      <div class="figsrc">· arXiv:2511.20639</div></figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Comprehensive walkthrough</span><span class="t-ko">전체 내용 정리</span></h2>
+
+    <h3 style="font-family:var(--serif);font-weight:500;font-size:19px;margin:18px 0 4px"><span class="t-en">Problem &amp; Motivation</span><span class="t-ko">문제 및 동기</span></h3>
+    <p class="t-en">LLM-based multi-agent systems extend single-model reasoning into system-level intelligence, but they rely on natural-language text as the lingua franca for both each agent's internal reasoning (CoT) and cross-agent communication. This text mediation incurs heavy token usage and inference latency, and forces lossy re-encoding of internal representations into discrete tokens. Prior work explored latent space only partially — either single-model internal latent CoT, or KV/embedding exchange between just two models — but no framework unified latent reasoning <em>and</em> latent communication end-to-end. LatentMAS asks: <b>Can MAS achieve pure latent collaboration?</b>, grounded on three principles: reasoning expressiveness, communication fidelity, and collaboration complexity.</p>
+    <p class="t-ko">LLM 기반 멀티에이전트 시스템은 단일 모델 추론을 시스템 수준 지능으로 확장하지만, 각 에이전트의 내부 추론(CoT)과 에이전트 간 통신 모두에 자연어 텍스트를 공용어로 의존한다. 이 텍스트 매개는 막대한 토큰 사용과 추론 지연을 유발하고, 내부 표현을 이산 토큰으로 손실 있게 재인코딩하도록 강제한다. 선행 연구는 단일 모델 내부 잠재 CoT 또는 두 모델 간 KV/임베딩 교환처럼 잠재 공간을 부분적으로만 다뤘으며, 잠재 추론과 잠재 통신을 종단간 통합한 프레임워크는 없었다. LatentMAS는 <b>MAS가 순수 잠재 협업을 이룰 수 있는가?</b>를 묻고, 추론 표현력·통신 충실도·협업 복잡도 세 원칙에 기반한다.</p>
+
+    <h3 style="font-family:var(--serif);font-weight:500;font-size:19px;margin:18px 0 4px"><span class="t-en">Mechanism 1 — Auto-regressive Latent Thoughts &amp; W<sub>a</sub></span><span class="t-ko">메커니즘 1 — 자기회귀 잠재 사고와 W<sub>a</sub></span></h3>
+    <p class="t-en">Instead of decoding tokens, each agent passes input embeddings E through its L transformer layers, takes the last-layer hidden state h<sub>t</sub>, and inserts it directly as the next-step input embedding, repeating for m latent steps to produce latent thoughts H = [h<sub>t+1</sub>,…,h<sub>t+m</sub>]. Because raw last-layer states are out-of-distribution for shallow input layers, a training-free linear alignment operator W<sub>a</sub> ∈ ℝ<sup>d<sub>h</sub>×d<sub>h</sub></sup> maps each output back to valid input space via e = hW<sub>a</sub>, where W<sub>a</sub> ≈ W<sub>out</sub><sup>†</sup>W<sub>in</sub>, derived to minimize the Wasserstein distance to the token-embedding distribution. W<sub>a</sub> is computed once per run and reused, so its cost is negligible.</p>
+    <p class="t-ko">토큰을 디코딩하는 대신, 각 에이전트는 입력 임베딩 E를 L개 트랜스포머 층에 통과시켜 마지막 층 은닉 상태 h<sub>t</sub>를 얻고 이를 다음 단계 입력 임베딩으로 직접 삽입하며, 이를 m단계 반복해 잠재 사고 H = [h<sub>t+1</sub>,…,h<sub>t+m</sub>]를 생성한다. 가공되지 않은 마지막 층 상태는 얕은 입력 층에서 분포 밖(OOD)이므로, 학습 불필요 선형 정렬 연산자 W<sub>a</sub> ∈ ℝ<sup>d<sub>h</sub>×d<sub>h</sub></sup>가 e = hW<sub>a</sub>로 출력을 유효 입력 공간에 되돌린다(W<sub>a</sub> ≈ W<sub>out</sub><sup>†</sup>W<sub>in</sub>, 토큰 임베딩 분포와의 바서슈타인 거리 최소화). W<sub>a</sub>는 실행당 한 번 계산해 재사용하므로 비용이 무시할 만하다.</p>
+
+    <h3 style="font-family:var(--serif);font-weight:500;font-size:19px;margin:18px 0 4px"><span class="t-en">Mechanism 2 — Latent Working Memory Transfer</span><span class="t-ko">메커니즘 2 — 잠재 작업 메모리 전이</span></h3>
+    <p class="t-en">After an agent A<sub>1</sub> finishes its m latent steps, LatentMAS extracts the KV-caches from <b>all L transformer layers</b> once, forming a latent working memory M<sub>A1</sub> = {(K<sup>(l)</sup>, V<sup>(l)</sup>)} that encapsulates both the original input context and the newly generated latent thoughts. The next agent A<sub>2</sub> integrates this by <b>layer-wise concatenation</b> — prepending each K<sup>(l)</sup>/V<sup>(l)</sup> of A<sub>1</sub> to its own caches — so A<sub>2</sub>'s subsequent latent generation is conditioned on A<sub>1</sub>'s full internal state. Transferring KV (rather than raw hidden states) avoids redundant recomputation, and the process chains across all agents; only the final agent decodes a text answer.</p>
+    <p class="t-ko">에이전트 A<sub>1</sub>이 m번의 잠재 단계를 마치면 LatentMAS는 <b>전체 L개 트랜스포머 층</b>의 KV 캐시를 한 번에 추출해, 원래 입력 맥락과 새로 생성된 잠재 사고를 모두 담은 잠재 작업 메모리 M<sub>A1</sub> = {(K<sup>(l)</sup>, V<sup>(l)</sup>)}를 만든다. 다음 에이전트 A<sub>2</sub>는 A<sub>1</sub>의 각 K<sup>(l)</sup>/V<sup>(l)</sup>를 자기 캐시 앞에 덧붙이는 <b>층별 연결</b>로 이를 통합해, 이후 잠재 생성을 A<sub>1</sub>의 전체 내부 상태에 조건화한다. 원시 은닉 상태가 아닌 KV를 전이해 중복 재계산을 피하며, 이 과정은 모든 에이전트로 연쇄되고 마지막 에이전트만 텍스트 답을 디코딩한다.</p>
+
+    <h3 style="font-family:var(--serif);font-weight:500;font-size:19px;margin:18px 0 4px"><span class="t-en">Theory — Expressiveness, Lossless Transfer, Complexity</span><span class="t-ko">이론 — 표현력·무손실 전이·복잡도</span></h3>
+    <p class="t-en"><b>Thm 3.1 (Expressiveness):</b> under the Linear Representation Hypothesis, losslessly expressing m latent thoughts in text requires at least Ω(d<sub>h</sub>m/log|V|) tokens, so latent generation is O(d<sub>h</sub>/log|V|) times more efficient and expressiveness scales linearly with hidden dim d<sub>h</sub> — e.g. Qwen3-4B/8B/14B are 235.7/377.1/471.4× more efficient than text. <b>Thm 3.3 (Lossless transfer):</b> an agent receiving latent working memory yields outputs equivalent to directly inputting predecessors' outputs. <b>Thm 3.4 (Complexity):</b> per-agent time is O((d<sub>h</sub><sup>2</sup>m + d<sub>h</sub>m<sup>2</sup> + d<sub>h</sub>tm)L), far below the text-MAS cost needed for equal expressiveness.</p>
+    <p class="t-ko"><b>정리 3.1(표현력):</b> 선형 표현 가설 하에서 m개의 잠재 사고를 텍스트로 무손실 표현하려면 최소 Ω(d<sub>h</sub>m/log|V|) 토큰이 필요하므로, 잠재 생성은 O(d<sub>h</sub>/log|V|)배 더 효율적이고 표현력은 은닉 차원 d<sub>h</sub>에 선형 비례한다 — 예: Qwen3-4B/8B/14B는 텍스트 대비 235.7/377.1/471.4배 효율적이다. <b>정리 3.3(무손실 전이):</b> 잠재 작업 메모리를 받은 에이전트의 출력은 선행 에이전트 출력을 직접 입력한 경우와 동등하다. <b>정리 3.4(복잡도):</b> 에이전트당 시간은 O((d<sub>h</sub><sup>2</sup>m + d<sub>h</sub>m<sup>2</sup> + d<sub>h</sub>tm)L)로, 동일 표현력을 위한 텍스트-MAS 비용보다 훨씬 낮다.</p>
+
+    <h3 style="font-family:var(--serif);font-weight:500;font-size:19px;margin:18px 0 4px"><span class="t-en">Experimental Setup</span><span class="t-ko">실험 설정</span></h3>
+    <p class="t-en">Evaluation spans <b>9 benchmarks</b>: math/science — GSM8K, AIME24/25, GPQA-Diamond, MedQA; commonsense — ARC-Easy/Challenge; code — MBPP-Plus, HumanEval-Plus. Backbones are <b>5 off-the-shelf LLMs</b> (Qwen3-4B/8B/14B, Llama-3.2-3B, Llama-3.1-8B). Two MAS settings: <b>sequential</b> (Planner→Critic→Refiner→Solver) and <b>hierarchical</b> (Math/Science/Code experts aggregated by a Summarizer). Baselines: Single LLM, Sequential TextMAS, Hierarchical TextMAS. Each agent runs m ∈ {0,10,20,40,80} latent steps; temperature 0.6, top-p 0.95; 8×A100-80G, averaged over three runs.</p>
+    <p class="t-ko">평가는 <b>9개 벤치마크</b>(수학/과학 — GSM8K, AIME24/25, GPQA-Diamond, MedQA; 상식 — ARC-Easy/Challenge; 코드 — MBPP-Plus, HumanEval-Plus)를 포괄한다. 백본은 <b>5개 기성 LLM</b>(Qwen3-4B/8B/14B, Llama-3.2-3B, Llama-3.1-8B). 두 MAS 설정: <b>순차형</b>(Planner→Critic→Refiner→Solver)과 <b>계층형</b>(수학/과학/코드 전문가를 Summarizer가 집계). 기준선: 단일 LLM, 순차 TextMAS, 계층 TextMAS. 각 에이전트는 m ∈ {0,10,20,40,80} 잠재 단계, 온도 0.6·top-p 0.95, 8×A100-80G, 3회 평균.</p>
+
+    <h3 style="font-family:var(--serif);font-weight:500;font-size:19px;margin:18px 0 4px"><span class="t-en">Main Results &amp; Ablations</span><span class="t-ko">주요 결과 및 제거 실험</span></h3>
+    <p class="t-en">LatentMAS beats the single-model baseline by <b>+14.6%</b> (sequential) / <b>+13.3%</b> (hierarchical) on average and TextMAS by <b>+2.8%</b> / <b>+4.6%</b>, while cutting output tokens <b>70.8%–83.7%</b> and running <b>4×–4.3×</b> faster (2.6×–7× vs vLLM). Hybrid ablations on Qwen3-8B show both latent components matter: Latent-reason+Text-comm = 85.5/66.4/65.9 and Text-reason+Latent-comm = 90.1/68.0/71.2 (GSM8K/MBPP+/MedQA), both below full LatentMAS at 93.8/74.6/75.3.</p>
+    <p class="t-ko">LatentMAS는 단일 모델 대비 평균 <b>+14.6%</b>(순차)·<b>+13.3%</b>(계층), TextMAS 대비 <b>+2.8%</b>·<b>+4.6%</b> 향상하며, 출력 토큰을 <b>70.8%~83.7%</b> 절감하고 <b>4×~4.3×</b> 빠르다(vLLM 대비 2.6×~7×). Qwen3-8B 하이브리드 제거 실험은 두 잠재 요소가 모두 중요함을 보인다: 잠재추론+텍스트통신 = 85.5/66.4/65.9, 텍스트추론+잠재통신 = 90.1/68.0/71.2 (GSM8K/MBPP+/MedQA), 둘 다 전체 LatentMAS의 93.8/74.6/75.3보다 낮다.</p>
+
+    <h3 style="font-family:var(--serif);font-weight:500;font-size:19px;margin:18px 0 4px"><span class="t-en">In-depth Analyses</span><span class="t-ko">심층 분석</span></h3>
+    <p class="t-en">On 300 MedQA questions (40 latent steps), LatentMAS's latent embeddings occupy nearly the same region as TextMAS token embeddings while covering their distribution with lower average pairwise cosine similarity (semantically consistent yet more diverse). Applying W<sub>a</sub> adds <b>+2.3% to +5.3%</b> accuracy; accuracy peaks around <b>40–80 latent steps</b>. A "debug mode" emits a parallel readable probe that, on 100 Qwen3-14B GSM8K pairs, is <b>96.2%</b> correct when the final answer is correct and <b>90.0%</b> incorrect when it is wrong. Trends hold across Qwen3 and Llama3.</p>
+    <p class="t-ko">300개 MedQA 문항(잠재 40단계)에서 LatentMAS의 잠재 임베딩은 TextMAS 토큰 임베딩과 거의 같은 영역을 차지하면서 그 분포를 더 낮은 평균 쌍별 코사인 유사도로 포괄한다(의미 일관·더 다양). W<sub>a</sub> 적용 시 정확도 <b>+2.3%~+5.3%</b> 향상, 정확도는 <b>40~80 잠재 단계</b> 부근에서 정점. "디버그 모드"의 병렬 가독 프로브는 Qwen3-14B GSM8K 100쌍에서 최종 정답일 때 <b>96.2%</b> 정확, 오답일 때 <b>90.0%</b> 부정확. 경향은 Qwen3·Llama3 모두에서 유지.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key results — Qwen3-14B, Sequential MAS</span><span class="t-ko">핵심 결과 — Qwen3-14B, 순차형 MAS</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 1 &amp; 2 excerpt.</b> Per-benchmark accuracy (%). LatentMAS is best or tied-best on 8 of 9 benchmarks.</caption>
+        <caption class="t-ko"><b>표 1·2 발췌.</b> 벤치마크별 정확도(%). LatentMAS는 9개 중 8개에서 최고 또는 공동 최고.</caption>
+        <thead><tr><th>Benchmark</th><th>Single</th><th>TextMAS</th><th>LatentMAS</th></tr></thead>
+        <tbody>
+          <tr><td>ARC-E</td><td>97.2</td><td>99.0</td><td class="up">99.4</td></tr>
+          <tr><td>ARC-C</td><td>92.6</td><td>95.9</td><td>95.6</td></tr>
+          <tr><td>GSM8K</td><td>83.7</td><td>93.8</td><td class="up">95.2</td></tr>
+          <tr><td>MedQA</td><td>64.7</td><td>80.3</td><td class="up">80.7</td></tr>
+          <tr><td>MBPP+</td><td>68.5</td><td>72.8</td><td class="up">75.7</td></tr>
+          <tr><td>HumanEval+</td><td>76.8</td><td>81.1</td><td class="up">86.5</td></tr>
+          <tr><td>AIME24</td><td>63.3</td><td>63.3</td><td class="up">66.7</td></tr>
+          <tr><td>AIME25</td><td>56.7</td><td>60.0</td><td class="up">63.3</td></tr>
+          <tr><td>GPQA-Diamond</td><td>48.5</td><td>51.5</td><td class="up">52.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">✅ Strengths</span><span class="t-ko">✅ 강점</span></h2>
+    <div class="adv">
+      <div class="advcard pos"><h4><span class="t-en">Genuinely unified, training-free framing</span><span class="t-ko">진정으로 통합된 학습 불필요 프레이밍</span></h4><p class="t-en">First to combine intra-agent latent reasoning with inter-agent latent KV communication into one end-to-end, training-free MAS pipeline — and it cleanly positions itself against prior work that did only one of the two.</p><p class="t-ko">에이전트 내부 잠재 추론과 에이전트 간 잠재 KV 통신을 하나의 종단간·학습 불필요 MAS 파이프라인으로 결합한 첫 시도이며, 둘 중 하나만 한 선행 연구와 명확히 대비된다.</p></div>
+      <div class="advcard pos"><h4><span class="t-en">Large, consistent, well-decomposed efficiency gains</span><span class="t-ko">크고 일관되며 잘 분해된 효율 향상</span></h4><p class="t-en">−70.8% to −83.7% output tokens and 4×–4.3× speed (2.6×–7× even vs vLLM-optimized TextMAS), across all 9 benchmarks and both settings. Crucially they measure the <em>final agent alone</em> (−29.1% tokens), showing savings aren't merely from deleting intermediate text.</p><p class="t-ko">9개 벤치마크·두 설정 전반에서 출력 토큰 −70.8%~−83.7%, 속도 4×~4.3×(vLLM 최적화 TextMAS 대비도 2.6×~7×). 특히 <em>최종 에이전트만</em> 따로 측정(−29.1% 토큰)해, 절감이 단순히 중간 텍스트 삭제 때문이 아님을 보였다.</p></div>
+      <div class="advcard pos"><h4><span class="t-en">Principled, validated W<sub>a</sub> alignment</span><span class="t-ko">원리적이고 검증된 W<sub>a</sub> 정렬</span></h4><p class="t-en">A closed-form ridge-regression projection that provably minimizes an upper bound on the Wasserstein distance to the input-embedding distribution, computed once and reused, contributing a measured +2.3–5.3% accuracy (ablation-supported).</p><p class="t-ko">입력 임베딩 분포와의 바서슈타인 거리 상계를 증명 가능하게 최소화하는 닫힌 형식의 능형 회귀 사영으로, 한 번 계산해 재사용하며 +2.3~5.3% 정확도 기여(제거 실험으로 뒷받침).</p></div>
+      <div class="advcard pos"><h4><span class="t-en">Clean two-way ablation</span><span class="t-ko">깔끔한 양방향 제거 실험</span></h4><p class="t-en">Both hybrids (latent-reason+text-comm, text-reason+latent-comm) underperform full LatentMAS, credibly showing the two contributions are complementary rather than one carrying all the gain. The right experiment, done correctly.</p><p class="t-ko">두 하이브리드(잠재추론+텍스트통신, 텍스트추론+잠재통신)가 모두 전체 LatentMAS보다 낮아, 두 기여가 보완적이며 한쪽이 모든 이득을 떠받치지 않음을 신뢰성 있게 보였다. 올바른 실험을 올바르게 수행.</p></div>
+      <div class="advcard pos"><h4><span class="t-en">Broad evaluation + interpretability tooling</span><span class="t-ko">폭넓은 평가 + 해석 도구</span></h4><p class="t-en">9 benchmarks, 2 topologies, 2 model families, with trends transferring to Llama. The "debug mode" and embedding-coverage analysis are commendable attempts to make a latent system inspectable rather than a pure black box.</p><p class="t-ko">9개 벤치마크·2개 구조·2개 모델 계열, Llama로도 경향 전이. "디버그 모드"와 임베딩 커버리지 분석은 잠재 시스템을 순수 블랙박스가 아닌 검사 가능한 것으로 만들려는 칭찬할 시도다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">⚔️ Weaknesses, gaps &amp; suspicious points</span><span class="t-ko">⚔️ 약점·부족한 점·의심 포인트</span></h2>
+    <div class="adv">
+      <div class="advcard neg"><span class="kind">unsupported claim</span><h4><span class="t-en">The headline "14.6%" is vs the wrong baseline; gains over TextMAS are marginal</span><span class="t-ko">헤드라인 "14.6%"는 잘못된 기준선 대비; TextMAS 대비 이득은 미미</span></h4><p class="t-en">"Up to 14.6% higher accuracy" is the gain over the <em>single-model</em> baseline (a near-strawman — any 4-agent system beats one agent), not over TextMAS, the real competitor. Versus TextMAS the average is only <b>+2.8% / +4.6%</b>, and per-cell it is routinely ≤0.5pp; yet the 14.6% figure is foregrounded throughout.</p><p class="t-ko">"최대 14.6% 정확도 향상"은 실제 경쟁자 TextMAS가 아니라 <em>단일 모델</em> 대비 이득(4-에이전트가 1-에이전트를 이기는 건 거의 허수아비)이다. TextMAS 대비 평균은 <b>+2.8%/+4.6%</b>뿐이고 셀 단위로는 흔히 ≤0.5pp인데도, 14.6% 수치를 시종일관 전면에 내세운다.</p></div>
+      <div class="advcard neg"><span class="kind">suspicious</span><h4><span class="t-en">Gains are not "consistent" — many ties and outright losses to TextMAS</span><span class="t-ko">이득은 "일관적"이지 않음 — TextMAS에 비기거나 지는 셀 다수</span></h4><p class="t-en">Despite "consistently outperforms," tables show losses: GSM8K Seq Qwen3-4B ↓1.6, ARC-C ↓0.2/↓0.3, GSM8K Hier ↓1.0/↓0.9, and several exact ↑0.0 ties on AIME. On easy benchmarks (ARC-E/C, GSM8K, where TextMAS already scores 90–99%) LatentMAS is statistically indistinguishable. The honest summary is "comparable accuracy at much lower cost," not "higher accuracy."</p><p class="t-ko">"일관되게 능가" 주장과 달리 표엔 패배가 있다: GSM8K Seq Qwen3-4B ↓1.6, ARC-C ↓0.2/↓0.3, GSM8K Hier ↓1.0/↓0.9, AIME엔 정확히 ↑0.0 동률 다수. 쉬운 벤치마크(ARC-E/C, GSM8K; TextMAS가 이미 90~99%)에선 통계적으로 구별 불가. 정직한 요약은 "정확도 향상"이 아니라 "훨씬 낮은 비용으로 동등한 정확도"다.</p></div>
+      <div class="advcard neg"><span class="kind">reproducibility</span><h4><span class="t-en">No seeds, no variance, no significance — fatal given AIME n=30 &amp; T=0.6 sampling</span><span class="t-ko">시드·분산·유의성 없음 — AIME n=30 · T=0.6 샘플링에 치명적</span></h4><p class="t-en">Results are "the mean over three runs" with stochastic decoding (T=0.6, top-p 0.95), yet <b>no standard deviations, CIs, or significance tests appear anywhere</b>. AIME24/25 have only 30 problems (1 item ≈ 3.3pp), so most AIME "gains" of 3.3–3.4pp are a single question flipping — well within run-to-run noise. The central claim (latent &gt; text) is effectively unfalsifiable from the data shown.</p><p class="t-ko">결과는 확률적 디코딩(T=0.6, top-p 0.95)의 "3회 평균"이라면서 <b>표준편차·신뢰구간·유의성 검정이 어디에도 없다</b>. AIME24/25는 30문제뿐(1문항 ≈ 3.3pp)이라 대부분의 3.3~3.4pp "이득"은 한 문제가 뒤집힌 것으로 실행 간 노이즈 범위다. 핵심 주장(잠재 &gt; 텍스트)은 제시된 데이터로 사실상 반증 불가.</p></div>
+      <div class="advcard neg"><span class="kind">unsupported claim</span><h4><span class="t-en">"Lossless / richer than text" is overclaimed</span><span class="t-ko">"무손실 / 텍스트보다 풍부"는 과대주장</span></h4><p class="t-en">Thm 3.3 ("lossless") only proves reading K/V from a cache equals recomputing it from the same tokens through the <em>same</em> model — a near-tautology — and says nothing about whether the downstream agent <em>uses</em> it better than text. Thm 3.1 is a worst-case <em>counting</em> upper bound (under a strong ternary linear-representation assumption), i.e. latent states <em>could</em> encode that much, not that the model populates it usefully. Crucially, the actual pipeline feeds back the <em>approximate</em> W<sub>a</sub> projection, so even the "lossless" guarantee doesn't cover the system as implemented.</p><p class="t-ko">정리 3.3("무손실")은 캐시에서 K/V 읽기가 같은 모델로 같은 토큰을 재계산하는 것과 같음만 증명(거의 동어반복)할 뿐, 하류 에이전트가 텍스트보다 더 잘 <em>쓰는지</em>는 말하지 않는다. 정리 3.1은 강한 삼진 선형표현 가정 하의 최악 <em>계수</em> 상한으로, 잠재 상태가 그만큼 인코딩<em>할 수 있다</em>는 것이지 유용하게 채운다는 게 아니다. 게다가 실제 파이프라인은 <em>근사</em> W<sub>a</sub> 사영을 되먹이므로, "무손실" 보장조차 구현된 시스템을 포괄하지 못한다.</p></div>
+      <div class="advcard neg"><span class="kind">threat to validity</span><h4><span class="t-en">Homogeneous same-model agents only; heterogeneity needs a trainable adapter (contradicting "training-free")</span><span class="t-ko">동질적 동일 모델만; 이질성은 학습형 어댑터 필요(=training-free와 모순)</span></h4><p class="t-en">Layer-wise KV concatenation is only well-defined when every agent shares L, d<sub>h</sub>, head geometry and tokenizer — i.e. the <em>same model</em>; Appendix G admits this and experiments never mix families. Supporting truly heterogeneous agents "requires a trainable adapter," directly contradicting the central training-free pitch. So "generalizes across families" means "within Qwen3 OR within Llama3 separately," not cross-family collaboration — a real limit for practical specialist-mixing MAS.</p><p class="t-ko">층별 KV 연결은 모든 에이전트가 L·d<sub>h</sub>·헤드 기하·토크나이저를 공유할 때만 정의된다 — 즉 <em>같은 모델</em>; 부록 G도 이를 인정하고 실험은 계열을 섞지 않는다. 진짜 이질 에이전트 지원은 "학습형 어댑터"를 요구해 핵심 training-free와 정면 모순. 따라서 "계열 간 일반화"는 "Qwen3 안에서 또는 Llama3 안에서 따로"일 뿐 계열 간 협업이 아니며, 전문가 모델 혼합 실용 MAS엔 실질적 한계다.</p></div>
+      <div class="advcard neg"><span class="kind">threat to validity</span><h4><span class="t-en">Efficiency isn't compute-matched; speedups are highly non-uniform</span><span class="t-ko">효율 비교가 계산량 매칭 아님; 속도 향상이 매우 비균일</span></h4><p class="t-en">The 4× / −80% headlines pit &lt;50 latent steps against a TextMAS baseline allowed up to 20K output tokens — so the win is partly definitional; no accuracy-vs-compute Pareto frontier is shown. And the "4×" is an average over ×1.9 (GSM8K) to ×6.8; token reduction ranges 46.5%–87.9%. The biggest wins cluster on the most verbose-baseline tasks (AIME's 20K cap, GPQA).</p><p class="t-ko">4× / −80% 헤드라인은 &lt;50 잠재 스텝을 최대 20K 출력 토큰이 허용된 TextMAS와 비교 — 우위가 부분적으로 정의에 의한 것이며, 정확도-계산량 파레토가 없다. "4×"도 ×1.9(GSM8K)~×6.8의 평균이고 토큰 절감은 46.5%~87.9%. 가장 큰 이득은 가장 장황한 기준선 과제(AIME 20K 상한, GPQA)에 몰린다.</p></div>
+      <div class="advcard neg"><span class="kind">missing experiment</span><h4><span class="t-en">Missing baselines &amp; a compute-matched single-agent control</span><span class="t-ko">누락된 기준선 + 계산량 정합 단일 에이전트 통제</span></h4><p class="t-en">All baselines are text methods. There is no comparison to the prior latent work the paper builds on (single-model latent-CoT à la Coconut; cross-model KV/embedding sharing), and no <b>compute-matched single-model control</b> (same FLOPs / self-consistency / more reasoning tokens). So "latent collaboration helps" is not separated from "more test-time compute helps," and the modest +2.8%/+4.6% might be matched by trivially scaling single-agent compute.</p><p class="t-ko">모든 기준선이 텍스트 기법이다. 토대로 삼은 선행 잠재 연구(Coconut류 단일 모델 잠재 CoT; 모델 간 KV/임베딩 공유)와의 비교도, <b>계산량 정합 단일 모델 통제</b>(동일 FLOPs/자기일관성/추론 토큰 증가)도 없다. 따라서 "잠재 협업이 돕는다"가 "테스트시 연산 증가가 돕는다"와 분리되지 않으며, 완만한 +2.8%/+4.6%는 단일 에이전트 연산을 늘리는 것만으로 따라잡힐 수 있다.</p></div>
+      <div class="advcard neg"><span class="kind">missing experiment</span><h4><span class="t-en">KV-cache memory overhead is carried across all agents but never measured</span><span class="t-ko">KV 캐시 메모리 오버헤드가 모든 에이전트에 누적되지만 미측정</span></h4><p class="t-en">Each successor prepends every predecessor's full layer-wise KV cache; the hierarchical summarizer integrates all experts' caches — a monotonically growing memory footprint. Yet Thm 3.4 analyzes only <em>time</em>, and <b>no peak-memory numbers</b> are reported. For a method whose whole pitch is efficiency, trading compute for unquantified memory (KV caches dominate inference memory at scale) is a material gap.</p><p class="t-ko">각 후속 에이전트가 선행자의 전체 층별 KV 캐시를 prepend하고, 계층 요약자는 모든 전문가 캐시를 통합 — 단조 증가 메모리. 그런데 정리 3.4는 <em>시간</em>만 분석하고 <b>최대 메모리 수치가 전혀 없다</b>. 효율이 전체 셀링 포인트인 방법이 계산을 정량화되지 않은 메모리와 맞바꾸는 것(대규모에서 KV 캐시가 추론 메모리를 지배)은 실질적 공백이다.</p></div>
+      <div class="advcard neg"><span class="kind">threat to validity</span><h4><span class="t-en">Removing text destroys monitorability; the "debug mode" mitigation is partial &amp; possibly unfaithful</span><span class="t-ko">텍스트 제거는 감시가능성 파괴; "디버그 모드" 완화책은 부분적·불충실 가능</span></h4><p class="t-en">Inter-agent text is a primary safety/interpretability surface; latent communication makes collusion or error propagation invisible by construction, yet the Impact Statement disclaims any concern. The mitigation generates a <em>parallel</em> text — not a faithful decode of the latent thoughts actually transferred — validated by a single thin study (Qwen3-14B, GSM8K only, n=100, manual annotation, no inter-annotator agreement). 96.2%/90.0% is suggestive at best.</p><p class="t-ko">에이전트 간 텍스트는 핵심 안전/해석 표면이다. 잠재 통신은 담합·오류 전파를 구조적으로 비가시화하는데도 Impact Statement는 우려를 부인한다. 완화책은 <em>병렬</em> 텍스트를 생성할 뿐 실제 전달된 잠재 사고의 충실한 디코딩이 아니며, 단일 빈약한 연구(Qwen3-14B·GSM8K만·n=100·수동 주석·주석자 간 일치도 없음)로만 검증된다. 96.2%/90.0%는 잘해야 시사적이다.</p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2511.20639">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="../papers/2026-06-20-latent-collaboration-mas.html">📝 <span class="t-en">5-min summary</span><span class="t-ko">5분 요약</span></a>
+      <a href="https://arxiv.org/abs/2511.20639">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2511.20639">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2511.20639">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en"><b>Full Review</b> — comprehensive walkthrough + adversarial critique (2 reviewer lenses). Auto-generated for ⭐ Must-read papers · noindex.</span>
+    <span class="t-ko"><b>풀 리뷰</b> — 전 내용 정리 + 적대적 비판(리뷰어 2 렌즈). ⭐ 머스트리드 논문에 자동 생성 · noindex.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

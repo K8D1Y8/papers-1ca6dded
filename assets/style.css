@@ -159,6 +159,27 @@ table.ptable th:first-child,table.ptable td:first-child{text-align:left;font-wei
 table.ptable tbody tr:last-child td{border-bottom:0}
 table.ptable td.up{color:var(--clay-deep);font-weight:700}
 
+/* ---- full review: overview logical-flow pipeline + adversarial cards ---- */
+.logicflow{counter-reset:fs;display:grid;gap:0;margin:16px 0 8px}
+.fstage{position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 16px 13px 52px;margin-bottom:24px;box-shadow:0 1px 2px rgba(40,32,18,.03)}
+.fstage:last-child{margin-bottom:0}
+.fstage:before{counter-increment:fs;content:counter(fs);position:absolute;left:13px;top:13px;width:27px;height:27px;
+  display:grid;place-items:center;border-radius:8px;background:var(--clay-tint);color:var(--clay-deep);font-family:var(--sans);font-weight:800;font-size:13px}
+.fstage:after{content:"↓";position:absolute;left:23px;bottom:-21px;color:var(--clay);font-weight:800;font-size:17px;line-height:1}
+.fstage:last-child:after{display:none}
+.fstage .fl{font-family:var(--sans);font-weight:750;font-size:14.5px;color:var(--ink)}
+.fstage .fd{font-size:13.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+.adv{display:grid;gap:11px;margin-top:6px}
+.advcard{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:14px 16px}
+.advcard.pos{border-left:3px solid var(--green)}
+.advcard.neg{border-left:3px solid var(--rose)}
+.advcard .kind{display:inline-block;font-family:var(--sans);font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--clay-deep);background:var(--clay-tint);border-radius:6px;padding:2px 7px;margin-bottom:7px}
+.advcard h4{margin:0 0 5px;font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:-.01em;color:var(--ink);line-height:1.3}
+.advcard p{margin:0;font-size:13.5px;color:var(--ink-soft);line-height:1.62}
+.fullbadge{display:inline-flex;align-items:center;gap:6px;background:var(--clay);color:#fff;font-family:var(--sans);font-weight:800;
+  font-size:11px;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:5px 12px}
+
 /* ============ archive index ============ */
 .hero .k{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .hero p{margin:8px 0 0;color:var(--muted);font-size:14px}
