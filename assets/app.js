@@ -55,3 +55,68 @@
     });
   }
 })();
+
+// "Ask Claude" — select text (or hit the button) to open Claude with the paper context.
+// No API key: it opens Claude Desktop via the claude:// deep link and copies the prompt to the clipboard as a fallback.
+(function () {
+  var paperTitle = (document.title || '').replace(/^5-min paper · /, '').trim();
+  var aEl = document.querySelector('a[href*="arxiv.org/abs/"]');
+  var arxivId = aEl ? ((aEl.getAttribute('href').match(/abs\/([0-9.]+)/) || [])[1] || '') : '';
+  if (!arxivId) return; // only on paper pages
+  var lastSel = '';
+
+  function buildPrompt(sel) {
+    var ctx = 'I am reading the paper "' + paperTitle + '" (arXiv:' + arxivId + ', https://arxiv.org/abs/' + arxivId + ').';
+    return sel
+      ? ctx + ' Please explain this part clearly and simply (answer in the language of my question):\n\n"' + sel + '"'
+      : ctx + ' I have a question about it:\n\n';
+  }
+  function ask(sel) {
+    var p = buildPrompt(sel);
+    try { if (navigator.clipboard) navigator.clipboard.writeText(p); } catch (e) {}
+    try { window.location.href = 'claude://claude.ai/new?q=' + encodeURIComponent(p); } catch (e) {}
+    toast(document.body.classList.contains('lang-ko')
+      ? 'Claude 여는 중 — 안 열리면 claude.ai에서 붙여넣기(⌘V). 프롬프트는 복사됨.'
+      : 'Opening Claude — if nothing opens, paste (⌘V) into claude.ai. Prompt copied.');
+  }
+
+  var bubble = document.createElement('button');
+  bubble.className = 'askbubble';
+  bubble.textContent = '🤖 Ask Claude';
+  bubble.style.display = 'none';
+  bubble.addEventListener('mousedown', function (e) { e.preventDefault(); }); // keep the selection
+  bubble.addEventListener('click', function () { if (lastSel) ask(lastSel); bubble.style.display = 'none'; });
+  document.body.appendChild(bubble);
+
+  document.addEventListener('selectionchange', function () {
+    var s = window.getSelection();
+    var t = s ? s.toString().trim() : '';
+    if (t.length > 3 && s.rangeCount) {
+      lastSel = t;
+      var r = s.getRangeAt(0).getBoundingClientRect();
+      if (r.width || r.height) {
+        bubble.style.display = 'block';
+        bubble.style.top = (window.scrollY + r.top - 44) + 'px';
+        bubble.style.left = (window.scrollX + Math.max(8, Math.min(r.left, window.innerWidth - 140))) + 'px';
+      }
+    } else {
+      bubble.style.display = 'none';
+    }
+  });
+  document.addEventListener('scroll', function () { bubble.style.display = 'none'; }, { passive: true });
+
+  var fab = document.createElement('button');
+  fab.className = 'askfab';
+  fab.innerHTML = '🤖 <span class="t-en">Ask Claude</span><span class="t-ko">클로드에게 질문</span>';
+  fab.addEventListener('click', function () { ask(''); });
+  document.body.appendChild(fab);
+
+  var toastEl;
+  function toast(msg) {
+    if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'asktoast'; document.body.appendChild(toastEl); }
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { toastEl.classList.remove('show'); }, 4200);
+  }
+})();
