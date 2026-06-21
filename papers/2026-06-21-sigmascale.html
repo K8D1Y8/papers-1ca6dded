@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · SigmaScale: SVD-based Low-Rank LLM Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Model Compression · Low-Rank</span><span class="t-ko">🗜 Model Compression · Low-Rank</span></span>
+      <span>2026 · 06 · 21</span>
+    </div>
+    <h1>SigmaScale: SVD-based Low-Rank LLM Compression<br>
+      <span class="glow t-en">— Learn the scaling, don't just derive it</span>
+      <span class="glow t-ko">— 스케일링을 '유도'하지 말고 '학습'하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Ernests Lavrinovics</b> <span class="t-en">et al.</span><span class="t-ko">외 5인</span></span>
+      <span>🏛 Aalborg · Genoa · CERN</span>
+      <span>🗓 2026.06.05</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.07098">arXiv:2606.07098</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">SVD-based LLM compression truncates singular values, but naive SVD hurts because of activation outliers — so prior work multiplies weights by <b>analytically-derived</b> scaling matrices S. <span class="hl">SigmaScale instead LEARNS row/column diagonal scaling under an activation-aware loss</span> before truncated SVD. Learned scaling demonstrably <b>lowers the effective intrinsic rank</b> (entropy↓), strongly correlated (<b>r≈0.9</b>) with compression loss. On Llama-3.1-8B and Qwen3-8B it is competitive with SOTA SVD methods, especially at mild compression (0.90×).</p>
+    <p class="t-ko">SVD 기반 LLM 압축은 특이값을 잘라내지만, 활성값 이상치 탓에 단순 SVD는 성능이 나쁘다 — 그래서 기존 연구는 가중치에 <b>해석적으로 유도한</b> 스케일링 행렬 S를 곱한다. <span class="hl">SigmaScale은 대신 활성값 인식 손실 아래 행·열 대각 스케일링을 학습</span>해 절단 SVD 전에 적용한다. 학습된 스케일링은 <b>유효 내재 랭크를 낮추고</b>(엔트로피↓), 이는 압축 손실과 강하게 상관(<b>r≈0.9</b>)한다. Llama-3.1-8B·Qwen3-8B에서 SOTA SVD 기법과 대등, 특히 약한 압축(0.90×)에서 강하다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Among compression families, low-rank is the hardware-friendly one — but plain SVD on weights is poor.</p>
+    <p class="lead t-ko">압축 기법 중 저랭크는 '하드웨어 친화적'인 선택지다 — 그런데 가중치에 그냥 SVD를 쓰면 성능이 나쁘다.</p>
+    <p class="t-en">Quantization and pruning need specialized hardware support; <strong>low-rank decomposition does not</strong>, and it stacks on top of them. But naive SVD that minimizes ‖W−W′‖ does poorly on LLM weights because of <strong>activation outliers</strong>. Prior methods (ASVD, SVD-LLM) absorb outliers by deriving scaling matrices S analytically. SigmaScale asks: <strong>can we just learn S?</strong></p>
+    <p class="t-ko">양자화·프루닝은 특수 하드웨어 지원이 필요하지만 <strong>저랭크 분해는 그렇지 않고</strong>, 그 위에 겹쳐 쓸 수 있다. 그러나 ‖W−W′‖만 줄이는 단순 SVD는 <strong>활성값 이상치</strong> 때문에 LLM 가중치에서 성능이 나쁘다. 기존 기법(ASVD, SVD-LLM)은 스케일링 행렬 S를 해석적으로 유도해 이상치를 흡수한다. SigmaScale은 묻는다: <strong>그냥 S를 학습하면 안 될까?</strong></p>
+    <figure class="fig">
+      <img src="fig/2606.07098/fig1.png" alt="SigmaScale processing pipeline">
+      <figcaption class="t-en"><b>Figure 1.</b> The SigmaScale pipeline — sensitivity probing sets per-layer ranks; row/column scaling matrices are learned and applied before truncated SVD; then post-compression fine-tuning realigns weights.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> SigmaScale 파이프라인 — 민감도 프로빙으로 레이어별 랭크를 정하고, 행·열 스케일링 행렬을 학습해 절단 SVD 전에 적용한 뒤, 압축 후 미세조정으로 가중치를 재정렬한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.07098</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">Learn S</div><div class="l"><span class="t-en">learns scaling matrices<br>(first work to)</span><span class="t-ko">스케일링 행렬을 학습<br>(최초)</span></div></div>
+      <div class="stat"><div class="n">0.90×</div><div class="l"><span class="t-en">strongest at mild<br>compression regime</span><span class="t-ko">약한 압축 구간에서<br>가장 강함</span></div></div>
+      <div class="stat"><div class="n">r≈0.9</div><div class="l"><span class="t-en">eff-rank entropy↓ ↔<br>compression loss↓</span><span class="t-ko">유효랭크 엔트로피↓ ↔<br>압축 손실↓ 상관</span></div></div>
+      <div class="stat"><div class="n">8.95</div><div class="l"><span class="t-en">PPL, Llama-3.1-8B @0.90×<br>(SVD-LLM: 13.31)</span><span class="t-ko">PPL, Llama-3.1-8B @0.90×<br>(SVD-LLM: 13.31)</span></div></div>
+      <div class="stat"><div class="n">2 / 5</div><div class="l"><span class="t-en">LLMs / zero-shot<br>benchmarks</span><span class="t-ko">LLM 2개 / 제로샷<br>벤치마크 5개</span></div></div>
+      <div class="stat"><div class="n">no HW</div><div class="l"><span class="t-en">no special hardware<br>(unlike quant/pruning)</span><span class="t-ko">특수 하드웨어 불필요<br>(양자화·프루닝과 달리)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — best on zero-shot accuracy</span><span class="t-ko">결과 — 제로샷 정확도에서 우위</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Llama-3.1-8B @ 0.90× retention. SigmaScale leads on zero-shot accuracy (ARC-Easy, HellaSwag); ASVD+ edges it on perplexity.</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> Llama-3.1-8B @ 0.90× 유지. SigmaScale이 제로샷 정확도(ARC-Easy, HellaSwag)에서 앞섬; perplexity는 ASVD+가 근소 우위.</caption>
+        <thead><tr><th>Method</th><th>PPL↓</th><th>ARC-Easy</th><th>HellaSwag</th></tr></thead>
+        <tbody>
+          <tr><td><span class="t-en">Baseline (1.0×)</span><span class="t-ko">Baseline (1.0×)</span></td><td>7.21</td><td>79.63</td><td>80.12</td></tr>
+          <tr><td>SVD-LLM</td><td>13.31</td><td>68.10</td><td>64.71</td></tr>
+          <tr><td>ASVD+</td><td>8.26</td><td>76.89</td><td>74.35</td></tr>
+          <tr><td>SigmaScale</td><td>8.95</td><td class="up">78.62</td><td class="up">75.98</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea — two mechanisms</span><span class="t-ko">아이디어 — 두 개의 메커니즘</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag"><span class="t-en">① Learn, don't derive</span><span class="t-ko">① 유도 말고 학습</span></span>
+        <h3>Learned activation-aware scaling</h3>
+        <p class="t-en">Optimize row/column vectors → positive diagonal <span class="term">S = diag(exp(d))</span>, applied as <span class="term">S<sub>r</sub> W S<sub>c</sub></span> before truncated SVD, under an activation-aware loss <span class="term">‖WX − W′X‖</span>.</p>
+        <p class="t-ko">행·열 벡터를 최적화해 양의 대각 <span class="term">S = diag(exp(d))</span>를 만들고, 절단 SVD 전에 <span class="term">S<sub>r</sub> W S<sub>c</sub></span>로 적용 — 활성값 인식 손실 <span class="term">‖WX − W′X‖</span> 아래.</p>
+      </div>
+      <div class="m">
+        <span class="tag"><span class="t-en">② Lower the rank</span><span class="t-ko">② 랭크를 낮춤</span></span>
+        <h3>Reshapes the singular spectrum</h3>
+        <p class="t-en">Learned scaling reduces the <span class="term">effective-rank entropy</span> of Σ, and that drop tracks the compression-loss drop (<b>r≈0.9</b>) — evidence that learning S manipulates intrinsic rank.</p>
+        <p class="t-ko">학습된 스케일링은 Σ의 <span class="term">유효랭크 엔트로피</span>를 낮추고, 그 감소가 압축 손실 감소와 연동(<b>r≈0.9</b>) — S 학습이 내재 랭크를 조작한다는 증거.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Sensitivity probing</span><span class="t-ko">민감도 프로빙</span></b><span class="t-en">Per-module truncated SVD across ratios; binary-search ranks to hit a global compression target with minimal perplexity rise.</span><span class="t-ko">모듈별 절단 SVD를 비율별로; 전역 압축 목표를 PPL 상승 최소로 맞추도록 랭크 이진탐색.</span></li>
+      <li><b><span class="t-en">Init scaling vectors</span><span class="t-ko">스케일링 벡터 초기화</span></b><span class="t-en">d_r, d_c from a Gaussian scaled by σ_W; build S_r=diag(exp(d_r)), S_c=diag(exp(d_c)).</span><span class="t-ko">d_r, d_c를 σ_W로 스케일한 가우시안으로; S_r=diag(exp(d_r)), S_c=diag(exp(d_c)) 구성.</span></li>
+      <li><b><span class="t-en">Scale → SVD → inverse</span><span class="t-ko">스케일 → SVD → 역변환</span></b><span class="t-en">W′ = S_r⁻¹ · SVD_k(S_r W S_c) · S_c⁻¹; minimize the activation-aware loss ‖WX − W′X‖_F.</span><span class="t-ko">W′ = S_r⁻¹ · SVD_k(S_r W S_c) · S_c⁻¹; 활성값 인식 손실 ‖WX − W′X‖_F 최소화.</span></li>
+      <li><b><span class="t-en">Absorb + recover</span><span class="t-ko">흡수 + 회복</span></b><span class="t-en">Fold Σ into low-rank factors L, R, replace W; then post-compression fine-tune (SFT or KD) to realign.</span><span class="t-ko">Σ를 저랭크 인자 L, R에 흡수해 W 교체; 이후 압축 후 미세조정(SFT/KD)으로 재정렬.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Hardware-friendly.</strong> Low-rank deploys without special hardware and stacks on top of quantization/pruning.</p><p class="t-ko"><strong>하드웨어 친화적.</strong> 저랭크는 특수 하드웨어 없이 배포되고 양자화·프루닝 위에 겹쳐 쓸 수 있다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Learning beats deriving.</strong> First work to learn the scaling matrices — reshaping the singular spectrum instead of deriving S analytically.</p><p class="t-ko"><strong>유도보다 학습.</strong> 스케일링 행렬을 학습한 최초 연구 — S를 해석적으로 유도하는 대신 특이값 스펙트럼을 재편.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Mechanistic evidence.</strong> Effective-rank-entropy drop strongly tracks compression-loss drop (r≈0.9).</p><p class="t-ko"><strong>메커니즘 근거.</strong> 유효랭크 엔트로피 감소가 압축 손실 감소와 강하게 연동(r≈0.9).</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Mind the regime.</strong> Shines at 0.90× but degrades sharply at 0.50× — a truncation-quality booster, not an extreme-compression solution.</p><p class="t-ko"><strong>구간을 보라.</strong> 0.90×에선 강하지만 0.50×에선 급락 — 절단 품질 향상기이지 극단 압축 해법은 아니다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> SVD at every update step is O(n³) (no fast-SVD approximations explored); performance drops sharply under aggressive compression (especially Llama-3.1); KD did not beat plain SFT here; and evaluation is limited to perplexity + 5 zero-shot benchmarks (no long-form or coding), with Wikitext calibration acknowledged by the authors as subpar.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 매 업데이트 스텝의 SVD는 O(n³)(고속 SVD 근사 미탐구); 공격적 압축에서 성능이 급락(특히 Llama-3.1); 여기선 KD가 단순 SFT를 못 이김; 평가가 PPL+제로샷 5개에 한정(장문·코딩 없음), Wikitext 캘리브레이션은 저자도 부족하다고 인정.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.07098">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.07098">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.07098">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.07098">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · Model Compression / Low-rank</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-06-21.</span>
+    <span class="t-ko">선정 사유 — <b>위시리스트 · Model Compression / Low-rank</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-06-21.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

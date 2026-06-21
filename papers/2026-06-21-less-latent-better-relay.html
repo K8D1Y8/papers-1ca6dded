@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5분 논문 · When Less Latent Leads to Better Relay</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Multi-Agent · KV Compression</span><span class="t-ko">🗜 Multi-Agent · KV Compression</span></span>
+      <span>2026 · 06 · 21</span>
+    </div>
+    <h1>When Less Latent Leads to Better Relay<br><span class="glow t-en">— Don't send it all: compress and relay only what's useful</span><span class="glow t-ko">— 다 보내지 말고, '쓸모'만 압축해 넘겨라</span></h1>
+    <div class="meta">
+      <span>👥 <b>Yiping Li</b> <span class="t-en">et al.</span><span class="t-ko">외 2인</span></span>
+      <span>🏛 UC Merced</span>
+      <span>🗓 2026.04.14</span>
+      <span>📄 <a href="https://arxiv.org/abs/2604.13349">arXiv:2604.13349</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">LatentMAS relays an agent's <b>entire KV-cache</b> for lossless communication, but its memory and bandwidth cost explodes with the number of agents and rounds. This paper proposes a <span class="hl">relay-specific KV compression that sends "not everything, but only the states useful to the next agent."</span> With eviction + <b>Orthogonal Backfill (OBF)</b>, it shrinks prompt KV by <b>about 80–89%</b> while <b>actually beating full relay on 7 of 9 benchmarks</b>.</p>
+    <p class="t-ko">LatentMAS는 에이전트의 <b>KV-cache를 통째로</b> 넘겨 무손실로 통신하지만, 그 메모리·대역폭 비용이 에이전트·라운드 수에 따라 폭증한다. 이 논문은 <span class="hl">"전부가 아니라 다음 에이전트에게 쓸모 있는 상태만" 골라 보내는 relay 전용 KV 압축</span>을 제안한다. eviction + <b>Orthogonal Backfill(OBF)</b>로 프롬프트 KV를 <b>약 80~89%</b> 줄이고도, 9개 벤치마크 중 <b>7개에서 full relay를 오히려 능가</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The bottleneck of latent communication is not "how much you send" but "what is useful."</p>
+    <p class="lead t-ko">잠재 통신의 병목은 "얼마나 많이 보내냐"가 아니라 "무엇이 쓸모 있냐"다.</p>
+    <p class="t-en">When an agent relays its full KV-cache, communication fidelity is high, but the cost grows linearly with the number of agents, rounds, and prompt length. Moreover, relay compression is a <strong>fundamentally different problem</strong> from a single agent's cache management — the key is not saving my own memory, but <strong>whether the compressed state is useful for the next inference of "another agent."</strong> The authors reframe this not as memory reduction but as an <strong>information-preserving communication problem</strong>.</p>
+    <p class="t-ko">에이전트가 KV-cache 전체를 넘기면 통신 충실도는 높지만, 비용이 에이전트 수·라운드·프롬프트 길이에 비례해 선형으로 커진다. 게다가 relay 압축은 단일 에이전트의 캐시 관리와 <strong>본질적으로 다른 문제</strong> — 핵심은 내 메모리 절약이 아니라, <strong>압축한 상태가 "다른 에이전트"의 다음 추론에 유용한가</strong>이다. 저자들은 이를 메모리 축소가 아닌 <strong>정보 보존 통신 문제</strong>로 재정의한다.</p>
+    <figure class="fig">
+      <img src="fig/2604.13349/x1.png" alt="MAS 통신 매체 비교: 자연어, 임베딩, KV-cache">
+      <figcaption class="t-en"><b>Figure 1.</b> Representative communication media in MAS — natural language (text) → embeddings → KV-cache relay. Moving right raises information fidelity but also cost.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> MAS의 대표적 통신 매체 — 자연어(텍스트) → 임베딩 → KV-cache 전달. 오른쪽으로 갈수록 정보 충실도는 높지만 비용도 커진다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.13349</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">−89%</div><div class="l"><span class="t-en">Max communication KV savings<br>(ARC-E, budget k=32)</span><span class="t-ko">통신 KV 최대 절감<br>(ARC-E, 예산 k=32)</span></div></div>
+      <div class="stat"><div class="n">~14%</div><div class="l"><span class="t-en">Avg. retention ratio<br>(vs. original prompt)</span><span class="t-ko">평균 유지 비율<br>(원본 프롬프트 대비)</span></div></div>
+      <div class="stat"><div class="n">7 / 9</div><div class="l"><span class="t-en">Benchmarks where OBF<br>beats full relay</span><span class="t-ko">OBF가 full relay를<br>능가한 벤치마크</span></div></div>
+      <div class="stat"><div class="n">+11%p</div><div class="l"><span class="t-en">AIME25 accuracy<br>(H-OBF 64.4 vs Full 53.3)</span><span class="t-ko">AIME25 정확도<br>(H-OBF 64.4 vs Full 53.3)</span></div></div>
+      <div class="stat"><div class="n">32</div><div class="l"><span class="t-en">Prompt token budget<br>per agent · round</span><span class="t-ko">에이전트·라운드당<br>프롬프트 토큰 예산</span></div></div>
+      <div class="stat"><div class="n">9</div><div class="l"><span class="t-en">Benchmarks<br>· Qwen3-14B</span><span class="t-ko">벤치마크<br>· Qwen3-14B</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — compression catches up to full</span><span class="t-ko">결과 — 압축이 full을 따라잡는다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Qwen3-14B accuracy (%) — OBF ties or beats full relay. Representative 6/9 benchmarks, Δ = (best OBF − Full).</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> Qwen3-14B 정확도(%) — OBF가 full relay를 동률~상회. 대표 6/9 벤치마크, Δ = (최고 OBF − Full).</caption>
+        <thead><tr><th>Benchmark</th><th>Full</th><th>OBF (최고)</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>GSM8K</td><td>92.47</td><td>92.57</td><td class="up">+0.10</td></tr>
+          <tr><td>AIME24</td><td>67.78</td><td>71.11</td><td class="up">+3.33</td></tr>
+          <tr><td>AIME25</td><td>53.33</td><td>64.44</td><td class="up">+11.11</td></tr>
+          <tr><td>GPQA</td><td>56.51</td><td>57.19</td><td class="up">+0.68</td></tr>
+          <tr><td>HumanEval+</td><td>84.55</td><td>85.37</td><td class="up">+0.82</td></tr>
+          <tr><td>MedQA</td><td>77.34</td><td>80.45</td><td class="up">+3.11</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">Agent A</div>
+          <div class="sub"><span class="t-en">generate KV-cache</span><span class="t-ko">KV-cache 생성</span></div>
+          <div class="latent"><span class="t-en">full KV (costly)</span><span class="t-ko">full KV (비쌈)</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Compress Φ</span><span class="t-ko">압축 Φ</span></div>
+          <div class="sub"><span class="t-en">key tokens only + OBF</span><span class="t-ko">중요 토큰만 + OBF</span></div>
+          <div class="latent"><span class="t-en">shrink to ~14%</span><span class="t-ko">~14%로 축소</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">Agent B</div>
+          <div class="sub"><span class="t-en">reason on compressed msg</span><span class="t-ko">압축 메시지로 추론</span></div>
+          <div class="latent"><span class="t-en">accuracy held / improved</span><span class="t-ko">정확도 유지·향상</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Compress at the boundary</b> — evict, but <b>backfill</b> the orthogonal residual of the discarded information into the remaining state to recover the loss.</div>
+      <div class="cap t-ko"><b>경계에서 압축</b> — 버리되, 버린 정보의 직교 잔차를 남은 상태에 <b>되채워(backfill)</b> 손실을 보전한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: reframe compression as a "communication problem"</span><span class="t-ko">아이디어: 압축을 '통신 문제'로 재정의</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 분해 + 퇴출</span>
+        <h3>MAS용 Eviction</h3>
+        <p class="t-en">Split the accumulated cache into 4 parts: <span class="term">Sink / inherited history / current prompt / current reasoning</span>. The inherited part is passed as is, and only the tokens deemed important by the attention mass that current reasoning gives the prompt are kept via <span class="term">TopK=32</span> (adapting H2O and StreamingLLM for relay).</p>
+        <p class="t-ko">누적 캐시를 <span class="term">Sink / 상속 history / 현재 prompt / 현재 reasoning</span> 4분할. 상속분은 그대로 넘기고, 현재 reasoning이 prompt에 준 attention mass로 중요한 토큰만 <span class="term">TopK=32</span> 유지(H2O·StreamingLLM을 relay용으로 각색).</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 손실 보전</span>
+        <h3>Orthogonal Backfill (OBF)</h3>
+        <p class="t-en">Among the <span class="term">value states</span> discarded by hard eviction, extract the <strong>orthogonal residual</strong> that the retained ones cannot represent, via low-rank (SVD top-p), and inject it into the retained value. Keys stay untouched — a lightweight plug-in.</p>
+        <p class="t-ko">hard eviction으로 버려지는 <span class="term">value 상태</span> 중, 남긴 것으로 표현 못 하는 <strong>직교 잔차(residual)</strong>를 저랭크(SVD top-p)로 뽑아 retained value에 주입. key는 그대로 — 가벼운 plug-in.</p>
+      </div>
+    </div>
+    <figure class="fig">
+      <img src="fig/2604.13349/x4.png" alt="Orthogonal Backfill 기하 도식">
+      <figcaption class="t-en"><b>Figure 4.</b> Geometric intuition of Orthogonal Backfill — among the discarded value components, extract only the <b>residual orthogonal to the retained subspace</b> and add it back.</figcaption>
+      <figcaption class="t-ko"><b>Figure 4.</b> Orthogonal Backfill의 기하적 직관 — 버린 value 성분 중 <b>남긴 부분공간에 직교하는 잔차</b>만 추출해 되더한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.13349</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Split cache into 4</span><span class="t-ko">캐시 4분할</span></b><span class="t-en">Divide into Sink · inherited history · current prompt · current reasoning; relay the inherited part uncompressed and target only the local part (prompt · reasoning) for compression.</span><span class="t-ko">Sink·상속 history·현재 prompt·현재 reasoning으로 나눠, 상속분은 무압축 전달하고 로컬분(prompt·reasoning)만 압축 대상으로 삼는다.</span></li>
+      <li><b><span class="t-en">Select important tokens</span><span class="t-ko">중요 토큰 선별</span></b><span class="t-en">Rank by the attention mass that current reasoning assigns to prompt positions and keep only the top k (Head-wise / Layer-wise).</span><span class="t-ko">현재 reasoning이 prompt 위치에 부여한 attention mass로 순위 매겨 상위 k개만 유지(Head-wise / Layer-wise).</span></li>
+      <li><b><span class="t-en">Extract orthogonal residual</span><span class="t-ko">직교 잔차 추출</span></b><span class="t-en">Project the discarded value onto the orthogonal complement of the retained ones to isolate only "information the remainder cannot hold," and summarize the key p dimensions with SVD.</span><span class="t-ko">버린 value를 retained의 직교보공간에 투영해 "남은 것으로 못 담는 정보"만 분리, SVD로 핵심 p차원 요약.</span></li>
+      <li><b><span class="t-en">Inject OBF</span><span class="t-ko">OBF 주입</span></b><span class="t-en">Scale by the demand ratio δ of evicted vs. retained and add it to the retained value (keys unchanged) → ties or beats full on 7/9 benchmarks.</span><span class="t-ko">삭제 대 유지의 수요비 δ로 스케일해 retained value에 더한다(key 불변) → full 대비 7/9 벤치마크에서 동등·능가.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Not "more" but "useful."</strong> Cutting communication volume by 80%+ while maintaining or improving accuracy — directly resolving the scaling bottleneck of multi-agent latent communication.</p><p class="t-ko"><strong>'많이'가 아니라 '쓸모'.</strong> 통신량을 80%+ 줄여도 정확도를 유지·향상 — 멀티에이전트 잠재 통신의 스케일 병목을 직접 해소.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Compression as regularization?</strong> The fact that it <em>beats</em> full on 7/9 suggests that sending everything may mean sending the noise too.</p><p class="t-ko"><strong>압축이 곧 정규화?</strong> 7/9에서 full을 <em>능가</em>한다는 건, 전부 넘기는 게 잡음까지 넘기는 것일 수 있음을 시사.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>relay ≠ single-cache management.</strong> The criterion is not "my memory" but "is it useful to the receiving agent" — a new problem definition.</p><p class="t-ko"><strong>relay ≠ 단일 캐시관리.</strong> 기준은 "내 메모리"가 아니라 "받는 에이전트에게 유용한가" — 새로운 문제 정의.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Easy to stack as a plug-in.</strong> OBF only modifies values, so it can be added directly on top of existing eviction.</p><p class="t-ko"><strong>얹기 쉬운 plug-in.</strong> OBF는 value만 수정하므로 기존 eviction 위에 그대로 추가 가능.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The evaluation concentrates on a single Qwen3-14B backbone with a fixed budget (k=32). Heterogeneous agents, budget adaptation (dynamic ρ), and whether "compression beating full" is a genuine regularization effect or just bad luck for the baseline remain open questions.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 평가가 Qwen3-14B 단일 백본 · 고정 예산(k=32)에 집중돼 있다. 이질(heterogeneous) 에이전트, 예산 적응(동적 ρ), 그리고 "압축이 full을 능가"하는 현상이 진짜 정규화 효과인지 baseline의 불운인지에 대한 규명은 열린 과제.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2604.13349">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2604.13349">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2604.13349">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2604.13349">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · topic: Multi-Agent Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-21.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 · 주제: Multi-Agent Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-21.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

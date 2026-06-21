@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<!-- 5분 논문 요약 · 자동 생성 · noindex -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · LatentMem: Customizing Latent Memory for Multi-Agent Systems</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🧩 Multi-Agent · Latent Memory</span><span class="t-ko">🧩 Multi-Agent · Latent Memory</span></span>
+      <span>2026 · 06 · 21</span>
+    </div>
+    <h1>LatentMem: Customizing Latent Memory for Multi-Agent Systems<br>
+      <span class="glow t-en">— Learning a role-tailored latent memory for every agent</span>
+      <span class="glow t-ko">— 에이전트마다 '역할 맞춤' 잠재 메모리를 학습한다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Muxin Fu</b> <span class="t-en">et al.</span><span class="t-ko">외 7인</span></span>
+      <span>🏛 Tongji Univ · Shanghai AI Lab · CUHK 외</span>
+      <span>🗓 2026.02</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.03036">arXiv:2602.03036</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">It tackles the two chronic ailments of multi-agent (MAS) memory at once — role-blind, one-size-fits-all memory (<b>homogenization</b>) and exploding accumulated context (<b>information overload</b>). After retrieving from an <span class="hl">experience bank that stacks raw trajectories without any processing, a memory composer compresses them — together with each agent profile — into a fixed-length, role-specific latent memory</span> that is injected as tokens into each agent's reasoning. Trained with <b>LMPO</b>, which backpropagates the task reward through the latent memory — up to <b>16.20%</b> over vanilla on AutoGen·TriviaQA, an average <b>+6.66%p</b> over multi-agent memory baselines, and <b>2.16×</b> faster inference.</p>
+    <p class="t-ko">멀티에이전트 메모리(MAS memory)의 두 고질병 — 역할 구분 없는 '천편일률' 메모리(<b>homogenization</b>)와 누적 컨텍스트 폭증(<b>information overload</b>) — 을 동시에 푼다. 원본 trajectory를 가공 없이 쌓는 <span class="hl">experience bank에서 검색한 뒤, agent profile과 함께 memory composer가 역할별 고정 길이 잠재 메모리로 압축</span>해 각 에이전트의 추론에 토큰으로 주입한다. 태스크 보상을 잠재 메모리로 역전파하는 <b>LMPO</b>로 학습 — AutoGen·TriviaQA에서 vanilla 대비 최대 <b>16.20%</b> 향상, 멀티에이전트 메모리 기준선 평균 <b>+6.66%p</b>, 추론 시간은 <b>2.16배</b> 단축.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Multi-agent memory collapses the moment you hand "the same memory to everyone" — roles break down.</p>
+    <p class="lead t-ko">멀티에이전트 메모리는 "모두에게 같은 기억"을 주는 순간 역할이 무너진다.</p>
+    <p class="t-en">Existing MAS memory is a <strong>one-size-fits-all</strong> design that pours the same memory into every agent, so role adherence (<span class="term">role adherence</span>) weakens and correlated errors (<span class="term">correlated error</span>) get amplified — this is <strong>memory homogenization</strong>. At the same time, multi-granularity memory makes the number of stored items explode, obscuring the very decision signals that matter (<strong>information overload</strong>). Instead of handcrafted memory, LatentMem targets both at once with a <strong>learnable memory compressed per role in the latent space</strong>.</p>
+    <p class="t-ko">기존 MAS 메모리는 모든 에이전트에게 같은 기억을 붓는 <strong>one-size-fits-all</strong> 설계라, 역할 준수(<span class="term">role adherence</span>)가 약해지고 상관된 오류(<span class="term">correlated error</span>)가 증폭된다 — 이것이 <strong>memory homogenization</strong>이다. 동시에 multi-granularity 메모리는 저장 항목 수가 폭증해 정작 중요한 결정 신호를 가린다(<strong>information overload</strong>). LatentMem은 손으로 깎은(handcrafted) 메모리 대신, <strong>잠재 공간에서 역할별로 압축한 학습 가능한 메모리</strong>로 이 둘을 한 번에 겨냥한다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">16.20%</div><div class="l"><span class="t-en">max gain over vanilla<br>(AutoGen · TriviaQA)</span><span class="t-ko">vanilla 대비 최대 향상<br>(AutoGen · TriviaQA)</span></div></div>
+      <div class="stat"><div class="n">+6.66%p</div><div class="l"><span class="t-en">average over multi-agent<br>memory baselines</span><span class="t-ko">멀티에이전트 메모리<br>기준선 대비 평균</span></div></div>
+      <div class="stat"><div class="n">2.16×</div><div class="l"><span class="t-en">faster inference<br>(vs. DyLAN, OAgents)</span><span class="t-ko">추론 시간 단축<br>(DyLAN, OAgents 대비)</span></div></div>
+      <div class="stat"><div class="n">L′=8</div><div class="l"><span class="t-en">fixed-length latent<br>memory token count</span><span class="t-ko">고정 길이 잠재<br>메모리 토큰 수</span></div></div>
+      <div class="stat"><div class="n">65.5%</div><div class="l"><span class="t-en">MacNet·KodCode<br>(Llama-8B, 48.5→65.5)</span><span class="t-ko">MacNet·KodCode<br>(Llama-8B, 48.5→65.5)</span></div></div>
+      <div class="stat"><div class="n">+11.73%p</div><div class="l"><span class="t-en">over fine-tuning (MARTI)<br>(TriviaQA · AutoGen)</span><span class="t-ko">파인튜닝(MARTI) 대비<br>(TriviaQA · AutoGen)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">Experience Bank</div>
+          <div class="sub"><span class="t-en">raw trajectories, unprocessed</span><span class="t-ko">원본 trajectory 무가공 저장</span></div>
+          <div class="latent"><span class="t-en">top-K retrieval (MiniLM)</span><span class="t-ko">top-K 검색 (MiniLM)</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role">Memory Composer σφ</div>
+          <div class="sub"><span class="t-en">trajectory + role profile γ</span><span class="t-ko">trajectory + 역할 프로필 γ</span></div>
+          <div class="latent"><span class="t-en">fixed L′=8 latent memory</span><span class="t-ko">고정 L′=8 잠재 메모리</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">each agent πθ</span><span class="t-ko">각 에이전트 πθ</span></div>
+          <div class="sub"><span class="t-en">injected via h_j ⊕ m_j</span><span class="t-ko">h_j ⊕ m_j 로 주입</span></div>
+          <div class="latent"><span class="t-en">stronger role-specific reasoning</span><span class="t-ko">역할별 추론 강화</span></div>
+        </div>
+      </div>
+      <div class="cap t-en">The reward is <b>backpropagated (LMPO)</b> through the latent memory into the composer — the agent backbones are <b>frozen</b>, only the composer is trained.</div>
+      <div class="cap t-ko">보상은 잠재 메모리를 통해 composer로 <b>역전파(LMPO)</b> — 에이전트 백본은 <b>동결</b>, composer만 학습한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">아이디어: 두 개의 축</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 역할 인식</span>
+        <h3>Memory Composer</h3>
+        <p class="t-en">It takes the retrieved raw trajectory <span class="term">T_q</span> and the active agent's role profile <span class="term">γ</span> as input and produces a fixed-length latent memory <span class="term">m_j ∈ R^(L′×D)</span>. Because it is injected by <strong>concat</strong>enating onto the prompt's hidden state h_j, there is no modification to the agent or system architecture at all. In t-SNE it <strong>clusters distinctly</strong> by role.</p>
+        <p class="t-ko">검색된 원본 trajectory <span class="term">T_q</span>와 활성 에이전트의 역할 프로필 <span class="term">γ</span>를 입력받아 고정 길이 잠재 메모리 <span class="term">m_j ∈ R^(L′×D)</span>를 생성. 프롬프트 hidden state h_j에 <strong>concat</strong>해 주입하므로 에이전트·시스템 구조 수정이 전혀 없다. t-SNE에서 역할별로 <strong>뚜렷이 클러스터링</strong>된다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 학습</span>
+        <h3>LMPO (Latent Memory Policy Optimization)</h3>
+        <p class="t-en">A variant of <strong>GRPO</strong>. By treating the latent memory m_j as a <strong>differentiable interface</strong>, it backpropagates the gradient of the task reward through the agent's forward pass into the composer φ. Being a <span class="term">token-level</span> surrogate rather than trajectory-level, it enables balanced training even in long MAS interactions.</p>
+        <p class="t-ko"><strong>GRPO</strong>의 변형. 잠재 메모리 m_j를 <strong>미분 가능한 인터페이스</strong>로 두어, 태스크 보상의 그래디언트를 에이전트 forward를 거쳐 composer φ로 역전파한다. trajectory-level이 아닌 <span class="term">token-level</span> surrogate라 긴 MAS 상호작용에서도 균형 잡힌 학습이 가능.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Retrieve</span><span class="t-ko">검색</span></b><span class="t-en">Embed the new query q with MiniLM and fetch the top-K trajectories from the experience bank by cosine similarity.</span><span class="t-ko">새 쿼리 q를 MiniLM으로 임베딩해 experience bank에서 cosine similarity 기준 top-K trajectory를 가져온다.</span></li>
+      <li><b><span class="t-en">Compose</span><span class="t-ko">합성</span></b><span class="t-en">The memory composer takes T_q plus each agent's role profile and produces a role-specific fixed-length latent memory m_j.</span><span class="t-ko">memory composer가 T_q + 각 에이전트의 역할 프로필을 받아 역할별 고정 길이 잠재 메모리 m_j를 생성한다.</span></li>
+      <li><b><span class="t-en">Inject</span><span class="t-ko">주입</span></b><span class="t-en">Concatenate m_j(L′×D) onto the prompt encoding h_j(L×D) and reason over the (L+L′)×D expanded input — the backbone stays frozen.</span><span class="t-ko">프롬프트 인코딩 h_j(L×D)에 m_j(L′×D)를 concat해 (L+L′)×D 확장 입력으로 추론한다 — 백본은 동결.</span></li>
+      <li><b><span class="t-en">Train (LMPO)</span><span class="t-ko">학습(LMPO)</span></b><span class="t-en">Sample a group of G trajectories, normalize the rewards (advantage), and update only the composer with a token-level clipped objective.</span><span class="t-ko">그룹 G개 trajectory를 샘플해 보상을 정규화(advantage)하고, token-level clipped objective로 composer만 업데이트한다.</span></li>
+      <li><b><span class="t-en">Update</span><span class="t-ko">갱신</span></b><span class="t-en">Add completed trajectories to the experience bank → continual adaptation online.</span><span class="t-ko">완료된 trajectory를 experience bank에 추가 → 온라인으로 지속 적응(continual adaptation).</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Compression = efficiency + performance.</strong> Far from using more tokens, it uses <b>0.01M fewer</b> and still gains +8.40% — JoyAgent managed only +2.50% with <b>+1.87M</b> tokens. Information overload is resolved by latent compression.</p><p class="t-ko"><strong>압축 = 효율 + 성능.</strong> 토큰을 더 쓰기는커녕 <b>0.01M 적게</b> 쓰고도 +8.40% — JoyAgent은 <b>+1.87M</b> 토큰으로 +2.50%에 그쳤다. 정보 과부하를 잠재 압축으로 해소.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Per-role memory is the key.</strong> Removing the agent profile drops MacNet·KodCode by <b>-6.45%p</b>. "The same memory for everyone" hurts more the more complex the MAS.</p><p class="t-ko"><strong>역할별 기억이 핵심.</strong> agent profile을 제거하면 MacNet·KodCode에서 <b>-6.45%p</b>. "모두 같은 기억"은 복잡한 MAS일수록 더 손해다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Robust to retrieval count K.</strong> G-Memory degrades from overload at K&gt;3, but LatentMem keeps improving as K grows — extracting only what's useful even from redundant trajectories.</p><p class="t-ko"><strong>검색량 K에 강건.</strong> G-Memory는 K&gt;3에서 과부하로 성능이 떨어지지만, LatentMem은 K가 늘수록 꾸준히 향상 — 중복 trajectory에서도 쓸모만 추출.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Better than fine-tuning.</strong> Under the same compute budget it beats direct backbone fine-tuning (MARTI) in every setting (TriviaQA·AutoGen <b>+11.73%p</b>) — learning only the memory while keeping the backbone frozen.</p><p class="t-ko"><strong>파인튜닝보다 낫다.</strong> 같은 연산 예산에서 백본 직접 파인튜닝(MARTI)을 모든 설정에서 능가(TriviaQA·AutoGen <b>+11.73%p</b>) — 백본은 동결한 채 메모리만 학습.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The evaluation concentrates on small/mid-sized backbones such as Qwen3-4B·Llama-3.1-8B and GRPO-family training. Because the latent memory is <b>opaque tokens</b> that humans cannot read, interpretability and debugging are hard, and how retrieval/storage cost and the risk of accumulating contaminated trajectories are managed as the experience bank grows remains an open question. Whether "per-role clustering" actually leads to collaboration quality is a causal claim that needs verification beyond the t-SNE observation.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 평가가 Qwen3-4B·Llama-3.1-8B 등 소·중형 백본과 GRPO 계열 학습에 집중돼 있다. 잠재 메모리가 사람이 읽을 수 없는 <b>불투명 토큰</b>이라 해석성·디버깅이 어렵고, experience bank가 커질수록 검색·저장 비용과 오염된 trajectory 누적 위험이 어떻게 관리되는지는 열린 문제. "역할별 클러스터링"이 실제 협업 품질로 이어지는 인과는 t-SNE 관찰을 넘어선 추가 검증이 필요하다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.03036">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.03036">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.03036">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.03036">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>wishlist</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-06-21.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-06-21.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

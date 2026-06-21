@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  5-MIN PAPER SUMMARY — BILINGUAL TEMPLATE (English default · 한국어 toggle)
+  ----------------------------------------------------------------------------
+  규칙:
+   1) 디자인은 ../assets/style.css, 동작(진행바+언어토글)은 ../assets/app.js 가 담당.
+      페이지엔 인라인 <style>/<script> 를 새로 만들지 말 것.
+   2) **영어가 기본(primary)**, 한국어는 토글로 표시. 번역되는 텍스트는 두 형제 요소로:
+        <p class="t-en">English…</p><p class="t-ko">한국어…</p>
+      인라인이면 <span class="t-en">…</span><span class="t-ko">…</span>.
+      → t-en 이 기본 노출, t-ko 는 .langtoggle 의 '한' 클릭 시 노출.
+   3) 공용(번역 불필요): 숫자/지표, arXiv ID·링크, 날짜, 저자명, 표의 수치, 그림(그림 안 글자).
+      섹션 제목·본문·캡션·라벨·takeaway·비판 등 "읽는 글"은 모두 en/ko 쌍으로.
+   4) 분량(5분): 스탯 4~6 · 메커니즘 2~4 · 단계 3~5 · takeaway 3~4 · 비판 1 ·
+      (arXiv HTML 있으면) 대표 그림 1 + 핵심 표 1. robots=noindex 유지. 파일은 papers/ 에 저장.
+  ============================================================================
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · {{PAPER_TITLE}}</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">{{TOPIC_EN}}</span><span class="t-ko">{{TOPIC_KO}}</span></span>
+      <span>{{DATE_DOTS}}</span>
+    </div>
+    <h1>{{PAPER_TITLE}}<br>
+      <span class="glow t-en">— {{SUBTITLE_EN}}</span>
+      <span class="glow t-ko">— {{SUBTITLE_KO}}</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>{{FIRST_AUTHOR}}</b> <span class="t-en">{{AUTHORS_TAIL_EN}}</span><span class="t-ko">{{AUTHORS_TAIL_KO}}</span></span>
+      <span>🏛 {{AFFILIATIONS}}</span>
+      <span>🗓 {{PUB_DATE}}</span>
+      <span>📄 <a href="https://arxiv.org/abs/{{ARXIV_ID}}">arXiv:{{ARXIV_ID}}</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">{{TLDR_EN}}</p>
+    <p class="t-ko">{{TLDR_KO}}</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">{{LEAD_EN}}</p>
+    <p class="lead t-ko">{{LEAD_KO}}</p>
+    <p class="t-en">{{WHY_EN}}</p>
+    <p class="t-ko">{{WHY_KO}}</p>
+    <!-- (선택·best-effort) 대표 그림 1개. img/figsrc 는 공용, figcaption 만 en/ko 쌍. -->
+    <figure class="fig">
+      <img src="fig/{{ARXIV_ID}}/{{FIG_FILE}}" alt="{{FIG_ALT}}">
+      <figcaption class="t-en"><b>{{FIG_LABEL}}.</b> {{FIG_CAPTION_EN}}</figcaption>
+      <figcaption class="t-ko"><b>{{FIG_LABEL}}.</b> {{FIG_CAPTION_KO}}</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:{{ARXIV_ID}}</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">{{N1}}</div><div class="l"><span class="t-en">{{L1_EN}}</span><span class="t-ko">{{L1_KO}}</span></div></div>
+      <div class="stat"><div class="n">{{N2}}</div><div class="l"><span class="t-en">{{L2_EN}}</span><span class="t-ko">{{L2_KO}}</span></div></div>
+      <div class="stat"><div class="n">{{N3}}</div><div class="l"><span class="t-en">{{L3_EN}}</span><span class="t-ko">{{L3_KO}}</span></div></div>
+      <div class="stat"><div class="n">{{N4}}</div><div class="l"><span class="t-en">{{L4_EN}}</span><span class="t-ko">{{L4_KO}}</span></div></div>
+    </div>
+  </section>
+
+  <!-- (선택·best-effort) 핵심 표. 수치/열헤더는 공용, caption 만 en/ko 쌍. -->
+  <section>
+    <h2><span class="t-en">{{TABLE_HEADING_EN}}</span><span class="t-ko">{{TABLE_HEADING_KO}}</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>{{TABLE_LABEL}}.</b> {{TABLE_CAPTION_EN}}</caption>
+        <caption class="t-ko"><b>{{TABLE_LABEL}}.</b> {{TABLE_CAPTION_KO}}</caption>
+        <thead><tr><th>{{COL1}}</th><th>{{COL2}}</th><th>{{COL3}}</th><th>{{COL4}}</th></tr></thead>
+        <tbody>
+          <tr><td>{{R1C1}}</td><td>{{R1C2}}</td><td>{{R1C3}}</td><td class="up">{{R1C4}}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- (선택) 한 장의 그림: 인라인 SVG/agent-flow. 다이어그램 안 라벨은 공용(영문)으로 둬도 됨; .cap 은 쌍. -->
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      {{INLINE_DIAGRAM}}
+      <div class="cap t-en">{{CAP_EN}}</div>
+      <div class="cap t-ko">{{CAP_KO}}</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">{{IDEA_HEADING_EN}}</span><span class="t-ko">{{IDEA_HEADING_KO}}</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">{{TAG1}}</span>
+        <h3>{{MECH1_TITLE}}</h3>
+        <p class="t-en">{{MECH1_EN}}</p>
+        <p class="t-ko">{{MECH1_KO}}</p>
+      </div>
+      <div class="m">
+        <span class="tag">{{TAG2}}</span>
+        <h3>{{MECH2_TITLE}}</h3>
+        <p class="t-en">{{MECH2_EN}}</p>
+        <p class="t-ko">{{MECH2_KO}}</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">{{STEP1_EN}}</span><span class="t-ko">{{STEP1_KO}}</span></b><span class="t-en">{{STEP1D_EN}}</span><span class="t-ko">{{STEP1D_KO}}</span></li>
+      <li><b><span class="t-en">{{STEP2_EN}}</span><span class="t-ko">{{STEP2_KO}}</span></b><span class="t-en">{{STEP2D_EN}}</span><span class="t-ko">{{STEP2D_KO}}</span></li>
+      <li><b><span class="t-en">{{STEP3_EN}}</span><span class="t-ko">{{STEP3_KO}}</span></b><span class="t-en">{{STEP3D_EN}}</span><span class="t-ko">{{STEP3D_KO}}</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">{{TAKE1_EN}}</p><p class="t-ko">{{TAKE1_KO}}</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">{{TAKE2_EN}}</p><p class="t-ko">{{TAKE2_KO}}</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">{{TAKE3_EN}}</p><p class="t-ko">{{TAKE3_KO}}</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> {{CRITIQUE_EN}}</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> {{CRITIQUE_KO}}</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="{{ARXIV_ID}}">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/{{ARXIV_ID}}">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/{{ARXIV_ID}}">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/{{ARXIV_ID}}">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>{{SELECTION_REASON_EN}}</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · {{GEN_DATE}}.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>{{SELECTION_REASON_KO}}</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · {{GEN_DATE}}.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

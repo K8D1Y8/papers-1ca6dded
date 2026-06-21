@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>My Research Interest Map · Knowledge Graph</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<style>
+  /* page-specific layout for the full-bleed graph */
+  body{overflow:hidden}
+  .kg-head{padding:16px 20px 10px}
+  .kg-head h1{font-family:var(--serif);font-size:clamp(20px,3.2vw,28px);margin:0 0 4px;letter-spacing:-.01em;font-weight:500}
+  .kg-head h1 .g{color:var(--clay-deep)}
+  .kg-head p{margin:0;color:var(--muted);font-size:13.5px;max-width:760px}
+  .kg-bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:4px 20px 12px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px}
+  .lg{display:inline-flex;align-items:center;gap:7px;font-family:var(--sans);font-size:12.5px;font-weight:650;
+    border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 12px;cursor:pointer;color:var(--ink-soft);transition:all .12s}
+  .lg:hover{border-color:var(--clay)}
+  .lg.dim{opacity:.4}
+  .lg .dot{width:11px;height:11px;border-radius:50%}
+  .kg-hint{font-family:var(--sans);font-size:11.5px;color:var(--faint);margin-left:auto}
+  #kg{width:100vw;height:calc(100vh - 132px);display:block;cursor:grab}
+  #kg:active{cursor:grabbing}
+  .link{stroke:#cfc8b8;stroke-opacity:.55}
+  .link.cross{stroke:var(--clay);stroke-opacity:.7;stroke-dasharray:4 4}
+  .node circle{cursor:pointer;stroke-width:1.5px}
+  .node.bridge circle{stroke:var(--clay-deep);stroke-width:2.5px}
+  .nlabel{font-family:var(--sans);fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:3px;stroke-linejoin:round;pointer-events:none}
+  .nlabel.area{font-weight:800;font-size:14px}
+  .nlabel.sub{font-weight:700;font-size:11px;fill:var(--ink-soft)}
+  .nlabel.leaf{font-weight:600;font-size:9.5px;fill:var(--ink-soft);opacity:0;transition:opacity .12s}
+  .tip{position:fixed;z-index:80;pointer-events:none;max-width:280px;background:var(--ink);color:#fff;
+    font-family:var(--sans);font-size:12.5px;line-height:1.45;border-radius:10px;padding:10px 12px;opacity:0;transition:opacity .1s;box-shadow:0 12px 30px -10px rgba(0,0,0,.45)}
+  .tip b{color:#fff}
+  .tip .k{display:inline-block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#f6c9b6;font-weight:700;margin-bottom:3px}
+  .tip .ax{color:#9be7ff;margin-top:5px;display:block;font-size:11px}
+  @media(max-width:560px){ .kg-hint{display:none} #kg{height:calc(100vh - 158px)} }
+</style>
+</head>
+<body>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<div class="kg-head">
+  <a class="home" href="index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+  <h1 style="margin-top:8px"><span class="t-en">My Research <span class="g">Interest Map</span></span><span class="t-ko">내 연구 <span class="g">관심 지도</span></span></h1>
+  <p class="t-en">Four areas → subfields → key methods, auto-researched and cross-linked. Clay dashed lines are cross-area bridges; ringed nodes appear in more than one area.</p>
+  <p class="t-ko">네 대주제 → 소분류 → 핵심 기법을 자동 조사·연결했습니다. 점선(clay)은 영역 간 다리, 테두리 노드는 두 영역 이상에 걸치는 개념입니다.</p>
+</div>
+
+<div class="kg-bar">
+  <div class="legend" id="legend"></div>
+  <span class="kg-hint"><span class="t-en">hover = detail · click a node = open arXiv · drag · scroll = zoom · click a legend = focus</span><span class="t-ko">호버=설명 · 노드 클릭=arXiv · 드래그 · 스크롤=확대 · 범례 클릭=영역 강조</span></span>
+</div>
+
+<svg id="kg"></svg>
+<div class="tip" id="tip"></div>
+
+<script src="assets/app.js"></script>
+<script>
+const AREA_META = {
+  mac:  { en:'Multi-Agent & Latent Comm.', ko:'멀티에이전트·잠재 통신',        color:'#C15F3C' },
+  seq:  { en:'Efficient Sequence Models',  ko:'효율 시퀀스 모델 (SSM·선형)',   color:'#2f7d77' },
+  comp: { en:'Model Compression',          ko:'모델 압축',                     color:'#B8862F' },
+  world:{ en:'Shared World Models',        ko:'공유·멀티에이전트 World Model', color:'#6f5aa0' },
+};
+
+const DATA = {
+  areas: [
+    { key:'mac', subs:[
+      { name:'Latent & KV-Cache Comm', blurb:'Agents exchange hidden states / KV-caches directly, skipping text.', nodes:[
+        ['Cache-to-Cache','method','Projects one LLM KV-cache into another for direct transfer','2510.03215'],
+        ['LatentMAS','method','Multi-agent collaboration entirely in shared latent space','2511.20639'],
+        ['DroidSpeak','method','KV-cache sharing for cross-LLM communication','2411.02820'],
+        ['KVCOMM','method','Online cross-context KV-cache communication between agents','2510.12872'],
+        ['Latent-space agents','method','Agents communicate fully in latent space, no tokens','2511.09149'],
+        ['LCGuard','method','Safety guard for shared KV latent communication','2605.22863'] ]},
+      { name:'Efficient MAS Serving', blurb:'Cache reuse, prefix sharing and compression to cut MAS cost.', nodes:[
+        ['KVFlow','method','Prefix caching that accelerates multi-agent workflows','2507.07400'],
+        ['TokenDance','method','Collective KV-cache sharing for scalable serving','2604.03143'],
+        ['LRAgent','method','Efficient KV-cache sharing across multi-LoRA agents','2602.01053'],
+        ['xKV','method','Cross-layer KV compression via aligned singular vectors','2503.18893'],
+        ['KV-cache eviction','concept','Drop low-value cache entries to fit memory','2512.14946'],
+        ['Prefix caching','concept','Reuse KV of shared context prefixes','2509.16857'] ]},
+      { name:'Protocols & Topology', blurb:'Message formats and communication graphs for text-based collaboration.', nodes:[
+        ['A2A protocol','concept','Agent-to-Agent standard for task delegation','2505.02279'],
+        ['Agora','method','Scalable communication protocol for LLM networks','2410.11905'],
+        ['Dynamic topology','concept','Route communication graph per query','2602.06039'],
+        ['Topology priors','method','Transferable learned communication topologies','2605.17359'],
+        ['AgentsNet','benchmark','Benchmark for coordination at scale','2507.08616'],
+        ['ProtocolBench','benchmark','Evaluates multi-agent communication protocols','2510.17149'] ]},
+      { name:'Latent Reasoning Relay', blurb:'Passing continuous thought vectors instead of text chains.', nodes:[
+        ['Coconut','method','Reasoning in continuous latent space, not tokens','2412.06769'],
+        ['Latent Thought Flow','method','Efficient latent reasoning past token-CoT bottleneck','2606.16222'],
+        ['Latent CoT flows','method','Normalizing flows model latent reasoning','2606.06447'],
+        ['Abstract CoT','method','Non-verbal latent reasoning, shorter thoughts','2604.22709'],
+        ['Thinking states','method','Supervised latent thinking states replace rationales','2602.08332'] ]},
+      { name:'MAS Internalization', blurb:'Collapsing multi-agent debate into one model’s latent computation.', nodes:[
+        ['Latent Agents','method','Post-training internalizes multi-agent debate latently','2604.24881'],
+        ['AgentArk','method','Distills multi-agent intelligence into one agent','2602.03955'],
+        ['Agent Primitives','concept','Reusable latent building blocks for MAS','2602.03695'],
+        ['MARL collaboration','method','Multi-agent RL trains LLMs to collaborate','2508.04652'],
+        ['Self-Debate','method','Prepares models to internalize debate','2601.22297'] ]} ]},
+
+    { key:'seq', subs:[
+      { name:'State Space Models', blurb:'Selective state-space layers: linear-time, constant-memory recurrence.', nodes:[
+        ['S4','model','Structured state space layer for long-range modeling','2111.00396'],
+        ['S5','model','Simplified MIMO state space with parallel scan','2208.04933'],
+        ['Mamba','model','Selective SSM with input-dependent gating','2312.00752'],
+        ['Mamba-2 / SSD','model','State space duality linking SSMs and attention','2405.21060'],
+        ['Mamba-3','model','Improved SSM for inference-efficient quality','2603.15569'],
+        ['Hyena','method','Implicit long convolutions replacing attention','2302.10866'] ]},
+      { name:'Linear Attention & Delta Rule', blurb:'Matrix-state attention and delta-rule updates, chunked training.', nodes:[
+        ['GLA','method','Gated linear attention, hardware-efficient chunked training','2312.06635'],
+        ['DeltaNet','method','Delta-rule linear transformer parallelized over length','2406.06484'],
+        ['Gated DeltaNet','model','Delta rule plus gating improving recall','2412.06464'],
+        ['Based','method','Linear attention + sliding window balancing recall','2402.18668'],
+        ['Log-Linear Attention','method','Log-state attention between linear and full','2506.04761'],
+        ['TTT','method','Test-time-training layers with learnable hidden states','2407.04620'] ]},
+      { name:'Recurrent Alternatives', blurb:'RNN-style and retention-based transformer successors.', nodes:[
+        ['RetNet','model','Retention with parallel, recurrent, chunkwise forms','2307.08621'],
+        ['RWKV-7','model','Receptance weighted key-value, dynamic state','2503.14456'],
+        ['Griffin / Hawk','model','Gated linear recurrences mixed with local attention','2402.19427'],
+        ['xLSTM','model','Exponential-gated LSTM revival with matrix memory','2405.04517'] ]},
+      { name:'Hybrid Architectures', blurb:'Interleaving attention with SSM/linear layers to recover recall.', nodes:[
+        ['Jamba','model','Interleaved Transformer-Mamba MoE hybrid','2403.19887'],
+        ['Nemotron-H','model','Production hybrid Mamba-Transformer family','2504.03624'],
+        ['Kimi Linear','model','Hybrid linear attention beating full attention','2510.26692'],
+        ['RWKV-X','model','RWKV plus sparse attention for long context','2504.21463'],
+        ['Native Hybrid Attention','method','Single-layer fusion of linear and full attention','2510.07019'] ]},
+      { name:'Linearization & Analysis', blurb:'Distilling attention LLMs into efficient models; recall benchmarks.', nodes:[
+        ['MOHAWK','method','Distilling Transformers into Mamba','2408.10189'],
+        ['RADLADS','method','Rapid attention distillation to linear decoders','2505.03005'],
+        ['Liger','method','Linearizing pretrained LLMs into gated recurrence','2503.01496'],
+        ['MQAR','benchmark','Multi-query associative recall probing memory','2312.04927'],
+        ['Long Range Arena','benchmark','Benchmark suite for long-sequence models','2011.04006'],
+        ['Recall-throughput tradeoff','concept','Fixed-state recurrence trades recall for speed','2402.18668'] ]} ]},
+
+    { key:'comp', subs:[
+      { name:'Quantization', blurb:'Low-bit weights/activations, taming outliers via scaling/rotation.', nodes:[
+        ['GPTQ','method','Layer-wise second-order weight-only 4/3-bit PTQ','2210.17323'],
+        ['AWQ','method','Activation-aware per-channel scaling quantization','2306.00978'],
+        ['SmoothQuant','method','Shifts activation outliers into weights, W8A8','2211.10438'],
+        ['QuIP#','method','Hadamard incoherence + lattice codebooks, 2-bit','2402.04396'],
+        ['SpinQuant','method','Learned rotations remove outliers, low-bit PTQ','2405.16406'],
+        ['QuaRot','concept','Hadamard rotation enables outlier-free 4-bit','2404.00456'] ]},
+      { name:'Pruning & Sparsity', blurb:'Remove weights, neurons or layers by importance.', nodes:[
+        ['SparseGPT','method','One-shot 50% unstructured pruning, no retrain','2301.00774'],
+        ['Wanda','method','Prune by magnitude times input activation norm','2306.11695'],
+        ['LLM-Pruner','method','Gradient-based structured pruning of groups','2305.11627'],
+        ['Sheared LLaMA','method','Targeted structured pruning + continued pretrain','2310.06694'],
+        ['ShortGPT','concept','Drop redundant layers by block influence','2403.03853'],
+        ['N:M sparsity','concept','Hardware-friendly fine-grained sparse patterns',''] ]},
+      { name:'Low-Rank Decomposition', blurb:'Factorize weights into low-rank products via activation/loss-aware SVD.', nodes:[
+        ['ASVD','method','Activation-aware SVD for post-training compression','2312.05821'],
+        ['SVD-LLM','method','Truncation-aware SVD linking singulars to loss','2403.07378'],
+        ['FWSVD','method','Fisher-weighted SVD prioritizing important params','2207.00112'],
+        ['LoRA','method','Low-rank adapters for parameter-efficient finetune','2106.09685'],
+        ['QLoRA','method','4-bit quantized base model with LoRA adapters','2305.14314'],
+        ['Adaptive rank allocation','concept','Per-layer rank budgeting for SVD','2510.19389'] ]},
+      { name:'Knowledge Distillation', blurb:'Transfer teacher behavior into a smaller student.', nodes:[
+        ['MiniLLM','method','Reverse-KL on-policy white-box distillation','2306.08543'],
+        ['GKD','method','Generalized on-policy distillation over samples','2306.13649'],
+        ['Sequence-level KD','concept','Train student on teacher output sequences','1606.07947'],
+        ['Black-box distillation','concept','Learn from teacher text outputs, no logits','2511.10643'],
+        ['DistilBERT','model','Classic distilled encoder, 40% smaller','1910.01108'] ]},
+      { name:'KV-Cache Compression', blurb:'Shrink the inference KV cache: eviction, quantization, low-rank, sharing.', nodes:[
+        ['H2O','method','Heavy-hitter token eviction for KV cache','2306.14048'],
+        ['StreamingLLM','method','Keep attention-sink tokens for streaming','2309.17453'],
+        ['SnapKV','method','Prompt-time KV selection from attention','2404.14469'],
+        ['KIVI','method','Tuning-free asymmetric 2-bit KV quantization','2402.02750'],
+        ['MLA','concept','Multi-head latent attention compresses KV low-rank','2405.04434'],
+        ['PyramidKV','method','Layer-wise pyramidal KV budget allocation','2406.02069'] ]} ]},
+
+    { key:'world', subs:[
+      { name:'World-Model Foundations', blurb:'Single-agent latent-dynamics models that train policies in imagination.', nodes:[
+        ['DreamerV3','model','Latent RSSM world model across diverse domains','2301.04104'],
+        ['IRIS','model','Transformer world model over discrete image tokens','2209.00588'],
+        ['DIAMOND','model','Diffusion world model preserving visual detail','2405.12399'],
+        ['TD-MPC2','method','Decoder-free latent model-predictive control','2310.16828'],
+        ['Dreamer-4','model','Training agents inside scalable video world models','2509.24527'],
+        ['Imagination training','concept','Policy learning from rollouts in a learned model',''] ]},
+      { name:'Multi-Agent World Models', blurb:'Model-based MARL with shared/factored latent dynamics.', nodes:[
+        ['CoDreamer','method','Decentralized world models with learned comm','2406.13600'],
+        ['COMBO','method','Compositional world models for embodied cooperation','2404.10775'],
+        ['MATWM','model','Transformer world model for sample-efficient MARL','2506.18537'],
+        ['MAMBA','method','Dreamer-style model-based MARL in imagination','2303.14745'],
+        ['Diffusion MARL world model','method','Diffusion multi-agent modeling of joint dynamics','2505.20922'],
+        ['Agent modeling','concept','Predicting other agents within latent dynamics',''] ]},
+      { name:'Generative Game World Models', blurb:'Action-conditioned video/diffusion models as playable simulators.', nodes:[
+        ['Genie','model','Generative interactive environments from video','2402.15391'],
+        ['GameNGen','model','Diffusion model as a real-time game engine','2408.14837'],
+        ['Matrix-Game 2.0','model','Real-time streaming interactive diffusion world','2508.13009'],
+        ['Gamma-World','model','Generative multi-agent world modeling, >2 players','2605.28816'],
+        ['Solaris','model','Multiplayer video world model in Minecraft','2602.22208'],
+        ['Vid2World','method','Adapting video diffusion into interactive worlds','2505.14357'] ]},
+      { name:'Shared Latent & KV Across Agents', blurb:'LLM MAS sharing latent states / KV-cache instead of text.', nodes:[
+        ['LatentMAS','method','Latent collaboration across LLM agents, no text','2511.20639'],
+        ['KVCOMM','method','Online cross-context KV-cache communication','2510.12872'],
+        ['Cache-to-Cache','method','Direct semantic communication via KV cache','2510.03215'],
+        ['TokenDance','method','Scaling MAS serving via collective KV sharing','2604.03143'],
+        ['KV-cache reuse','concept','Reuse prefilled context across agents',''],
+        ['Latent-space communication','concept','Agents exchange hidden states, not tokens',''] ]} ]}
+  ],
+  links: [
+    ['Cache-to-Cache','MLA','KV-cache compression'],
+    ['xKV','MLA','low-rank KV latent'],
+    ['xKV','SVD-LLM','singular-vector low-rank'],
+    ['KV-cache eviction','H2O','KV eviction'],
+    ['Prefix caching','StreamingLLM','context KV reuse'],
+    ['KVCOMM','PyramidKV','per-layer KV budget'],
+    ['Mamba-2 / SSD','MLA','linear-attention duality'],
+    ['Liger','GLA','linearize into gated recurrence'],
+    ['MOHAWK','Knowledge Distillation','attention-to-SSM distillation'],
+    ['RADLADS','Sequence-level KD','attention distillation'],
+    ['Coconut','Latent CoT flows','continuous-thought reasoning'],
+    ['LatentMAS','Latent-space communication','latent multi-agent collab'],
+    ['KVCOMM','KV-cache reuse','cross-agent KV sharing'],
+    ['TokenDance','Cache-to-Cache','collective KV sharing'],
+    ['CoDreamer','Latent-space agents','inter-agent latent comm'],
+    ['MAMBA','DreamerV3','imagination-based MARL'],
+    ['TD-MPC2','Coconut','decoder-free latent rollout'],
+    ['MLA','Adaptive rank allocation','per-layer rank budgeting']
+  ]
+};
+
+// ---- build graph ----
+const nodes = [], links = [];
+const byId = new Map();      // id -> node
+const leafByLabel = new Map(); // label -> node (deduped leaves)
+const subByName = new Map();  // sub name -> node
+
+function add(n){ nodes.push(n); byId.set(n.id, n); return n; }
+
+DATA.areas.forEach(a => {
+  const meta = AREA_META[a.key];
+  const aid = 'area:'+a.key;
+  add({ id:aid, label:meta.en, labelKo:meta.ko, level:0, area:a.key, kind:'area', blurb:'' });
+  a.subs.forEach((s, si) => {
+    const sid = 'sub:'+a.key+':'+si;
+    const sn = add({ id:sid, label:s.name, level:1, area:a.key, kind:'sub', blurb:s.blurb });
+    subByName.set(s.name, sn);
+    links.push({ source:aid, target:sid, type:'hier' });
+    s.nodes.forEach(arr => {
+      const [label, kind, blurb, arxiv] = arr;
+      let n = leafByLabel.get(label);
+      if(!n){
+        n = add({ id:'leaf:'+label, label, level:2, area:a.key, areas:new Set([a.key]), kind, blurb, arxiv:arxiv||'' });
+        leafByLabel.set(label, n);
+      } else {
+        n.areas.add(a.key);            // shared across areas -> bridge
+        if(!n.blurb && blurb) n.blurb = blurb;
+        if(!n.arxiv && arxiv) n.arxiv = arxiv;
+      }
+      links.push({ source:sid, target:n.id, type:'hier' });
+    });
+  });
+});
+// mark bridges (leaf in >1 area)
+nodes.forEach(n => { if(n.level===2 && n.areas && n.areas.size>1) n.bridge = true; });
+
+function resolve(label){
+  if(leafByLabel.has(label)) return leafByLabel.get(label).id;
+  if(subByName.has(label))   return subByName.get(label).id;
+  return null;
+}
+DATA.links.forEach(([f,t,rel]) => {
+  const a = resolve(f), b = resolve(t);
+  if(a && b) links.push({ source:a, target:b, type:'cross', rel });
+});
+
+const bridgeCount = nodes.filter(n=>n.bridge).length;
+
+// ---- render ----
+const svg = d3.select('#kg');
+let W = window.innerWidth, H = svg.node().clientHeight;
+svg.attr('viewBox', [0,0,W,H]);
+const root = svg.append('g');
+svg.call(d3.zoom().scaleExtent([0.25,4]).on('zoom', e => root.attr('transform', e.transform)));
+
+// area anchors (quadrants) for clustering
+const anchors = {
+  mac:  [W*0.30, H*0.32], seq:[W*0.72, H*0.30],
+  comp: [W*0.30, H*0.72], world:[W*0.72, H*0.74]
+};
+function ax(n){ return n.bridge ? W*0.5 : (anchors[n.area]||[W/2,H/2])[0]; }
+function ay(n){ return n.bridge ? H*0.5 : (anchors[n.area]||[W/2,H/2])[1]; }
+function radius(n){ return n.level===0?20 : n.level===1?11 : n.bridge?8.5:5.5; }
+function fill(n){
+  const c = AREA_META[n.area].color;
+  if(n.bridge) return '#fffdf8';
+  if(n.level===0) return c;
+  if(n.level===1) return d3.color(c).copy({opacity:1}).brighter(0.15);
+  return d3.color(c).copy({opacity:0.85});
+}
+function stroke(n){ return n.bridge ? 'var(--clay-deep)' : d3.color(AREA_META[n.area].color).darker(0.5); }
+
+const sim = d3.forceSimulation(nodes)
+  .force('link', d3.forceLink(links).id(d=>d.id).distance(d=> d.type==='cross'?120 : d.source.level===0?64:34).strength(d=> d.type==='cross'?0.12:0.7))
+  .force('charge', d3.forceManyBody().strength(d=> d.level===0?-420 : d.level===1?-160:-60))
+  .force('x', d3.forceX(ax).strength(0.10))
+  .force('y', d3.forceY(ay).strength(0.10))
+  .force('collide', d3.forceCollide(d=> radius(d)+ (d.level===2?7:14)));
+
+const link = root.append('g').selectAll('line').data(links).join('line')
+  .attr('class', d=> 'link'+(d.type==='cross'?' cross':''))
+  .attr('stroke-width', d=> d.type==='cross'?1.6:1);
+
+const node = root.append('g').selectAll('g').data(nodes).join('g')
+  .attr('class', d=> 'node'+(d.bridge?' bridge':''))
+  .call(d3.drag()
+    .on('start', (e,d)=>{ if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on('drag', (e,d)=>{ d.fx=e.x; d.fy=e.y; })
+    .on('end', (e,d)=>{ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+node.append('circle')
+  .attr('r', radius).attr('fill', fill).attr('stroke', stroke);
+
+node.append('text')
+  .attr('class', d=> 'nlabel '+(d.level===0?'area':d.level===1?'sub':'leaf'))
+  .attr('text-anchor','middle')
+  .attr('dy', d=> d.level===0? -26 : d.level===1? -16 : -9)
+  .text(d=> d.label);
+
+// neighbor index for highlight
+const nbr = new Map(); nodes.forEach(n=> nbr.set(n.id, new Set([n.id])));
+links.forEach(l=>{ nbr.get(l.source.id).add(l.target.id); nbr.get(l.target.id).add(l.source.id); });
+
+const tip = document.getElementById('tip');
+function showTip(e, d){
+  const ko = document.body.classList.contains('lang-ko');
+  const kind = d.kind==='area'? (ko?'대주제':'AREA') : d.kind==='sub'? (ko?'소분류':'SUBFIELD') : d.kind.toUpperCase();
+  let h = '<span class="k">'+kind+(d.bridge?' · BRIDGE':'')+'</span><b>'+d.label+'</b>';
+  if(d.blurb) h += '<div>'+d.blurb+'</div>';
+  if(d.arxiv) h += '<span class="ax">arXiv:'+d.arxiv+' ↗</span>';
+  tip.innerHTML = h;
+  tip.style.left = Math.min(e.clientX+14, window.innerWidth-290)+'px';
+  tip.style.top  = Math.min(e.clientY+14, window.innerHeight-120)+'px';
+  tip.style.opacity = 1;
+}
+node.on('mousemove', showTip)
+  .on('mouseenter', (e,d)=> focusNode(d))
+  .on('mouseleave', ()=>{ tip.style.opacity=0; if(!activeArea) clearFocus(); })
+  .on('click', (e,d)=>{ if(d.arxiv) window.open('https://arxiv.org/abs/'+d.arxiv,'_blank'); });
+
+function focusNode(d){
+  const set = nbr.get(d.id);
+  node.style('opacity', n=> set.has(n.id)?1:0.12);
+  node.selectAll('text.leaf').style('opacity', n=> set.has(n.id)?1:0);
+  link.style('stroke-opacity', l=> (l.source.id===d.id||l.target.id===d.id)? .95 : .04);
+}
+function clearFocus(){
+  node.style('opacity',1);
+  node.selectAll('text.leaf').style('opacity',0);
+  link.style('stroke-opacity', null);
+}
+
+// legend with area focus
+let activeArea = null;
+const legend = d3.select('#legend');
+Object.keys(AREA_META).forEach(k=>{
+  const m = AREA_META[k];
+  const el = legend.append('div').attr('class','lg').attr('data-area',k);
+  el.append('span').attr('class','dot').style('background', m.color);
+  el.append('span').attr('class','t-en').text(m.en);
+  el.append('span').attr('class','t-ko').text(m.ko);
+  el.on('click', ()=> toggleArea(k, el));
+});
+function toggleArea(k, el){
+  if(activeArea===k){ activeArea=null; clearFocus(); d3.selectAll('.lg').classed('dim',false); return; }
+  activeArea=k;
+  d3.selectAll('.lg').classed('dim', function(){ return this.getAttribute('data-area')!==k; });
+  node.style('opacity', n=> n.area===k ? 1 : 0.10);
+  node.selectAll('text.leaf').style('opacity', n=> n.area===k ? 1 : 0);
+  link.style('stroke-opacity', l=> (l.source.area===k||l.target.area===k)? .8 : .05);
+}
+
+sim.on('tick', ()=>{
+  link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+  node.attr('transform', d=> 'translate('+d.x+','+d.y+')');
+});
+
+// node count badge in head
+d3.select('.kg-head p.t-en').append('span').style('color','var(--clay-deep)').style('font-weight','700')
+  .text('  ·  '+nodes.filter(n=>n.level===2).length+' methods · '+bridgeCount+' bridges');
+d3.select('.kg-head p.t-ko').append('span').style('color','var(--clay-deep)').style('font-weight','700')
+  .text('  ·  기법 '+nodes.filter(n=>n.level===2).length+'개 · 다리 '+bridgeCount+'개');
+
+window.addEventListener('resize', ()=>{ W=window.innerWidth; H=svg.node().clientHeight; svg.attr('viewBox',[0,0,W,H]); sim.alpha(0.3).restart(); });
+</script>
+</body>
+</html>

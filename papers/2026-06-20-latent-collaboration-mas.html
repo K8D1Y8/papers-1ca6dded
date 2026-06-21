@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5분 논문 · Latent Collaboration in Multi-Agent Systems</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🧩 Multi-Agent · Latent Comm.</span><span class="t-ko">🧩 Multi-Agent · Latent Comm.</span></span>
+      <span>2026 · 06 · 20</span>
+    </div>
+    <h1>Latent Collaboration in Multi-Agent Systems<br><span class="glow t-en">— Drop the text, collaborate in latent space</span><span class="glow t-ko">— 텍스트를 버리고, 잠재공간에서 협업하다</span></h1>
+    <div class="meta">
+      <span>👥 <b>Jiaru Zou</b> <span class="t-en">et al.</span><span class="t-ko">외 11인</span></span>
+      <span>🏛 Princeton · Stanford · UIUC</span>
+      <span>🗓 2025.11.25</span>
+      <span>📄 <a href="https://arxiv.org/abs/2511.20639">arXiv:2511.20639</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">LLM multi-agent systems usually think and talk <b>in text</b>. <span class="hl">LatentMAS performs both reasoning and communication entirely in continuous latent space</span> — feeding the last-layer hidden state back as the next input, and passing the KV-cache along verbatim so information transfers without loss. Even though it is <b>training-free</b>, accuracy goes up, output tokens drop <b>70–84%</b>, and inference runs <b>about 4× faster</b>.</p>
+    <p class="t-ko">LLM 멀티에이전트는 보통 <b>텍스트로</b> 생각하고 대화한다. <span class="hl">LatentMAS는 추론과 통신을 모두 연속 잠재공간(latent space)에서</span> 수행한다 — 마지막 레이어 hidden state를 다음 입력으로 되먹이고, KV-cache를 그대로 넘겨 정보 손실 없이 전달한다. <b>학습 불필요(training-free)</b>인데도 정확도는 올라가고, 출력 토큰 <b>70~84% 절감</b>, 추론 속도 <b>약 4배</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Having agents talk in "human-readable text" is expensive, slow, and leaks information.</p>
+    <p class="lead t-ko">에이전트들이 "사람이 읽는 텍스트"로 대화하는 건 비싸고, 느리고, 정보가 샌다.</p>
+    <p class="t-en">Today's LLM multi-agent systems (MAS) rely on <strong>natural-language tokens</strong> for both internal reasoning and inter-agent communication. That's nice for human readability — but token costs are high, and re-encoding into discrete tokens <strong>loses expressiveness and information fidelity</strong>. This paper asks: <strong>"Can a MAS collaborate purely in latent space?"</strong></p>
+    <p class="t-ko">현재 LLM 멀티에이전트 시스템(MAS)은 내부 추론도, 에이전트 간 통신도 전부 <strong>자연어 토큰</strong>에 의존한다. 사람이 읽기엔 좋지만 — 토큰 비용이 크고, 이산(discrete) 토큰으로 다시 인코딩하면서 <strong>표현력과 정보 충실도(fidelity)가 손실</strong>된다. 이 논문은 묻는다: <strong>"MAS가 순수하게 잠재공간에서만 협업할 수 있을까?"</strong></p>
+    <figure class="fig">
+      <img src="fig/2511.20639/x3.png" alt="LatentMAS 프레임워크 개요">
+      <figcaption class="t-en"><b>Figure 3.</b> Overview of the LatentMAS framework — each agent reasons in latent space (latent thoughts) and passes its KV-cache to the next agent verbatim. Only the final agent decodes into text.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> LatentMAS 프레임워크 개요 — 각 에이전트가 잠재공간에서 추론(latent thoughts)하고, KV-cache를 다음 에이전트에 그대로 전달한다. 마지막 에이전트만 텍스트로 디코딩.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2511.20639</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+14.6%</div><div class="l"><span class="t-en">accuracy vs. single model<br>(sequential average)</span><span class="t-ko">단일 모델 대비 정확도<br>(sequential 평균)</span></div></div>
+      <div class="stat"><div class="n">−83%</div><div class="l"><span class="t-en">output tokens<br>(vs. text MAS, max)</span><span class="t-ko">출력 토큰<br>(텍스트 MAS 대비 최대)</span></div></div>
+      <div class="stat"><div class="n">4.3×</div><div class="l"><span class="t-en">inference speed<br>(end-to-end average)</span><span class="t-ko">추론 속도<br>(end-to-end 평균)</span></div></div>
+      <div class="stat"><div class="n">+4.6%</div><div class="l"><span class="t-en">accuracy vs. text MAS<br>(hierarchical average)</span><span class="t-ko">텍스트 MAS 대비 정확도<br>(hierarchical 평균)</span></div></div>
+      <div class="stat"><div class="n">9</div><div class="l"><span class="t-en">benchmarks · 5<br>LLMs (Qwen3 · Llama3)</span><span class="t-ko">벤치마크 · 5개<br>LLM(Qwen3·Llama3)</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">extra training<br>(training-free)</span><span class="t-ko">추가 학습<br>(training-free)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — latent collaboration is more accurate</span><span class="t-ko">결과 — 잠재 협업이 더 정확하다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Qwen3-14B accuracy (%) · Sequential MAS — LatentMAS matches or beats the single model and TextMAS. (Representative benchmarks shown.)</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> Qwen3-14B 정확도(%) · Sequential MAS — LatentMAS가 단일 모델·TextMAS를 동률~상회. (대표 벤치마크 발췌)</caption>
+        <thead><tr><th>Benchmark</th><th>Single</th><th>TextMAS</th><th>LatentMAS</th></tr></thead>
+        <tbody>
+          <tr><td>AIME24</td><td>63.3</td><td>63.3</td><td class="up">66.7</td></tr>
+          <tr><td>AIME25</td><td>56.7</td><td>60.0</td><td class="up">63.3</td></tr>
+          <tr><td>GPQA-Diamond</td><td>48.5</td><td>51.5</td><td class="up">52.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">Agent A</div>
+          <div class="sub">Planner</div>
+          <div class="latent">latent thoughts ↺</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">Agent B</div>
+          <div class="sub">Critic / Refiner</div>
+          <div class="latent"><span class="t-en">receives KV-cache as-is</span><span class="t-ko">KV-cache 그대로 수신</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">Final Agent</div>
+          <div class="sub">Solver</div>
+          <div class="latent"><span class="t-en">decodes to text only here</span><span class="t-ko">여기서만 텍스트 디코딩</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Inside latent space</b> the thinking and hand-off finish, and <b>only the last agent</b> emits the answer as text.</div>
+      <div class="cap t-ko"><b>잠재공간 안에서</b> 사고·전달이 끝나고, <b>마지막 에이전트만</b> 답을 텍스트로 출력한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works — two mechanisms</span><span class="t-ko">아이디어: 두 개의 메커니즘</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag"><span class="t-en">① Reasoning</span><span class="t-ko">① 추론</span></span>
+        <h3>Auto-regressive Latent Thoughts</h3>
+        <p class="t-en">Instead of decoding tokens, it feeds the <span class="term">last-layer hidden state</span> back as the next step's input embedding. The distribution mismatch is corrected by an alignment operator <span class="term">W<sub>a</sub></span> (computed once). Each step carries richer meaning.</p>
+        <p class="t-ko">토큰을 디코딩하지 않고, <span class="term">마지막 레이어 hidden state</span>를 다음 스텝의 입력 임베딩으로 되먹인다. 분포 어긋남은 정렬 연산자 <span class="term">W<sub>a</sub></span>(한 번만 계산)로 보정. 한 스텝에 더 풍부한 의미를 담는다.</p>
+      </div>
+      <div class="m">
+        <span class="tag"><span class="t-en">② Communication</span><span class="t-ko">② 통신</span></span>
+        <h3>Latent Working Memory Transfer</h3>
+        <p class="t-en">An agent's <span class="term">layer-wise KV-cache</span> is concatenated directly onto the next agent's cache. With no re-encoding, it hands over "everything thought so far" <strong>losslessly</strong> (Thm 3.3).</p>
+        <p class="t-ko">에이전트의 <span class="term">레이어별 KV-cache</span>를 다음 에이전트 캐시에 그대로 concat. 재인코딩 없이 <strong>무손실(lossless)</strong>로 "방금까지의 생각"을 통째로 넘긴다(Thm 3.3).</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Generate latent thoughts</span><span class="t-ko">잠재 사고 생성</span></b><span class="t-en">Each agent generates hidden states auto-regressively for m steps (sweet spot ≈ 40–80 steps).</span><span class="t-ko">각 에이전트가 m 스텝 동안 hidden state를 auto-regressive하게 생성(최적 구간 ≈ 40~80 스텝).</span></li>
+      <li><b><span class="t-en">Align input distribution</span><span class="t-ko">입력 분포 정렬</span></b><span class="t-en">W<sub>a</sub> maps output hidden states back into the input-embedding space to prevent drift — worth +2.3–5.3% accuracy on its own.</span><span class="t-ko">W<sub>a</sub>로 출력 hidden state를 입력 임베딩 공간으로 되돌려 drift 방지 — 그 자체로 정확도 +2.3~5.3%.</span></li>
+      <li><b><span class="t-en">Transfer working memory</span><span class="t-ko">워킹 메모리 전달</span></b><span class="t-en">The KV-cache is merged layer-wise into the next agent, inheriting context without loss.</span><span class="t-ko">KV-cache를 다음 에이전트에 layer-wise로 합쳐 컨텍스트를 손실 없이 승계.</span></li>
+      <li><b><span class="t-en">Final decoding</span><span class="t-ko">최종 디코딩</span></b><span class="t-en">Only the last agent emits the answer as text from the accumulated latent memory (and even that answer is 29% shorter on average).</span><span class="t-ko">마지막 에이전트만 누적된 잠재 메모리를 바탕으로 답을 텍스트로 출력(이 답도 평균 29% 더 짧아짐).</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Close to a free lunch.</strong> With no extra training, it bolts onto off-the-shelf models to lift accuracy while cutting tokens and latency at the same time. Especially attractive for resource-constrained settings.</p><p class="t-ko"><strong>공짜 점심에 가깝다.</strong> 추가 학습 없이 기성 모델에 얹어 정확도↑ + 토큰·지연↓를 동시에. 자원 제약 환경에 특히 매력적.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>You need both.</strong> Hybrids using only latent reasoning or only latent communication all underperform the full version — expressiveness and lossless transfer work together.</p><p class="t-ko"><strong>둘 다 있어야 효과.</strong> 잠재 추론만 / 잠재 통신만 쓰는 하이브리드는 모두 풀버전보다 낮음 — 표현력과 무손실 전달이 함께 작동.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Interpretability covered too.</strong> A debug mode that generates latent and text simultaneously agrees with the final answer 96.2% of the time — a diagnostic window into latent collaboration.</p><p class="t-ko"><strong>해석 가능성도 챙김.</strong> latent와 텍스트를 동시 생성하는 debug 모드는 최종 정답과 96.2% 일치 — 잠재 협업의 진단 창.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Generality.</strong> Consistent gains across the entire Qwen3 and Llama3 lineup. Extending to heterogeneous agents is the next challenge.</p><p class="t-ko"><strong>일반성.</strong> Qwen3·Llama3 전 계열에서 일관된 이득. 향후 이종(heterogeneous) 에이전트로의 확장이 다음 과제.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> lossless transfer leans on the assumption of identical/compatible architectures (shared tokenizer and dimensions). Truly heterogeneous MAS that mixes different model families, plus the safety and auditability of latent space (harder to monitor once text disappears), remain open problems.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 무손실 전달은 동일/호환 아키텍처(공유 토크나이저·차원) 가정에 기댄다. 서로 다른 모델군을 섞는 진짜 이종 MAS, 그리고 잠재공간의 안전성·감사가능성(텍스트가 사라진 만큼 모니터링이 어려움)은 열린 문제다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2511.20639">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2511.20639">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2511.20639">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2511.20639">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>wishlist fallback · topic: Multi-Agent Latent Communication · policy: recent conference accepts first</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-06-20.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 폴백 · 주제: Multi-Agent Latent Communication · 정책: 최근 학회 accept 우선</b>.<br>이 페이지는 매일 아침 자동 생성되는 <b>5분 논문 요약</b>입니다 · noindex(검색 비노출) · 자동 생성 2026-06-20.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
