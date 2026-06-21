@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Multi-Head Low-Rank Attention (MLRA)</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Low-Rank Attention · Long-Context Inference</span><span class="t-ko">Low-Rank Attention · Long-Context Inference</span></span>
+      <span class="chip">ICLR 2026</span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Multi-Head Low-Rank Attention (MLRA)<br>
+      <span class="glow t-en">— Make MLA's latent KV cache shardable: native 4-way tensor parallelism, 2.8× faster decoding</span>
+      <span class="glow t-ko">— MLA의 잠재 KV 캐시를 분할 가능하게: 4-way 텐서 병렬을 기본 지원, 디코딩 2.8× 가속</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Songtao Liu</b> <span class="t-en">et al. (corresponding)</span><span class="t-ko">외 (교신저자)</span></span>
+      <span>🏛 Penn State · UConn · CMU · UCLA</span>
+      <span>🗓 2026.03.02</span>
+      <span>📄 <a href="https://arxiv.org/abs/2603.02188">arXiv:2603.02188</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Multi-Head Latent Attention (MLA) shrinks the KV cache into a single latent head — but that head <b>can't be split</b>, so under tensor parallelism (TP) every GPU has to reload the whole cache. <span class="hl">MLRA decomposes the latent head into 2 or 4 independent low-rank branches by moving the block-summation from <i>before</i> attention to <i>after</i> it</span>, making the latent states partitionable. Result: native 4-way TP, per-device KV loading cut to <b>1.5 d<sub>h</sub></b> (MLA stays at 4.5 d<sub>h</sub>), a <b>2.8× decoding speedup over MLA</b>, and — at 2.9B scale — the <b>best</b> perplexity (13.672) and zero-shot accuracy (58.84%) of all baselines.</p>
+    <p class="t-ko">Multi-Head Latent Attention(MLA)은 KV 캐시를 하나의 잠재 헤드로 압축하지만, 그 헤드는 <b>나눌 수 없어</b> 텐서 병렬(TP)에서 모든 GPU가 캐시 전체를 다시 읽어야 한다. <span class="hl">MLRA는 블록 합산을 어텐션 <i>이전</i>이 아니라 <i>이후</i>로 옮겨, 잠재 헤드를 2개 또는 4개의 독립 저랭크 브랜치로 분해</span>해 잠재 상태를 분할 가능하게 만든다. 그 결과 4-way TP를 기본 지원하고, 디바이스당 KV 로딩을 <b>1.5 d<sub>h</sub></b>로 줄이며(MLA는 4.5 d<sub>h</sub> 고정), <b>MLA 대비 디코딩 2.8× 가속</b>, 그리고 2.9B 규모에서 모든 baseline 중 <b>최고</b> perplexity(13.672)·제로샷 정확도(58.84%)를 달성한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Long-context decoding is memory-bound — and MLA, the best cache compressor, breaks exactly where you need it most: multi-GPU serving.</p>
+    <p class="lead t-ko">긴 컨텍스트 디코딩은 메모리 병목이다 — 그런데 최고의 캐시 압축기 MLA는 가장 필요한 지점, 즉 다중 GPU 서빙에서 무너진다.</p>
+    <p class="t-en">During decoding, the KV cache is reloaded from HBM at every step, so <strong>data movement, not compute, dominates latency</strong> for long contexts (RAG, long chain-of-thought). MLA compresses the total cache beautifully — but its <strong>single latent head can't be sharded</strong>. Under tensor parallelism, FlashMLA distributes the up-projections by head, yet each device still reloads the <em>entire</em> latent cache (4.5 d<sub>h</sub> per token, regardless of how many GPUs). MLRA's question: <strong>can we keep MLA's tiny cache <i>and</i> split it cleanly across devices?</strong></p>
+    <p class="t-ko">디코딩 중 KV 캐시는 매 스텝 HBM에서 다시 로드되므로, 긴 컨텍스트(RAG, 긴 사고사슬)에서는 <strong>연산이 아니라 데이터 이동이 지연을 지배</strong>한다. MLA는 전체 캐시를 훌륭히 압축하지만 <strong>단일 잠재 헤드는 분할 불가</strong>다. 텐서 병렬에서 FlashMLA는 업프로젝션을 헤드별로 분산하지만, 각 디바이스는 여전히 잠재 캐시 <em>전체</em>를 다시 읽는다(토큰당 4.5 d<sub>h</sub>, GPU 수와 무관). MLRA의 질문: <strong>MLA의 작은 캐시를 유지하면서도 디바이스 간에 깔끔히 분할할 수 있는가?</strong></p>
+    <figure class="fig">
+      <img src="fig/2603.02188/x5.png" alt="Decoding latency vs sequence length: MLRA-4 lowest at every length">
+      <figcaption class="t-en"><b>Figure 5.</b> Decoding latency (lower is better) vs sequence length (batch=1, H100). MLRA-4 (TP=4) is lowest at every length from 128K to 2M tokens — ~2.8× faster than MLA (which must run as data-parallel) and 1.05–1.26× faster than GQA, with the gap widening as context grows.</figcaption>
+      <figcaption class="t-ko"><b>Figure 5.</b> 시퀀스 길이에 따른 디코딩 지연(낮을수록 좋음, batch=1, H100). MLRA-4(TP=4)는 128K~2M 토큰 모든 길이에서 가장 낮다 — MLA(데이터 병렬로만 실행 가능) 대비 약 2.8×, GQA 대비 1.05–1.26× 빠르며, 컨텍스트가 길수록 격차가 커진다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2603.02188</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">2.8×</div><div class="l"><span class="t-en">decoding speedup<br>over MLA (long context)</span><span class="t-ko">디코딩 속도향상<br>MLA 대비 (긴 컨텍스트)</span></div></div>
+      <div class="stat"><div class="n">1.5 d<sub>h</sub></div><div class="l"><span class="t-en">per-device KV load @4-way TP<br>(MLA: 4.5 d<sub>h</sub>)</span><span class="t-ko">4-way TP 디바이스당 KV<br>(MLA: 4.5 d<sub>h</sub>)</span></div></div>
+      <div class="stat"><div class="n">13.672</div><div class="l"><span class="t-en">avg perplexity — best<br>(MLA 13.727)</span><span class="t-ko">평균 perplexity — 최고<br>(MLA 13.727)</span></div></div>
+      <div class="stat"><div class="n">58.84%</div><div class="l"><span class="t-en">avg zero-shot acc — best<br>(MLA 58.75%)</span><span class="t-ko">평균 제로샷 정확도 — 최고<br>(MLA 58.75%)</span></div></div>
+      <div class="stat"><div class="n">2M</div><div class="l"><span class="t-en">max context tested<br>(tokens, batch=1)</span><span class="t-ko">최대 테스트 컨텍스트<br>(토큰, batch=1)</span></div></div>
+      <div class="stat"><div class="n">4-way</div><div class="l"><span class="t-en">native TP (GTA needs<br>8-way for same 1.5 d<sub>h</sub>)</span><span class="t-ko">기본 TP (GTA는 동일 1.5 d<sub>h</sub>에<br>8-way 필요)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — quality and shardability together</span><span class="t-ko">결과 — 품질과 분할성을 동시에</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 1, 3 & 4 (excerpt).</b> 2.9B models, pretrained from scratch on 98.3B FineWeb-Edu tokens. MLRA-4 wins on perplexity, reasoning accuracy, <i>and</i> per-device KV loading.</caption>
+        <caption class="t-ko"><b>Table 1·3·4 발췌.</b> 2.9B 모델, FineWeb-Edu 98.3B 토큰으로 from-scratch 사전학습. MLRA-4가 perplexity·추론 정확도·디바이스당 KV 로딩 모두에서 우위.</caption>
+        <thead><tr><th>Method</th><th>Avg PPL↓</th><th>Avg Acc↑ (%)</th><th>KV/device @4-GPU TP</th></tr></thead>
+        <tbody>
+          <tr><td>GQA</td><td>14.139</td><td>57.89</td><td>4 d<sub>h</sub></td></tr>
+          <tr><td>MLA</td><td>13.727</td><td>58.75</td><td>4.5 d<sub>h</sub></td></tr>
+          <tr><td>GLA-2</td><td>13.779</td><td>58.30</td><td>2.5 d<sub>h</sub></td></tr>
+          <tr><td>GTA</td><td>13.972</td><td>57.80</td><td>2.5 d<sub>h</sub></td></tr>
+          <tr><td>MLRA-2</td><td>13.804</td><td>58.68</td><td class="up">1.5 d<sub>h</sub></td></tr>
+          <tr><td><b>MLRA-4</b></td><td class="up">13.672</td><td class="up">58.84</td><td class="up">1.5 d<sub>h</sub></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 760 326" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;font-family:var(--sans)">
+        <!-- MLA side -->
+        <text x="150" y="26" text-anchor="middle" font-size="15" font-weight="700" fill="#1A1915">MLA — single latent head</text>
+        <rect x="60" y="44" width="180" height="46" rx="9" fill="#D97757" opacity="0.16" stroke="#D97757"/>
+        <text x="150" y="72" text-anchor="middle" font-size="13" font-weight="700" fill="#B5552F">latent head c (4.5 d_h)</text>
+        <!-- GPUs all reload full -->
+        <g>
+          <rect x="40" y="120" width="100" height="60" rx="9" fill="#FBFAF6" stroke="#DCD6C8"/>
+          <rect x="160" y="120" width="100" height="60" rx="9" fill="#FBFAF6" stroke="#DCD6C8"/>
+          <text x="90" y="146" text-anchor="middle" font-size="12" font-weight="700" fill="#403C34">GPU 0</text>
+          <text x="210" y="146" text-anchor="middle" font-size="12" font-weight="700" fill="#403C34">GPU 1</text>
+          <text x="90" y="166" text-anchor="middle" font-size="11" fill="#79746A">full cache</text>
+          <text x="210" y="166" text-anchor="middle" font-size="11" fill="#79746A">full cache</text>
+          <line x1="120" y1="90" x2="90" y2="120" stroke="#B5552F" stroke-width="1.5"/>
+          <line x1="180" y1="90" x2="210" y2="120" stroke="#B5552F" stroke-width="1.5"/>
+        </g>
+        <text x="150" y="208" text-anchor="middle" font-size="12.5" font-weight="700" fill="#B5552F">every GPU reloads 4.5 d_h</text>
+        <text x="150" y="226" text-anchor="middle" font-size="11.5" fill="#79746A">non-shardable → TP gives no relief</text>
+
+        <!-- divider -->
+        <line x1="380" y1="40" x2="380" y2="300" stroke="#DCD6C8" stroke-width="1" stroke-dasharray="4 4"/>
+
+        <!-- MLRA side -->
+        <text x="585" y="26" text-anchor="middle" font-size="15" font-weight="700" fill="#1A1915">MLRA-4 — four low-rank branches</text>
+        <g>
+          <rect x="430" y="44" width="70" height="40" rx="8" fill="#D97757" opacity="0.16" stroke="#D97757"/>
+          <rect x="510" y="44" width="70" height="40" rx="8" fill="#D97757" opacity="0.16" stroke="#D97757"/>
+          <rect x="590" y="44" width="70" height="40" rx="8" fill="#D97757" opacity="0.16" stroke="#D97757"/>
+          <rect x="670" y="44" width="70" height="40" rx="8" fill="#D97757" opacity="0.16" stroke="#D97757"/>
+          <text x="465" y="69" text-anchor="middle" font-size="11.5" font-weight="700" fill="#B5552F">c⁰</text>
+          <text x="545" y="69" text-anchor="middle" font-size="11.5" font-weight="700" fill="#B5552F">c¹</text>
+          <text x="625" y="69" text-anchor="middle" font-size="11.5" font-weight="700" fill="#B5552F">c²</text>
+          <text x="705" y="69" text-anchor="middle" font-size="11.5" font-weight="700" fill="#B5552F">c³</text>
+        </g>
+        <g>
+          <rect x="430" y="120" width="70" height="56" rx="8" fill="#FBFAF6" stroke="#DCD6C8"/>
+          <rect x="510" y="120" width="70" height="56" rx="8" fill="#FBFAF6" stroke="#DCD6C8"/>
+          <rect x="590" y="120" width="70" height="56" rx="8" fill="#FBFAF6" stroke="#DCD6C8"/>
+          <rect x="670" y="120" width="70" height="56" rx="8" fill="#FBFAF6" stroke="#DCD6C8"/>
+          <text x="465" y="143" text-anchor="middle" font-size="11" font-weight="700" fill="#403C34">GPU 0</text>
+          <text x="545" y="143" text-anchor="middle" font-size="11" font-weight="700" fill="#403C34">GPU 1</text>
+          <text x="625" y="143" text-anchor="middle" font-size="11" font-weight="700" fill="#403C34">GPU 2</text>
+          <text x="705" y="143" text-anchor="middle" font-size="11" font-weight="700" fill="#403C34">GPU 3</text>
+          <text x="465" y="162" text-anchor="middle" font-size="10.5" fill="#79746A">¼ cache</text>
+          <text x="545" y="162" text-anchor="middle" font-size="10.5" fill="#79746A">¼ cache</text>
+          <text x="625" y="162" text-anchor="middle" font-size="10.5" fill="#79746A">¼ cache</text>
+          <text x="705" y="162" text-anchor="middle" font-size="10.5" fill="#79746A">¼ cache</text>
+          <line x1="465" y1="84" x2="465" y2="120" stroke="#B5552F" stroke-width="1.5"/>
+          <line x1="545" y1="84" x2="545" y2="120" stroke="#B5552F" stroke-width="1.5"/>
+          <line x1="625" y1="84" x2="625" y2="120" stroke="#B5552F" stroke-width="1.5"/>
+          <line x1="705" y1="84" x2="705" y2="120" stroke="#B5552F" stroke-width="1.5"/>
+        </g>
+        <!-- sum of outputs -->
+        <rect x="500" y="206" width="170" height="34" rx="8" fill="#D97757" opacity="0.1" stroke="#D97757"/>
+        <text x="585" y="228" text-anchor="middle" font-size="12" font-weight="700" fill="#B5552F">Σ attention outputs</text>
+        <line x1="465" y1="176" x2="560" y2="206" stroke="#79746A" stroke-width="1"/>
+        <line x1="545" y1="176" x2="575" y2="206" stroke="#79746A" stroke-width="1"/>
+        <line x1="625" y1="176" x2="595" y2="206" stroke="#79746A" stroke-width="1"/>
+        <line x1="705" y1="176" x2="610" y2="206" stroke="#79746A" stroke-width="1"/>
+        <text x="585" y="268" text-anchor="middle" font-size="12.5" font-weight="700" fill="#B5552F">each GPU loads only 1.5 d_h</text>
+        <text x="585" y="286" text-anchor="middle" font-size="11.5" fill="#79746A">same total cache — but cleanly sharded</text>
+      </svg>
+      <div class="cap t-en">MLA sums four block-projections <i>before</i> attention into one un-splittable head. MLRA runs attention on each block independently and sums the <i>outputs</i> — so each branch (and its cache) lives on its own device.</div>
+      <div class="cap t-ko">MLA는 어텐션 <i>이전</i>에 네 개의 블록 투영을 하나의 분할 불가 헤드로 합산한다. MLRA는 각 블록에서 독립적으로 어텐션을 수행하고 <i>출력</i>을 합산 — 따라서 각 브랜치(와 캐시)가 자기 디바이스에 분산된다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea — two moves</span><span class="t-ko">아이디어 — 두 가지 수</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag"><span class="t-en">① Shift the summation</span><span class="t-ko">① 합산을 옮긴다</span></span>
+        <h3>Branches instead of one head</h3>
+        <p class="t-en">MLA's key/value for each head is a <em>sum of block-wise projections</em> computed <b>before</b> attention. MLRA moves that sum to <b>after</b> attention: treat each block as an independent low-rank branch, run attention per branch (sharing the RoPE key), then add the outputs. The branches are now mutually independent — and therefore partitionable across GPUs.</p>
+        <p class="t-ko">MLA에서 각 헤드의 key/value는 어텐션 <b>이전</b>에 계산되는 <em>블록별 투영의 합</em>이다. MLRA는 이 합을 어텐션 <b>이후</b>로 옮긴다: 각 블록을 독립 저랭크 브랜치로 보고, (RoPE key는 공유한 채) 브랜치별로 어텐션을 수행한 뒤 출력을 더한다. 이제 브랜치들은 상호 독립이라 GPU 간 분할이 가능하다.</p>
+      </div>
+      <div class="m">
+        <span class="tag"><span class="t-en">② Variance calibration</span><span class="t-ko">② 분산 보정</span></span>
+        <h3>Keep variances aligned</h3>
+        <p class="t-en">Summing branches and the RoPE↔NoPE variance gap can destabilize training. MLRA rescales the query/KV latent states (α<sub>q</sub>, α<sub>kv</sub>) before up-projection and the summed outputs (α<sub>attn</sub> = 1/√2 for MLRA-2, 1/2 for MLRA-4). Ablations show this — plus zero-init of output projections and optional gating — each lowers perplexity.</p>
+        <p class="t-ko">브랜치 합산과 RoPE↔NoPE 분산 불일치는 학습을 불안정하게 만들 수 있다. MLRA는 업프로젝션 전 query/KV 잠재 상태(α<sub>q</sub>, α<sub>kv</sub>)와 합산 출력(MLRA-2는 α<sub>attn</sub>=1/√2, MLRA-4는 1/2)을 재스케일한다. 절제 실험에서 이 보정 — 그리고 출력 투영 zero-init·선택적 게이팅 — 이 각각 perplexity를 낮춘다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Decompose</span><span class="t-ko">분해</span></b><span class="t-en">Partition MLA's latent head and the NoPE KV up-projections into 4 row/channel blocks (MLRA-4) or 2 (MLRA-2).</span><span class="t-ko">MLA의 잠재 헤드와 NoPE KV 업프로젝션을 4개(MLRA-4) 또는 2개(MLRA-2)의 행/채널 블록으로 분할.</span></li>
+      <li><b><span class="t-en">Branch attention</span><span class="t-ko">브랜치 어텐션</span></b><span class="t-en">Each block forms its own NoPE K/V; run independent attention per branch, sharing one RoPE key across branches and heads.</span><span class="t-ko">각 블록이 자체 NoPE K/V를 형성; 하나의 RoPE key를 브랜치·헤드가 공유한 채 브랜치별 독립 어텐션 수행.</span></li>
+      <li><b><span class="t-en">Sum & rescale</span><span class="t-ko">합산·재스케일</span></b><span class="t-en">Add the branch outputs and apply α<sub>attn</sub>. After weight absorption the per-head logit space is just 1.5 d<sub>h</sub> (vs 4.5 in MLA, 2.5 in GLA-2).</span><span class="t-ko">브랜치 출력을 더하고 α<sub>attn</sub> 적용. 가중치 흡수 후 헤드당 로짓 공간은 1.5 d<sub>h</sub>에 불과(MLA 4.5, GLA-2 2.5).</span></li>
+      <li><b><span class="t-en">Shard across GPUs</span><span class="t-ko">GPU 분산</span></b><span class="t-en">Assign branches to devices → native 4-way TP. The total cache equals MLA's, but each device loads only 1.5 d<sub>h</sub> per token.</span><span class="t-ko">브랜치를 디바이스에 배정 → 4-way TP 기본 지원. 총 캐시는 MLA와 같지만 디바이스당 토큰당 1.5 d<sub>h</sub>만 로드.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Solves MLA's TP bottleneck.</strong> Partitionable latent heads enable 4-way TP, dropping per-device KV load to 1.5 d<sub>h</sub> (MLA is stuck at 4.5). 2.8× faster than MLA, 1.05–1.26× over GQA, up to 2M-token context.</p><p class="t-ko"><strong>MLA의 TP 병목을 해결.</strong> 분할 가능한 잠재 헤드로 4-way TP를 지원해 디바이스당 KV 로딩을 1.5 d<sub>h</sub>로 낮춘다(MLA는 4.5 고정). MLA 대비 2.8×, GQA 대비 1.05–1.26×, 최대 2M 토큰.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Efficiency without a quality tax.</strong> At 2.9B, MLRA-4 has the best avg perplexity (13.672) and zero-shot accuracy (58.84%), beating MLA, GLA-2 and GQA. More branches (4 &gt; 2) consistently helps.</p><p class="t-ko"><strong>품질 손실 없는 효율.</strong> 2.9B에서 MLRA-4가 최고 평균 perplexity(13.672)·제로샷 정확도(58.84%)로 MLA·GLA-2·GQA를 능가. 브랜치가 많을수록(4 &gt; 2) 꾸준히 유리.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Same cache, better sharding.</strong> MLRA-4's <i>total</i> KV cache equals MLA's — the win is splitting it cleanly. Arithmetic intensity stays high (≈2h), shifting decoding from memory-bound toward compute-bound.</p><p class="t-ko"><strong>같은 캐시, 더 나은 분할.</strong> MLRA-4의 <i>총</i> KV 캐시는 MLA와 동일 — 핵심은 깔끔히 나누는 것. 산술 강도가 높게(≈2h) 유지돼 디코딩을 메모리 병목에서 연산 병목 쪽으로 옮긴다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Open & practical.</strong> A FlashAttention-3-based MLRA-4 kernel on the nanoGPT/Llama-3 stack; code and pretrained weights are released.</p><p class="t-ko"><strong>공개·실용적.</strong> nanoGPT/Llama-3 스택 위 FlashAttention-3 기반 MLRA-4 커널; 코드·사전학습 가중치 공개.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> all quality results are at a single 2.9B from-scratch scale — no large (30B+) or instruction-tuned models. And the headline "2.8× over MLA" partly reflects that MLA <i>can't</i> use TP (it runs data-parallel here), not a pure algorithmic edge; the latency/throughput kernels also use 64/128-head configs that differ from the 24-head trained models, so speed and quality aren't measured on the same network. The quality gains over MLA, while consistent, are slim (≈0.4% perplexity, 0.09 pts accuracy) — MLRA's real selling point is shardability, not raw quality.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 모든 품질 결과는 단일 2.9B from-scratch 규모뿐 — 대형(30B+)·인스트럭션 튜닝 모델은 없다. 또 헤드라인 "MLA 대비 2.8×"는 순수 알고리즘 우위라기보다 MLA가 TP를 <i>못 써</i> 데이터 병렬로 돌아간 탓도 있고, 지연·처리량 커널은 학습된 24-헤드 모델과 다른 64/128-헤드 구성이라 속도와 품질이 같은 네트워크에서 측정되지 않았다. MLA 대비 품질 향상은 일관적이나 미미하다(≈perplexity 0.4%, 정확도 0.09점) — MLRA의 진짜 강점은 원시 품질이 아니라 분할성이다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2603.02188">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2603.02188">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2603.02188">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2603.02188">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · Low-Rank Decomposition / Efficient Attention</b> · venue: ICLR 2026.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-06-22.</span>
+    <span class="t-ko">선정 사유 — <b>위시리스트 · Low-Rank Decomposition / Efficient Attention</b> · 학회: ICLR 2026.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
