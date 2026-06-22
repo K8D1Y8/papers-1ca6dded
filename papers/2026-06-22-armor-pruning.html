@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · ARMOR: High-Performance Semi-Structured Pruning via Adaptive Matrix Factorization</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Compression · Prune+Factorize</span><span class="t-ko">🗜 Compression · Prune+Factorize</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>ARMOR: High-Performance Semi-Structured Pruning via Adaptive Matrix Factorization<br>
+      <span class="glow t-en">— Don't just delete weights — wrap a 2:4 core in error-correcting matrices</span>
+      <span class="glow t-ko">— 그냥 지우지 마라 — 2:4 코어를 오차 보정 행렬로 감싸라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Lawrence Liu</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 UCLA · UW · Princeton · Georgia Tech</span>
+      <span>🗓 2026.04.03</span>
+      <span>📄 <a href="https://arxiv.org/abs/2510.05528">arXiv:2510.05528</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">2:4 sparsity gives real GPU speedups but naive pruning hurts accuracy badly. ARMOR reframes pruning as <span class="hl">matrix factorization: each weight becomes <b>A · (W′⊙M) · B</b></span> — a hardware-friendly 2:4 sparse core wrapped by two cheap <b>block-diagonal</b> matrices that act as pre/post error correctors. A block coordinate descent (provably no worse than the SOTA NoWag-P it starts from) tunes them. On Llama-2-13B it cuts the Wikitext2 perplexity gap to dense by <b>nearly 50%</b> (6.37 vs 8.28), and on Qwen2.5-32B GPQA it even <b>beats the dense model</b> (39.51 vs 38.84) — all for ~2–5% parameter overhead.</p>
+    <p class="t-ko">2:4 희소성은 GPU에서 실제 가속을 주지만, 단순 프루닝은 정확도를 크게 망친다. ARMOR는 프루닝을 <span class="hl">행렬 분해로 재정의한다: 각 가중치를 <b>A · (W′⊙M) · B</b></span>로 — 하드웨어 친화적 2:4 희소 코어를 두 개의 저비용 <b>블록 대각</b> 행렬로 감싸 전/후 오차 보정기로 쓴다. 블록 좌표 하강법(시작점인 SOTA NoWag-P보다 이론적으로 나빠지지 않음)으로 이들을 조정한다. Llama-2-13B에서 dense 대비 Wikitext2 perplexity 격차를 <b>거의 50%</b> 줄이고(6.37 vs 8.28), Qwen2.5-32B GPQA에서는 <b>dense 모델까지 능가</b>(39.51 vs 38.84) — 모두 ~2~5% 파라미터 오버헤드로.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The pruning dilemma: methods that are actually fast on hardware lose accuracy; methods that keep accuracy aren't actually fast.</p>
+    <p class="lead t-ko">프루닝의 딜레마: 실제로 빠른 방법은 정확도를 잃고, 정확도를 지키는 방법은 실제로 빠르지 않다.</p>
+    <p class="t-en">Unstructured pruning can drop 50% of weights with little loss, but irregular sparsity gives no real GPU speedup. 2:4 semi-structured sparsity is natively accelerated by NVIDIA Ampere+ (up to 2× throughput) — but its rigid "2-of-every-4" pattern forces you to discard critical weights, blowing up perplexity (e.g. ~59% worse than 50% unstructured on Llama-7B). ARMOR's insight: don't fight the 2:4 constraint by choosing which weights to keep — instead <strong>rotate the activation/weight space</strong> with learned block-diagonal wrappers so the 2:4 cut becomes far less lossy, while keeping the kernel-accelerated core intact.</p>
+    <p class="t-ko">비구조적 프루닝은 가중치 50%를 거의 손실 없이 제거하지만, 불규칙 희소성은 실제 GPU 가속이 없다. 2:4 반구조적 희소성은 NVIDIA Ampere+에서 네이티브 가속(최대 2× 처리량)되지만, "4개 중 2개"라는 경직된 패턴 때문에 중요한 가중치를 버려야 해 perplexity가 폭증한다(예: Llama-7B에서 50% 비구조 대비 ~59% 악화). ARMOR의 통찰: 어떤 가중치를 남길지로 2:4 제약과 싸우지 말고, 학습된 블록 대각 래퍼로 <strong>활성/가중치 공간을 회전</strong>시켜 2:4 절단의 손실을 크게 줄이되, 커널 가속되는 코어는 그대로 둔다.</p>
+    <figure class="fig">
+      <img src="fig/2510.05528/fig1.png" alt="ARMOR factorization: weight W becomes A times (W'⊙M) times B with block-diagonal wrappers, vs naive 2:4 sparse core">
+      <figcaption class="t-en"><b>Figure 1.</b> ARMOR factorization. Each weight W is not naively pruned to a 2:4 sparse core (W′⊙M); instead the core is wrapped by two block-diagonal matrices A and B that act as pre/post error correctors, optimized to find a less-lossy 2:4 basis.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> ARMOR 분해. 각 가중치 W를 단순히 2:4 희소 코어(W′⊙M)로 프루닝하지 않고, 코어를 두 블록 대각 행렬 A·B로 감싸 전/후 오차 보정기로 쓰며, 손실이 적은 2:4 기저를 찾도록 최적화한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2510.05528</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">~50%</div><div class="l"><span class="t-en">Perplexity gap to dense closed<br>(Llama-2-13B, Wikitext2)</span><span class="t-ko">dense까지 perplexity 격차 축소<br>(Llama-2-13B, Wikitext2)</span></div></div>
+      <div class="stat"><div class="n">6.37</div><div class="l"><span class="t-en">ARMOR PPL vs 8.28 NoWag-P<br>(Llama-2-13B Wikitext2)</span><span class="t-ko">ARMOR PPL vs NoWag-P 8.28<br>(Llama-2-13B Wikitext2)</span></div></div>
+      <div class="stat"><div class="n">39.51</div><div class="l"><span class="t-en">Qwen2.5-32B GPQA — beats<br>dense 38.84, SparseGPT 30.36</span><span class="t-ko">Qwen2.5-32B GPQA — dense<br>38.84·SparseGPT 30.36 능가</span></div></div>
+      <div class="stat"><div class="n">+21.3</div><div class="l"><span class="t-en">Qwen2.5-14B GSM8K gain<br>(67.17 vs 45.87 NoWag-P)</span><span class="t-ko">Qwen2.5-14B GSM8K 향상<br>(67.17 vs NoWag-P 45.87)</span></div></div>
+      <div class="stat"><div class="n">2.4–5.0%</div><div class="l"><span class="t-en">Block-diagonal wrapper<br>parameter overhead</span><span class="t-ko">블록 대각 래퍼<br>파라미터 오버헤드</span></div></div>
+      <div class="stat"><div class="n">~80×</div><div class="l"><span class="t-en">Less compute than MaskLLM<br>(and ~4000× less data)</span><span class="t-ko">MaskLLM 대비 연산<br>(데이터는 ~4000×↓)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — perplexity (2:4 pruning, lower is better)</span><span class="t-ko">결과 — perplexity (2:4 프루닝, 낮을수록 좋음)</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3 (excerpt).</b> Wikitext2 perplexity (↓), 2:4 sparsity. ARMOR closes most of the gap to the dense model that other 2:4 methods leave open.</caption>
+        <caption class="t-ko"><b>Table 3 발췌.</b> Wikitext2 perplexity(↓), 2:4 희소성. 다른 2:4 기법이 남기는 dense 대비 격차를 ARMOR가 대부분 메운다.</caption>
+        <thead><tr><th>Method</th><th>Llama-2-7B</th><th>Llama-2-13B</th><th>Llama-2-70B</th><th>Llama-3-8B</th></tr></thead>
+        <tbody>
+          <tr><td>Dense</td><td>5.12</td><td>4.57</td><td>3.12</td><td>5.54</td></tr>
+          <tr><td>SparseGPT</td><td>10.16</td><td>8.39</td><td>5.39</td><td>14.18</td></tr>
+          <tr><td>Wanda</td><td>11.35</td><td>8.36</td><td>5.20</td><td>22.42</td></tr>
+          <tr><td>NoWag-P</td><td>11.14</td><td>8.28</td><td>5.17</td><td>24.0</td></tr>
+          <tr><td>ARMOR</td><td class="up">7.21</td><td class="up">6.37</td><td class="up">4.55</td><td class="up">10.10</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">W</div>
+          <div class="sub"><span class="t-en">original dense weight</span><span class="t-ko">원본 dense 가중치</span></div>
+          <div class="latent"><span class="t-en">full precision</span><span class="t-ko">풀 정밀도</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">A · (W′⊙M) · B</span><span class="t-ko">A · (W′⊙M) · B</span></div>
+          <div class="sub"><span class="t-en">2:4 core + block-diag wrappers</span><span class="t-ko">2:4 코어 + 블록대각 래퍼</span></div>
+          <div class="latent"><span class="t-en">block coordinate descent</span><span class="t-ko">블록 좌표 하강법</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Pruned LLM</span><span class="t-ko">프루닝된 LLM</span></div>
+          <div class="sub"><span class="t-en">2:4 kernel speed kept</span><span class="t-ko">2:4 커널 속도 유지</span></div>
+          <div class="latent"><span class="t-en">accuracy ≈ dense</span><span class="t-ko">정확도 ≈ dense</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Factorize, don't just delete.</b> The 2:4 core stays hardware-accelerated; the O(N) block-diagonal wrappers rotate the space into a basis where the 2:4 cut barely hurts — and provably start no worse than NoWag-P.</div>
+      <div class="cap t-ko"><b>지우지 말고 분해하라.</b> 2:4 코어는 하드웨어 가속을 유지하고, O(N) 블록 대각 래퍼가 2:4 절단의 손실이 거의 없는 기저로 공간을 회전 — 시작점부터 NoWag-P보다 나쁘지 않음이 보장된다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: pruning as factorization, not deletion</span><span class="t-ko">아이디어: 삭제가 아닌 분해로서의 프루닝</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 분해 구조</span>
+        <h3>Block-diagonal wrappers</h3>
+        <p class="t-en">Each W is factored as <span class="term">A·(W′⊙M)·B</span> where A, B are <strong>block-diagonal</strong> (block size 128). They hold only O((d_out+d_in)·d_block) params — sublinear vs the d_out·d_in dense layer — so storage/inference overhead is just <span class="term">2.4–5%</span>, yet they give the 2:4 core room to express what naive pruning can't.</p>
+        <p class="t-ko">각 W를 <span class="term">A·(W′⊙M)·B</span>로 분해, A·B는 <strong>블록 대각</strong>(블록 크기 128). O((d_out+d_in)·d_block) 파라미터만 가져 d_out·d_in dense 층 대비 sublinear — 저장/추론 오버헤드는 <span class="term">2.4~5%</span>뿐이지만, 단순 프루닝이 표현 못 하는 것을 2:4 코어가 표현하도록 여유를 준다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 최적화 보장</span>
+        <h3>Block coordinate descent</h3>
+        <p class="t-en">Alternates a continuous update (Adam on A, B, W′) with a <strong>greedy sparse-core update</strong>: for each 4-group there are only <span class="term">(4 choose 2)=6</span> masks, each a least-squares solve. Init equals NoWag-P, and Theorem 3.1 proves the proxy loss <strong>never increases</strong> — so ARMOR ≥ SOTA by construction.</p>
+        <p class="t-ko">연속 업데이트(A·B·W′에 Adam)와 <strong>탐욕적 희소 코어 업데이트</strong>를 번갈아 — 4-그룹마다 마스크는 <span class="term">(4 중 2)=6</span>가지뿐이라 각각 최소제곱으로 푼다. 초기값이 NoWag-P이고 정리 3.1이 proxy loss가 <strong>절대 증가하지 않음</strong>을 증명 — 구조적으로 ARMOR ≥ SOTA.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Normalize &amp; initialize</span><span class="t-ko">정규화 &amp; 초기화</span></b><span class="t-en">Row/column-normalize W (NoWag style), set A=B=I, W′=W̄, and seed the 2:4 mask M to the NoWag-P pruning result — so optimization starts at a SOTA solution.</span><span class="t-ko">W를 행/열 정규화(NoWag 방식), A=B=I·W′=W̄로 두고 2:4 마스크 M을 NoWag-P 프루닝 결과로 초기화 — SOTA 해에서 출발.</span></li>
+      <li><b><span class="t-en">Continuous update</span><span class="t-ko">연속 파라미터 업데이트</span></b><span class="t-en">Jointly optimize the block-diagonal A, B and dense W′ with Adam to minimize the data-aware NoWag proxy loss ‖W̄−Ŵ‖²weighted by activation magnitudes — one forward/backward per iteration.</span><span class="t-ko">블록 대각 A·B와 dense W′를 Adam으로 공동 최적화, 활성 크기로 가중된 NoWag proxy loss ‖W̄−Ŵ‖²를 최소화 — 반복당 1회 순/역전파.</span></li>
+      <li><b><span class="t-en">Greedy sparse-core update</span><span class="t-ko">탐욕적 희소 코어 업데이트</span></b><span class="t-en">Because the loss decomposes block-wise, thousands of 4-element groups update in parallel; each group tries all 6 valid 2:4 masks via least squares and picks the best. Groups are sampled with probability ∝ proxy-loss gradient.</span><span class="t-ko">loss가 블록별로 분해되므로 수천 개 4-원소 그룹을 병렬 갱신 — 각 그룹은 유효한 6개 2:4 마스크를 최소제곱으로 시도해 최선 선택. 그룹은 proxy-loss 기울기에 비례해 샘플링.</span></li>
+      <li><b><span class="t-en">Iterate &amp; denormalize</span><span class="t-ko">반복 &amp; 역정규화</span></b><span class="t-en">Alternate the two steps for 20,000 iterations per layer (one-shot, no global retraining), then fold the normalization back into A and B so the deployed layer is a plain 2:4 layer plus two small batched matmuls.</span><span class="t-ko">두 단계를 층마다 20,000회 반복(one-shot, 전역 재학습 없음), 정규화를 A·B에 되접어 배포 층은 일반 2:4 층 + 두 개의 작은 배치 matmul이 된다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Hardware speed AND accuracy.</strong> ARMOR keeps the native 2:4 kernel speedup while closing ~half the perplexity gap to dense — escaping the "fast or accurate" dichotomy of prior pruning.</p><p class="t-ko"><strong>하드웨어 속도 + 정확도 둘 다.</strong> 네이티브 2:4 커널 가속을 유지하면서 dense 대비 perplexity 격차를 ~절반 메워, 기존 프루닝의 "빠르거나 정확하거나" 딜레마를 탈출.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Reframing beats heuristics.</strong> Treating 2:4 pruning as a factorization (rotate the basis) rather than a masking problem (pick weights) unlocks gains so large it sometimes beats the dense model on GPQA.</p><p class="t-ko"><strong>재정의가 휴리스틱을 이긴다.</strong> 2:4 프루닝을 마스킹(가중치 선택)이 아닌 분해(기저 회전) 문제로 보면, GPQA에서 dense까지 능가할 만큼 큰 이득이 열린다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Provable floor.</strong> Initialized at NoWag-P with a monotone-descent guarantee (Thm 3.1), ARMOR can't do worse than the SOTA baseline on proxy loss — a rare safety property for one-shot pruning.</p><p class="t-ko"><strong>증명된 하한.</strong> NoWag-P에서 초기화 + 단조 감소 보장(정리 3.1)으로, proxy loss 기준 SOTA보다 나빠질 수 없음 — one-shot 프루닝에서 드문 안전 속성.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Cheap, retraining-free.</strong> One-shot, ~2–5% overhead, and ~80× less compute / ~4000× less data than learnable masking (MaskLLM) — practical to apply at 70B+ scale.</p><p class="t-ko"><strong>저렴 · 재학습 불필요.</strong> One-shot, ~2~5% 오버헤드, 학습형 마스킹(MaskLLM) 대비 연산 ~80×↓·데이터 ~4000×↓ — 70B+ 규모에도 실용적.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline numbers carry caveats. The "+2.4–5%" overhead is not free — A and B add extra batched matmuls and storage that the paper reports rather than wall-clock end-to-end latency, so the real speed/accuracy Pareto vs an actually-deployed 2:4 kernel is under-quantified. The "beats dense" GPQA result is a single task/model where dense itself scores low (38.84), plausibly noise on a hard benchmark. And the comparison is mostly against NoWag-P (its own initialization) and gradient-free baselines; against the strongest learnable rotation method (DenoiseRotator-SparseGPT) ARMOR only ties, not dominates.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 수치엔 단서가 붙는다. "+2.4~5%" 오버헤드는 공짜가 아니다 — A·B가 추가 배치 matmul·저장을 더하지만 논문은 이를 보고할 뿐 end-to-end 실측 지연시간은 아니어서, 실제 배포된 2:4 커널 대비 속도/정확도 Pareto는 정량화가 부족하다. "dense 능가" GPQA 결과는 dense 자체 점수가 낮은(38.84) 단일 과제/모델로, 어려운 벤치마크의 노이즈일 수 있다. 또 비교는 대부분 (자기 초기화인) NoWag-P와 gradient-free baseline 대상이며, 가장 강력한 학습형 회전 기법(DenoiseRotator-SparseGPT) 대비로는 압도가 아니라 동률 수준이다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2510.05528">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2510.05528">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2510.05528">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2510.05528">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

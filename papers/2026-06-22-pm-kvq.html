@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · PM-KVQ: Progressive Mixed-precision KV Cache Quantization for Long-CoT LLMs</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Compression · KV Quantization</span><span class="t-ko">🗜 Compression · KV Quantization</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>PM-KVQ: Progressive Mixed-precision KV Cache Quantization for Long-CoT LLMs<br>
+      <span class="glow t-en">— Start high-precision, shrink the KV cache only as memory fills up</span>
+      <span class="glow t-ko">— 처음엔 고정밀로, 메모리가 찰 때만 KV 캐시를 점진적으로 줄여라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Tengxuan Liu</b> <span class="t-en">et al.</span><span class="t-ko">외</span></span>
+      <span>🏛 Tsinghua University · Infinigence-AI</span>
+      <span>🗓 2025.05.24</span>
+      <span>📄 <a href="https://arxiv.org/abs/2505.18610">arXiv:2505.18610</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Long chain-of-thought reasoning blows up the <b>KV cache</b> to tens or hundreds of GB. Existing quantizers crush it to a fixed low bit-width (e.g. 2-bit) from the very first decoding step, so <span class="hl">quantization error accumulates across thousands of generated tokens</span>. PM-KVQ instead keeps the cache <b>high-precision early and progressively shrinks the bit-width</b> only as memory fills, adds <b>block-wise mixed precision</b> via integer programming, and fixes long-context calibration with <b>positional interpolation</b> — gaining up to <b>+8% accuracy</b> over SOTA at the same memory budget.</p>
+    <p class="t-ko">긴 사고연쇄(long-CoT) 추론은 <b>KV 캐시</b>를 수십~수백 GB로 폭증시킨다. 기존 양자화기는 첫 디코딩 단계부터 고정 저비트(예: 2-bit)로 짓눌러 <span class="hl">수천 토큰에 걸쳐 양자화 오차가 누적</span>된다. PM-KVQ는 대신 <b>초반엔 고정밀로 두고 메모리가 찰 때만 비트폭을 점진적으로 축소</b>하며, 정수계획법으로 <b>블록별 혼합정밀도</b>를 배분하고, <b>위치 보간(PI)</b>으로 긴 컨텍스트 캘리브레이션을 교정한다 — 같은 메모리 예산에서 SOTA 대비 최대 <b>+8% 정확도</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">For reasoning LLMs the bottleneck is not the weights — it is the ever-growing KV cache that fixed low-bit quantization quietly destroys.</p>
+    <p class="lead t-ko">추론 LLM의 병목은 가중치가 아니라, 고정 저비트 양자화가 조용히 망가뜨리는 끝없이 커지는 KV 캐시다.</p>
+    <p class="t-en">Most KV-cache quantizers were designed for short contexts (&lt;8K tokens). Applied to long-CoT models that emit tens of thousands of tokens, two things break. First, quantizing every decoding step to a fixed 2-bit width injects error at each step that <strong>accumulates catastrophically</strong> — and memory sits half-empty early in generation, so the aggressive low bit-width is needlessly wasteful. Second, <strong>RoPE</strong> makes some Key channels low-frequency: they only reveal their full distribution over 32K+ tokens, so calibrating outlier-handling on 512–2048-token snippets is a mismatch. PM-KVQ reframes the problem as <strong>spending the memory budget intelligently over time and across blocks</strong>, rather than picking one bit-width up front.</p>
+    <p class="t-ko">대부분의 KV 캐시 양자화기는 짧은 컨텍스트(&lt;8K 토큰)용으로 설계됐다. 수만 토큰을 내뱉는 long-CoT 모델에 적용하면 두 가지가 무너진다. 첫째, 매 디코딩 단계를 고정 2-bit로 양자화하면 단계마다 오차가 들어가 <strong>치명적으로 누적</strong>되고, 생성 초반엔 메모리가 절반쯤 비어 있어 공격적 저비트가 불필요한 낭비다. 둘째, <strong>RoPE</strong> 때문에 일부 Key 채널은 저주파라 32K+ 토큰에서야 분포 전체가 드러나는데, 512~2048 토큰 조각으로 아웃라이어 처리를 캘리브레이션하면 불일치가 생긴다. PM-KVQ는 이 문제를 사전에 비트폭 하나를 고르는 게 아니라 <strong>메모리 예산을 시간·블록에 걸쳐 똑똑하게 쓰는</strong> 문제로 재정의한다.</p>
+    <figure class="fig">
+      <img src="fig/2505.18610/fig1.png" alt="PM-KVQ method overview: progressive quantization, block-wise allocation, positional-interpolation calibration">
+      <figcaption class="t-en"><b>Figure 1.</b> Method overview. (a) <b>Progressive quantization</b> keeps the cache at 16-bit and shrinks (16→8→4→2-bit) only as the budget fills, avoiding wasted memory and cumulative error. (b) <b>Block-wise allocation</b> gives sensitive blocks more bits. (c) <b>Calibration with positional interpolation</b> recovers the full long-context distribution from short data.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 방법 개요. (a) <b>점진적 양자화</b>는 캐시를 16-bit로 두다가 예산이 찰 때만 축소(16→8→4→2-bit)해 메모리 낭비와 누적 오차를 피한다. (b) <b>블록별 배분</b>은 민감한 블록에 더 많은 비트를 준다. (c) <b>위치 보간 캘리브레이션</b>은 짧은 데이터로 긴 컨텍스트 분포 전체를 복원한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2505.18610</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+8%</div><div class="l"><span class="t-en">Max accuracy gain over SOTA<br>at same memory budget</span><span class="t-ko">동일 메모리 예산에서<br>SOTA 대비 최대 정확도 향상</span></div></div>
+      <div class="stat"><div class="n">+12.9%</div><div class="l"><span class="t-en">2-bit 70B pass@1 vs KIVI<br>(64.79 vs 51.88, AIME-24)</span><span class="t-ko">2-bit 70B pass@1 vs KIVI<br>(64.79 vs 51.88, AIME-24)</span></div></div>
+      <div class="stat"><div class="n">7B–70B</div><div class="l"><span class="t-en">Model sizes evaluated<br>(DeepSeek-R1 distills)</span><span class="t-ko">평가한 모델 규모<br>(DeepSeek-R1 distill)</span></div></div>
+      <div class="stat"><div class="n">2 / 4-bit</div><div class="l"><span class="t-en">KV cache bit-widths<br>tested</span><span class="t-ko">실험한 KV 캐시<br>비트폭</span></div></div>
+      <div class="stat"><div class="n">+26.25%</div><div class="l"><span class="t-en">Equivalent vs Direct<br>Right-Shift (pass@1)</span><span class="t-ko">Equivalent vs Direct<br>Right-Shift (pass@1)</span></div></div>
+      <div class="stat"><div class="n">s = 4</div><div class="l"><span class="t-en">PI scaling: 2048 tok →<br>8192-tok calibration</span><span class="t-ko">PI 배율: 2048 토큰 →<br>8192 토큰 캘리브레이션</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — holding up under 2-bit</span><span class="t-ko">결과 — 2-bit에서도 버틴다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Selected results.</b> 2-bit KV cache, pass@1 / accuracy (%). Δ = PM-KVQ − KIVI. Baselines RotateKV and MiKV collapse to near-0% at 2-bit on the smaller model.</caption>
+        <caption class="t-ko"><b>발췌 결과.</b> 2-bit KV 캐시, pass@1 / 정확도(%). Δ = PM-KVQ − KIVI. RotateKV·MiKV는 작은 모델 2-bit에서 거의 0%로 붕괴.</caption>
+        <thead><tr><th>Model / Bench</th><th>16-bit</th><th>KIVI</th><th>PM-KVQ</th><th>Δ vs KIVI</th></tr></thead>
+        <tbody>
+          <tr><td>70B · AIME-2024 (pass@1)</td><td>69.14</td><td>51.88</td><td>64.79</td><td class="up">+12.91</td></tr>
+          <tr><td>14B · CMIMC-2024 (degr.)</td><td>—</td><td>−21.87</td><td>−1.87</td><td class="up">+20.00</td></tr>
+          <tr><td>&lt;10B · voting (avg gain)</td><td>—</td><td>base</td><td>+15.56</td><td class="up">+15.56</td></tr>
+          <tr><td>10–32B · voting (avg gain)</td><td>—</td><td>base</td><td>+17.78</td><td class="up">+17.78</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Early decoding</span><span class="t-ko">디코딩 초반</span></div>
+          <div class="sub"><span class="t-en">memory half-empty</span><span class="t-ko">메모리 절반 빔</span></div>
+          <div class="latent">16-bit KV</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">As budget fills</span><span class="t-ko">예산이 차면</span></div>
+          <div class="sub"><span class="t-en">equivalent right-shift</span><span class="t-ko">등가 우측 시프트</span></div>
+          <div class="latent">16→8→4→2-bit</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Per block</span><span class="t-ko">블록별</span></div>
+          <div class="sub"><span class="t-en">IP picks final bits</span><span class="t-ko">IP가 최종 비트 결정</span></div>
+          <div class="latent"><span class="t-en">sensitive → more bits</span><span class="t-ko">민감 블록 → 더 많은 비트</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Spend the budget over time, not all at once.</b> High precision is kept while memory is free; bit-width drops by integer add+shift only when needed, and an integer-programming solver gives each block its final (Fbit) precision by sensitivity.</div>
+      <div class="cap t-ko"><b>예산은 한 번에가 아니라 시간에 걸쳐 쓴다.</b> 메모리가 한가할 땐 고정밀 유지, 필요할 때만 정수 덧셈+시프트로 비트폭을 낮추고, 정수계획법 솔버가 민감도에 따라 블록마다 최종(Fbit) 정밀도를 정한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three ideas</span><span class="t-ko">세 가지 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 점진적 양자화</span>
+        <h3>Progressive Quantization</h3>
+        <p class="t-en">Don't quantize to 2-bit from step 1. Keep the KV cache at 16-bit, then shrink (16→8→4→2-bit) as memory fills, using an <span class="term">Equivalent Right-Shift</span> — an integer add+shift that re-quantizes losslessly in dynamic range. This beats Direct/Modified shift by <span class="term">+26.25% / +9.58%</span> pass@1.</p>
+        <p class="t-ko">1단계부터 2-bit로 양자화하지 않는다. KV 캐시를 16-bit로 유지하다 메모리가 차면 축소(16→8→4→2-bit)하는데, <span class="term">등가 우측 시프트</span>(정수 덧셈+시프트로 동적범위 손실 없이 재양자화)를 쓴다. Direct/Modified 시프트보다 pass@1 <span class="term">+26.25% / +9.58%</span> 우수.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 블록별 배분 · ③ PI 캘리브</span>
+        <h3>Mixed precision + PI calibration</h3>
+        <p class="t-en">An <span class="term">integer-programming</span> solver (Taylor sensitivity, solved in seconds via CVXPY) gives sensitive blocks more bits. For calibration, <span class="term">positional interpolation</span> (e.g. s=4) makes a 2048-token sample mimic an 8192-token context, capturing low-frequency RoPE channels without O(N²) cost: <span class="term">+1.66%</span> pass@1.</p>
+        <p class="t-ko"><span class="term">정수계획법</span> 솔버(테일러 민감도, CVXPY로 수 초 내 해결)가 민감한 블록에 더 많은 비트를 준다. 캘리브레이션은 <span class="term">위치 보간</span>(예: s=4)으로 2048 토큰 샘플이 8192 토큰 컨텍스트를 흉내 내, O(N²) 비용 없이 저주파 RoPE 채널을 포착: pass@1 <span class="term">+1.66%</span>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Profile sensitivity (pre-inference)</span><span class="t-ko">민감도 프로파일링(추론 전)</span></b><span class="t-en">Estimate each transformer block's KV-cache sensitivity to b-bit quantization via a first-order Taylor approximation using loss gradients w.r.t. the Key/Value caches.</span><span class="t-ko">Key/Value 캐시에 대한 손실 기울기로 1차 테일러 근사를 써, 각 트랜스포머 블록이 b-bit 양자화에 얼마나 민감한지 추정.</span></li>
+      <li><b><span class="t-en">Solve the bit-allocation IP</span><span class="t-ko">비트 배분 IP 풀기</span></b><span class="t-en">Minimize total sensitivity subject to a memory budget M, choosing each block's final bit-width (Fbit) from an option set — solved by CVXPY in seconds.</span><span class="t-ko">메모리 예산 M 제약 하에 총 민감도를 최소화하도록 옵션 집합에서 블록별 최종 비트폭(Fbit) 선택 — CVXPY로 수 초 내 해결.</span></li>
+      <li><b><span class="t-en">Calibrate with positional interpolation</span><span class="t-ko">위치 보간으로 캘리브레이션</span></b><span class="t-en">Apply channel-wise reparameterization for outliers, but scale RoPE positions (s&gt;1) so short calibration data simulates a long context — no extra compute or memory.</span><span class="t-ko">아웃라이어용 채널별 재매개변수화를 적용하되 RoPE 위치를 스케일(s&gt;1)해 짧은 캘리브 데이터가 긴 컨텍스트를 모사 — 추가 연산·메모리 없음.</span></li>
+      <li><b><span class="t-en">Decode progressively</span><span class="t-ko">점진적 디코딩</span></b><span class="t-en">Start at 16-bit; as the budget fills, apply equivalent right-shift to drop each block down to its allocated Fbit, keeping precision high for as long as possible.</span><span class="t-ko">16-bit로 시작; 예산이 차면 등가 우측 시프트로 각 블록을 할당된 Fbit까지 낮춰, 가능한 한 오래 고정밀 유지.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Time-aware budgeting beats fixed bit-width.</strong> Keeping early tokens high-precision and shrinking only on demand cuts cumulative error — up to +8% over SOTA at the same memory.</p><p class="t-ko"><strong>고정 비트폭보다 시간 인지형 예산 배분.</strong> 초반 토큰을 고정밀로 두고 필요할 때만 축소하면 누적 오차가 줄어 — 같은 메모리에서 SOTA 대비 최대 +8%.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>2-bit becomes usable.</strong> Where RotateKV/MiKV collapse to ~0% at 2-bit, PM-KVQ keeps a 70B distill at 64.79 pass@1 (vs 69.14 full).</p><p class="t-ko"><strong>2-bit가 쓸 만해진다.</strong> RotateKV/MiKV가 2-bit에서 ~0%로 붕괴하는 반면 PM-KVQ는 70B distill을 pass@1 64.79(원본 69.14)로 유지.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>RoPE matters for calibration.</strong> Positional interpolation lets short calibration data stand in for long contexts, sidestepping the O(N²) cost of true long sequences.</p><p class="t-ko"><strong>캘리브레이션에 RoPE가 중요.</strong> 위치 보간으로 짧은 캘리브 데이터가 긴 컨텍스트를 대신해, 실제 긴 시퀀스의 O(N²) 비용을 우회.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Lightweight to set up.</strong> The mixed-precision allocation is a small integer program solved in seconds — practical as a pre-inference step.</p><p class="t-ko"><strong>설정이 가볍다.</strong> 혼합정밀도 배분은 수 초 내 풀리는 작은 정수계획 — 추론 전 단계로 실용적.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The "lossless" wins depend on a memory budget generous enough that early tokens really do stay at high precision — under truly tight budgets where the cache must hit Fbit almost immediately, the progressive advantage shrinks toward a plain fixed-bit scheme. The method also explicitly excludes MLA-style attention and is not integrated with a real inference engine, so the headline accuracy gains haven't yet been shown to translate into end-to-end throughput on production stacks.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> "무손실" 이득은 초반 토큰이 실제로 고정밀로 남을 만큼 메모리 예산이 넉넉해야 성립한다 — 캐시가 거의 즉시 Fbit에 도달해야 하는 진짜 빠듯한 예산에선 점진적 이점이 평범한 고정비트 방식 쪽으로 줄어든다. 또한 MLA류 어텐션은 명시적으로 제외했고 실제 추론 엔진과 통합되지 않아, 대표 정확도 이득이 프로덕션 스택의 종단 처리량으로 이어지는지는 아직 검증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2505.18610">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2505.18610">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2505.18610">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2505.18610">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

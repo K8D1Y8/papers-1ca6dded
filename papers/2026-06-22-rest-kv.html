@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · ReST-KV: Robust KV Cache Eviction with Layer-wise Output Reconstruction and Spatial-Temporal Smoothing</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Compression · KV Eviction</span><span class="t-ko">🗜 Compression · KV Eviction</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>ReST-KV: Robust KV Cache Eviction<br><span class="glow t-en">— Don't keep the tokens with the highest attention; keep the ones whose removal hurts the output most</span><span class="glow t-ko">— attention이 큰 토큰이 아니라, 빼면 출력이 가장 망가지는 토큰을 남겨라</span></h1>
+    <div class="meta">
+      <span>👥 <b>Yongqi An</b> <span class="t-en">et al.</span><span class="t-ko">외 7인</span></span>
+      <span>🏛 <span class="t-en">Inst. of Automation, CAS · UCAS</span><span class="t-ko">중국과학원 자동화연구소 · UCAS</span></span>
+      <span>🗓 2026.04.02</span>
+      <span>📄 <a href="https://openreview.net/forum?id=PhEHuo7oMm">OpenReview</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">KV-cache eviction methods (H2O, SnapKV, PyramidKV) keep the tokens with the highest attention weights — but they ignore that <b>removing a token redistributes the attention</b> over the survivors, so the "important" ranking is wrong. ReST-KV reframes eviction as <span class="hl">layer-wise output reconstruction</span>: each token's importance is the <b>increase in MHA output error if you drop it</b>, which naturally captures redistribution. Two cheap smoothers — an <b>EMA over time</b> and an <b>adaptive spatial window</b> — make selection robust. Result: <b>+2.58% on LongBench</b>, <b>+15.2% on RULER</b>, and a <b>10.61× decoding speedup</b> at 128k.</p>
+    <p class="t-ko">기존 KV-cache eviction(H2O, SnapKV, PyramidKV)은 attention 가중치가 큰 토큰을 남긴다. 하지만 <b>토큰을 빼면 남은 토큰들로 attention이 재분배</b>된다는 사실을 무시해 "중요도" 랭킹 자체가 틀린다. ReST-KV는 eviction을 <span class="hl">레이어별 출력 복원(layer-wise output reconstruction)</span> 문제로 재정의 — 각 토큰의 중요도는 <b>그것을 빼면 MHA 출력 오차가 얼마나 커지는가</b>로 측정하며, 이는 재분배 효과를 자연스럽게 담는다. 여기에 가벼운 두 평활화 — <b>시간축 EMA</b>와 <b>적응형 공간 윈도우</b> — 로 선택을 안정화. 결과: <b>LongBench +2.58%</b>, <b>RULER +15.2%</b>, 128k에서 <b>디코딩 10.61× 가속</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">High attention does not mean "important to keep" — because attention is reweighted the moment you evict.</p>
+    <p class="lead t-ko">attention이 크다고 "남길 가치"가 큰 게 아니다 — 빼는 순간 attention이 다시 분배되기 때문이다.</p>
+    <p class="t-en">As context grows past 128K tokens, the KV cache can balloon to hundreds of GB, so eviction is the practical lever for long-context inference without retraining. The trouble: every prior indicator scores a token by its <strong>raw attention weight</strong>, treating the rest of the cache as frozen. But when you actually remove a token, the softmax renormalizes and the surviving tokens absorb its mass — a token that looked redundant may have been the only one carrying a value the others can't reconstruct. ReST-KV measures importance by <strong>what happens to the layer's output after removal</strong>, so redistribution is baked into the score rather than ignored.</p>
+    <p class="t-ko">컨텍스트가 128K 토큰을 넘어가면 KV 캐시는 수백 GB로 폭증하므로, 재학습 없이 롱컨텍스트 추론을 돌리려면 eviction이 사실상 유일한 레버다. 문제는 모든 기존 지표가 토큰을 <strong>원시 attention 가중치</strong>로만 평가하면서, 나머지 캐시는 고정돼 있다고 가정한다는 점. 실제로 토큰을 빼면 softmax가 재정규화되며 남은 토큰들이 그 질량을 흡수한다 — 중복처럼 보이던 토큰이 사실 다른 토큰들이 복원 못 하는 value를 유일하게 들고 있었을 수 있다. ReST-KV는 중요도를 <strong>제거 후 그 레이어의 출력이 어떻게 변하는가</strong>로 측정하므로, 재분배가 점수에 그대로 반영된다.</p>
+    <figure class="fig">
+      <img src="fig/PhEHuo7oMm/fig1.png" alt="ReST-KV vs prior methods: attention redistribution after eviction">
+      <figcaption class="t-en"><b>Figure 1.</b> Prior methods minimize only the attention of removed tokens (red). ReST-KV minimizes the <b>output discrepancy</b> — the redistributed attention (gold) times surviving values minus the removed attention times removed values — so it accounts for what the survivors can or cannot reconstruct.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> 기존 방법은 제거 토큰의 attention(빨강)만 최소화한다. ReST-KV는 <b>출력 불일치</b>를 최소화 — 재분배된 attention(금색)×남은 value에서 제거 attention×제거 value를 뺀 값 — 즉 남은 토큰이 무엇을 복원할 수 있/없는지를 함께 고려한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · OpenReview PhEHuo7oMm</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+2.58%</div><div class="l"><span class="t-en">LongBench gain over SOTA<br>(low budget, Mistral)</span><span class="t-ko">LongBench SOTA 대비 향상<br>(저예산, Mistral)</span></div></div>
+      <div class="stat"><div class="n">+15.2%</div><div class="l"><span class="t-en">RULER avg. accuracy gain<br>(Llama3.1-8B, 4k–128k)</span><span class="t-ko">RULER 평균 정확도 향상<br>(Llama3.1-8B, 4k~128k)</span></div></div>
+      <div class="stat"><div class="n">10.61×</div><div class="l"><span class="t-en">Decoding speedup at 128k<br>vs full cache + FlashAttn-2</span><span class="t-ko">128k 디코딩 가속<br>vs full cache + FlashAttn-2</span></div></div>
+      <div class="stat"><div class="n">98%</div><div class="l"><span class="t-en">Needle-in-Haystack score<br>retained (Mistral, B=1024L)</span><span class="t-ko">Needle-in-Haystack 점수 유지<br>(Mistral, B=1024L)</span></div></div>
+      <div class="stat"><div class="n">−36.0%</div><div class="l"><span class="t-en">Peak memory at 128k<br>vs full cache</span><span class="t-ko">128k 최대 메모리<br>vs full cache</span></div></div>
+      <div class="stat"><div class="n">≈2%</div><div class="l"><span class="t-en">Extra prefill overhead<br>over SnapKV (TTFT)</span><span class="t-ko">SnapKV 대비 추가 프리필 오버헤드<br>(TTFT)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — RULER holds up where others collapse</span><span class="t-ko">결과 — 다른 방법이 무너지는 RULER에서 버틴다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2.</b> RULER accuracy by context length, Llama3.1-8B-Instruct, fixed budget B<sub>total</sub>=1024L. ReST-KV degrades far more gracefully as context grows.</caption>
+        <caption class="t-ko"><b>표 2.</b> 컨텍스트 길이별 RULER 정확도, Llama3.1-8B-Instruct, 고정 예산 B<sub>total</sub>=1024L. ReST-KV는 길이가 커져도 훨씬 완만하게 떨어진다.</caption>
+        <thead><tr><th>Method</th><th>4K</th><th>16K</th><th>64K</th><th>128K</th><th>Avg.</th></tr></thead>
+        <tbody>
+          <tr><td>Full cache</td><td>99.34</td><td>98.55</td><td>89.85</td><td>79.32</td><td>93.46</td></tr>
+          <tr><td>StreamingLLM</td><td>39.81</td><td>12.10</td><td>9.91</td><td>8.18</td><td>16.50</td></tr>
+          <tr><td>SnapKV</td><td>83.60</td><td>71.12</td><td>57.47</td><td>47.99</td><td>67.11</td></tr>
+          <tr><td>PyramidKV</td><td>81.35</td><td>70.23</td><td>57.84</td><td>48.93</td><td>66.97</td></tr>
+          <tr><td><b>ReST-KV</b></td><td><b>94.01</b></td><td><b>84.12</b></td><td><b>78.65</b></td><td><b>68.28</b></td><td><b>82.27</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> Ablation on LongBench (Llama3.1-8B, B<sub>total</sub>=128L). Each of the three components contributes; the spatial smoother (AWS) matters most.</caption>
+        <caption class="t-ko"><b>표 3.</b> LongBench 절제 실험(Llama3.1-8B, B<sub>total</sub>=128L). 세 구성요소 모두 기여하며, 공간 평활화(AWS)가 가장 크다.</caption>
+        <thead><tr><th><span class="t-en">Variant</span><span class="t-ko">변형</span></th><th>Avg. Acc</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td><span class="t-en">Attention-weight Top-k (baseline)</span><span class="t-ko">attention 가중치 Top-k (기준)</span></td><td>32.98</td><td class="down">−2.88</td></tr>
+          <tr><td>ReST-KV w/o LOR</td><td>33.95</td><td class="down">−1.91</td></tr>
+          <tr><td>ReST-KV w/o EMA</td><td>34.02</td><td class="down">−1.84</td></tr>
+          <tr><td>ReST-KV w/o AWS</td><td>33.50</td><td class="down">−2.36</td></tr>
+          <tr><td><b>ReST-KV (full)</b></td><td><b>35.86</b></td><td class="up">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Drop token n</span><span class="t-ko">토큰 n 제거</span></div>
+          <div class="sub"><span class="t-en">recompute MHA output</span><span class="t-ko">MHA 출력 재계산</span></div>
+          <div class="latent"><span class="t-en">attention renormalizes</span><span class="t-ko">attention 재정규화</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Reconstruction error</span><span class="t-ko">복원 오차</span></div>
+          <div class="sub"><span class="t-en">A[n]/(1−A[n]) · ‖MHA − vₙW_O‖</span><span class="t-ko">A[n]/(1−A[n]) · ‖MHA − vₙW_O‖</span></div>
+          <div class="latent"><span class="t-en">= importance indicator</span><span class="t-ko">= 중요도 지표</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">EMA + Adaptive Window</span><span class="t-ko">EMA + 적응 윈도우</span></div>
+          <div class="sub"><span class="t-en">smooth over time + space</span><span class="t-ko">시간·공간으로 평활화</span></div>
+          <div class="latent"><span class="t-en">keep top-B per head</span><span class="t-ko">헤드별 top-B 유지</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Score by output damage, not raw attention.</b> The indicator multiplies a nonlinear attention amplifier A[n]/(1−A[n]) by how much the survivors fail to reconstruct token n's value contribution — then smooths the score across recent steps and shifted positions before keeping the top-B.</div>
+      <div class="cap t-ko"><b>원시 attention이 아니라 '출력 손상'으로 채점.</b> 지표는 비선형 attention 증폭항 A[n]/(1−A[n])에, 남은 토큰들이 토큰 n의 value 기여를 얼마나 복원하지 못하는지를 곱한다 — 그 점수를 최근 스텝·이동 위치로 평활화한 뒤 top-B를 남긴다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: eviction = preserving each layer's output</span><span class="t-ko">아이디어: eviction = 각 레이어 출력의 보존</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① <span class="t-en">Reconstruction</span><span class="t-ko">복원</span></span>
+        <h3>Layer-wise Output Reconstruction (LOR)</h3>
+        <p class="t-en">Define importance as the <span class="term">ℓ2 increase in MHA output</span> when a KV pair is removed. Under a local-linearity assumption it simplifies to a closed form: <span class="term">A[n]/(1−A[n]) · ‖MHA − vₙW_O‖</span>. The first factor is a monotonic amplifier of attention; the second is the redistribution-sensitivity term that prior indicators completely miss.</p>
+        <p class="t-ko">중요도를 KV 쌍 제거 시 <span class="term">MHA 출력의 ℓ2 증가량</span>으로 정의. 국소 선형성 가정하에 닫힌 형태로 단순화된다: <span class="term">A[n]/(1−A[n]) · ‖MHA − vₙW_O‖</span>. 앞 항은 attention의 단조 증폭기, 뒤 항은 기존 지표가 완전히 놓치는 재분배 민감도 항이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② <span class="t-en">Smoothing</span><span class="t-ko">평활화</span></span>
+        <h3>Spatial-Temporal Smoothing (EMA + AWS)</h3>
+        <p class="t-en">Importance fluctuates over decoding steps and shifts across positions (the "vertical-slash" pattern). An <span class="term">exponential moving average (α=0.3)</span> stabilizes the temporal signal; an <span class="term">adaptive window</span> measures how the top-B centroid drifts between the front and rear halves of the query window, then auto-tunes window size and shift (β=2000).</p>
+        <p class="t-ko">중요도는 디코딩 스텝에 따라 요동치고 위치에 따라 이동한다("vertical-slash" 패턴). <span class="term">지수이동평균(α=0.3)</span>이 시간 신호를 안정화하고, <span class="term">적응형 윈도우</span>가 쿼리 윈도우의 앞/뒤 절반에서 top-B 중심이 얼마나 이동하는지를 측정해 윈도우 크기·이동을 자동 조정한다(β=2000).</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Formulate as reconstruction</span><span class="t-ko">복원 문제로 정식화</span></b><span class="t-en">For each layer and head, frame eviction as choosing ≤B KV pairs that minimize the ℓ2 distance between the full MHA output and the pruned one.</span><span class="t-ko">각 레이어·헤드에서, full MHA 출력과 잘라낸 출력 간 ℓ2 거리를 최소화하는 ≤B개 KV 쌍을 고르는 문제로 정식화.</span></li>
+      <li><b><span class="t-en">Score each KV pair</span><span class="t-ko">KV 쌍 채점</span></b><span class="t-en">Use the closed-form indicator A[n]/(1−A[n])·‖MHA−vₙW_O‖ — large value = removing it hurts the output a lot = keep it.</span><span class="t-ko">닫힌 형태 지표 A[n]/(1−A[n])·‖MHA−vₙW_O‖ 사용 — 값이 클수록 제거 시 출력 손상이 커 → 유지.</span></li>
+      <li><b><span class="t-en">Smooth over time + space</span><span class="t-ko">시간·공간 평활화</span></b><span class="t-en">Apply EMA over a recent query window (force-keep the latest S_w tokens), then average the indicator over an adaptively sized/shifted spatial window to track moving importance.</span><span class="t-ko">최근 쿼리 윈도우에 EMA 적용(최신 S_w 토큰은 강제 유지) 후, 적응형 크기·이동 공간 윈도우로 지표를 평균해 움직이는 중요도를 추적.</span></li>
+      <li><b><span class="t-en">Keep top-B, once</span><span class="t-ko">top-B를 한 번만 유지</span></b><span class="t-en">Select the top-B indices per head during prefill only (no per-step re-eviction), giving SnapKV-level O(wND) prefill cost and a fixed decode budget.</span><span class="t-ko">프리필 중 한 번만 헤드별 top-B 인덱스 선택(스텝별 재퇴출 없음) — SnapKV 수준의 O(wND) 프리필 비용과 고정 디코드 예산 확보.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🎯</span><p class="t-en"><strong>Attention weight is a proxy, output error is the target.</strong> Scoring by the actual output damage from removal is a cleaner objective — and the redistribution term is the part everyone left on the table.</p><p class="t-ko"><strong>attention 가중치는 대리지표, 출력 오차가 진짜 목표.</strong> 제거가 출력에 주는 실제 손상으로 채점하는 게 더 깔끔한 목적함수 — 재분배 항이 모두가 놓친 부분.</p></div>
+      <div class="t"><span class="ic">📈</span><p class="t-en"><strong>The gains concentrate where it's hard.</strong> +15.2% on RULER and 68.28 at 128k (vs ~48 for SnapKV/PyramidKV) — robustness under tight budgets, not just average wins.</p><p class="t-ko"><strong>이득이 어려운 구간에 몰린다.</strong> RULER +15.2%, 128k에서 68.28(SnapKV/PyramidKV는 ~48) — 평균 승리가 아니라 빠듯한 예산에서의 견고함.</p></div>
+      <div class="t"><span class="ic">⚡</span><p class="t-en"><strong>Nearly free at inference.</strong> The indicator only runs over a small query window, so prefill cost matches SnapKV (≈2% overhead) while decoding gets a 10.61× speedup at 128k.</p><p class="t-ko"><strong>추론 비용은 거의 공짜.</strong> 지표는 작은 쿼리 윈도우에서만 돌아 프리필 비용이 SnapKV와 동급(≈2% 오버헤드)이고, 128k 디코딩은 10.61× 가속.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Drop-in and composable.</strong> Model-agnostic across MHA and GQA backbones, and compatible with PyramidKV/AdaKV budget allocation and KV quantization.</p><p class="t-ko"><strong>끼워넣기 + 조합 가능.</strong> MHA·GQA 백본에 모두 적용되는 모델 불문 방식이며, PyramidKV/AdaKV 예산 배분 및 KV 양자화와 호환.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The closed-form indicator (Eq. 7) rests on a <b>local-linearity assumption</b> à la Molchanov pruning — it estimates the effect of removing tokens <em>one at a time</em>, yet eviction removes many at once, where redistribution is highly non-linear and the per-token approximation can compound. The paper also reports an <b>inconsistent TTFT speedup</b> (2.37× in the abstract vs 3.42× in §4.6), and the headline 10.61× decode and −36% memory are single-config A800 measurements. Whether the greedy top-B selection actually approximates the true combinatorial reconstruction optimum is asserted, not proven.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 닫힌 형태 지표(식 7)는 Molchanov 프루닝식 <b>국소 선형성 가정</b>에 의존한다 — 토큰을 <em>하나씩</em> 뺄 때의 효과를 추정하지만, 실제 eviction은 한꺼번에 여러 개를 제거하며 그곳에서 재분배는 매우 비선형이고 토큰별 근사가 누적될 수 있다. 논문은 <b>TTFT 가속 수치도 불일치</b>(초록 2.37× vs §4.6 3.42×)하며, 대표 수치인 10.61× 디코드·−36% 메모리는 단일 설정 A800 측정값이다. greedy top-B 선택이 진짜 조합 최적 복원해를 근사하는지는 주장일 뿐 증명되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="PhEHuo7oMm">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://openreview.net/forum?id=PhEHuo7oMm">📄 OpenReview</a>
+      <a href="https://openreview.net/pdf?id=PhEHuo7oMm">📥 PDF</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
