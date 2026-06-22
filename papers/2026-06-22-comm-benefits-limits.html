@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Benefits and Limitations of Communication in Multi-Agent Reasoning</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · Comm Theory</span><span class="t-ko">🤝 Multi-Agent · Comm Theory</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Benefits and Limitations of Communication in Multi-Agent Reasoning<br><span class="glow t-en">— When does talking between agents actually buy you anything?</span><span class="glow t-ko">— 에이전트끼리 '대화'가 실제로 이득이 되는 건 언제인가</span></h1>
+    <div class="meta">
+      <span>👥 <b>Michael Rizvi-Martel</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 Mila · Université de Montréal · Oxford · Stanford · Saarland</span>
+      <span>🗓 2025.10.14</span>
+      <span>📄 <a href="https://arxiv.org/abs/2510.13903">arXiv:2510.13903</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Multi-agent LLM systems are everywhere, but nobody knows what they can <em>provably</em> do. This paper builds a theory: model each agent as a hard-attention Transformer, draw the whole system as a DAG of <b>CoT edges</b> (thinking) and <b>communication edges</b> (talking), and ask what communication actually buys. The answer is sharp — <span class="hl">more agents never reduce total work, and you can only cut wall-clock time by spending more communication.</span> Three tasks land in three regimes: <b>recall</b> (free parallelism), <b>state tracking</b> (speedup, but you pay in messages), and <b>k-hop reasoning</b> (lots of talk, no speedup). Validated on Llama-70B / 8B.</p>
+    <p class="t-ko">멀티에이전트 LLM은 어디에나 있지만, 그것이 <em>증명 가능하게</em> 무엇을 할 수 있는지는 아무도 모른다. 이 논문은 이론을 세운다 — 각 에이전트를 hard-attention 트랜스포머로 보고, 시스템 전체를 <b>CoT 엣지</b>(사고)와 <b>통신 엣지</b>(대화)로 이뤄진 DAG로 그린 뒤, 통신이 실제로 무엇을 사는지 묻는다. 답은 날카롭다 — <span class="hl">에이전트를 늘려도 총 연산량은 줄지 않고, 벽시계 시간을 줄이려면 반드시 통신을 더 써야 한다.</span> 세 과제가 세 영역으로 나뉜다: <b>recall</b>(공짜 병렬화), <b>state tracking</b>(속도↑, 대신 메시지 비용), <b>k-hop 추론</b>(통신만 많고 속도는 그대로). Llama-70B/8B로 검증.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Multi-agent collaboration is treated as a free lunch — but the theory says communication has a price, and it is the price of every speedup.</p>
+    <p class="lead t-ko">멀티에이전트 협업은 공짜 점심처럼 쓰이지만, 이론은 통신에 값이 있다고 말한다 — 그리고 그 값이 곧 모든 속도 향상의 대가다.</p>
+    <p class="t-en">Single LLMs degrade as context and complexity grow, so practitioners split work across agents (Chain-of-Agents, LongAgent, XpandA). But this is all empirical heuristics; nobody has characterized <strong>when</strong> partitioning helps, how much <strong>inter-agent communication</strong> it costs, and whether it actually saves time. This paper imports the rigor of Transformer expressivity theory into the multi-agent setting and proves two conservation laws, then maps three canonical reasoning tasks onto three distinct cost regimes — turning "spin up more agents" from folklore into a design decision with provable bounds.</p>
+    <p class="t-ko">단일 LLM은 문맥과 복잡도가 커질수록 성능이 무너지므로, 실무자들은 작업을 여러 에이전트에 쪼갠다(Chain-of-Agents, LongAgent, XpandA). 그러나 이는 모두 경험적 휴리스틱일 뿐, <strong>언제</strong> 분할이 도움이 되고, <strong>에이전트 간 통신</strong> 비용이 얼마이며, 실제로 시간을 절약하는지를 규명한 사람은 없었다. 이 논문은 트랜스포머 표현력 이론의 엄밀함을 멀티에이전트로 끌어와 두 보존 법칙을 증명하고, 세 대표 추론 과제를 세 비용 영역에 매핑한다 — "에이전트를 더 띄워라"를 구전 지식에서 증명 가능한 한계를 가진 설계 결정으로 바꾼다.</p>
+    <figure class="fig">
+      <img src="fig/2510.13903/fig1.png" alt="Llama-8B computation depth vs total communication for the parity (state tracking) task">
+      <figcaption class="t-en"><b>Figure 6.</b> The depth–communication tradeoff made real on Llama-8B (parity / state tracking). As total communication (edges) grows, computation depth (wall-clock proxy) drops — the empirical face of Proposition 4.2.</figcaption>
+      <figcaption class="t-ko"><b>Figure 6.</b> Llama-8B에서 실측한 깊이–통신 트레이드오프(parity / state tracking). 총 통신량(엣지)이 늘수록 연산 깊이(벽시계 대용)는 감소 — Proposition 4.2의 경험적 모습.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2510.13903</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">Feasible depth–comm<br>regimes identified</span><span class="t-ko">규명한 깊이–통신<br>실현 영역 수</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">Algorithmic task families<br>(recall · state · k-hop)</span><span class="t-ko">분석한 알고리즘 과제군<br>(recall·state·k-hop)</span></div></div>
+      <div class="stat"><div class="n">O(1)</div><div class="l"><span class="t-en">Depth &amp; comm for<br>associative recall</span><span class="t-ko">associative recall의<br>깊이·통신</span></div></div>
+      <div class="stat"><div class="n">O(log w + N/w)</div><div class="l"><span class="t-en">Depth for state tracking<br>with w agents</span><span class="t-ko">w 에이전트 state tracking<br>깊이</span></div></div>
+      <div class="stat"><div class="n">O(k)</div><div class="l"><span class="t-en">Depth &amp; comm for<br>k-hop reasoning</span><span class="t-ko">k-hop 추론의<br>깊이·통신</span></div></div>
+      <div class="stat"><div class="n">70B / 8B</div><div class="l"><span class="t-en">Llama-3.x Instruct<br>backbones tested</span><span class="t-ko">검증에 사용한<br>Llama-3.x Instruct</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — three tasks, three regimes</span><span class="t-ko">결과 — 세 과제, 세 영역</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table.</b> Theoretical resource bounds per task family (w = number of agents, N = input length, k = hops). Communication and depth are the two costs that trade off; size = total work never shrinks.</caption>
+        <caption class="t-ko"><b>Table.</b> 과제군별 이론적 자원 한계(w = 에이전트 수, N = 입력 길이, k = hop 수). 통신과 깊이가 서로 상쇄되는 두 비용이며, size = 총 연산량은 결코 줄지 않는다.</caption>
+        <thead><tr><th>Task</th><th>Depth</th><th>Communication</th><th>Regime</th></tr></thead>
+        <tbody>
+          <tr><td>Associative recall</td><td>O(1)</td><td>O(1)</td><td class="up">1 · free scale-out</td></tr>
+          <tr><td>State tracking (monoid)</td><td>O(log w + N/w)</td><td>O(w)</td><td class="up">2 · pay to speed up</td></tr>
+          <tr><td>k-hop reasoning</td><td>O(k)</td><td>O(k)</td><td>3 · talk, no speedup</td></tr>
+          <tr><td>Any task (lower bound)</td><td>—</td><td>O(1) ⇒ single-agent O(1) depth</td><td>conservation laws</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">Regime 1 · Recall</div>
+          <div class="sub"><span class="t-en">each agent scans a chunk</span><span class="t-ko">각 에이전트가 청크 스캔</span></div>
+          <div class="latent"><span class="t-en">O(1) depth · O(1) comm</span><span class="t-ko">O(1) 깊이 · O(1) 통신</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role">Regime 2 · State</div>
+          <div class="sub"><span class="t-en">prefix-sum cascade</span><span class="t-ko">prefix-sum 캐스케이드</span></div>
+          <div class="latent"><span class="t-en">depth ↓ as comm ↑</span><span class="t-ko">통신↑ 하면 깊이↓</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">Regime 3 · k-hop</div>
+          <div class="sub"><span class="t-en">manager iterates queries</span><span class="t-ko">매니저가 쿼리 반복</span></div>
+          <div class="latent"><span class="t-en">O(k) comm · no speedup</span><span class="t-ko">O(k) 통신 · 속도↑ 없음</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Two conservation laws bound everything</b> — total work can't shrink, and any wall-clock speedup must be bought with extra communication. Where a task lands among the three regimes tells you which protocol (and how many agents) is worth it.</div>
+      <div class="cap t-ko"><b>두 보존 법칙이 모든 것을 가둔다</b> — 총 연산량은 줄지 않고, 벽시계 속도 향상은 반드시 추가 통신으로 사야 한다. 과제가 세 영역 중 어디에 떨어지는지가 어떤 프로토콜(과 몇 명의 에이전트)이 가치 있는지를 알려준다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: communication is a budget, not a freebie</span><span class="t-ko">아이디어: 통신은 공짜가 아니라 '예산'이다</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 형식화</span>
+        <h3>MAS as a DAG of agents</h3>
+        <p class="t-en">A multi-agent system is a directed acyclic graph: nodes are agent states over time, <span class="term">CoT edges</span> are autoregressive thinking within one agent, and <span class="term">communication edges</span> carry a symbol between agents. One node is the manager that emits the answer. Four metrics — <strong>depth</strong> (wall-clock), <strong>width</strong> (#agents), <strong>size</strong> (total work), <strong>communication budget</strong> (#sending nodes) — make tradeoffs precise.</p>
+        <p class="t-ko">멀티에이전트 시스템을 방향 비순환 그래프로 본다: 노드는 시간에 따른 에이전트 상태, <span class="term">CoT 엣지</span>는 한 에이전트 내부의 자기회귀적 사고, <span class="term">통신 엣지</span>는 에이전트 간 심볼 전달. 한 노드는 답을 내는 매니저. 네 지표 — <strong>깊이</strong>(벽시계), <strong>폭</strong>(에이전트 수), <strong>size</strong>(총 연산), <strong>통신 예산</strong>(송신 노드 수) — 로 트레이드오프를 정량화한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 보존 법칙</span>
+        <h3>Two impossibility results</h3>
+        <p class="t-en"><strong>Conservation of size (Prop 4.1):</strong> any multi-agent protocol collapses to a single agent with the same total size — parallelism never reduces total work. <strong>Depth–comm tradeoff (Prop 4.2):</strong> if a system uses only O(1) communication, a single agent matches it in O(1) depth — so every real speedup <em>requires</em> growing communication. These two laws carve out exactly three feasible regimes (and one impossible one).</p>
+        <p class="t-ko"><strong>size 보존(Prop 4.1):</strong> 모든 멀티에이전트 프로토콜은 같은 총 size의 단일 에이전트로 환원된다 — 병렬화로 총 연산은 줄지 않는다. <strong>깊이–통신 트레이드오프(Prop 4.2):</strong> 통신을 O(1)만 쓰면 단일 에이전트가 O(1) 깊이로 따라잡는다 — 즉 모든 실질적 속도 향상은 통신 증가를 <em>요구</em>한다. 이 두 법칙이 정확히 세 실현 영역(과 한 불가능 영역)을 깎아낸다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Model each agent</span><span class="t-ko">에이전트 모델링</span></b><span class="t-en">Treat every agent as a Unique Hard Attention Transformer (UHAT) — a plausible model for long-context reasoning that subsumes fixed-precision softmax Transformers.</span><span class="t-ko">각 에이전트를 Unique Hard Attention Transformer(UHAT)로 본다 — 장문맥 추론에 타당한 모델이며 고정정밀 softmax 트랜스포머를 포섭한다.</span></li>
+      <li><b><span class="t-en">Derive the bounds</span><span class="t-ko">한계 유도</span></b><span class="t-en">Prove the two conservation laws, then for recall / state tracking / k-hop derive matching upper and lower bounds on agents, communication, and depth.</span><span class="t-ko">두 보존 법칙을 증명한 뒤, recall·state tracking·k-hop 각각에 대해 에이전트·통신·깊이의 상·하한을 맞물려 유도한다.</span></li>
+      <li><b><span class="t-en">Build optimal protocols</span><span class="t-ko">최적 프로토콜 구성</span></b><span class="t-en">Instantiate them as real protocols: Chain-of-Agents for recall, Prefix-Sum for state tracking, Iterative-Query for k-hop — each hitting its theoretical regime.</span><span class="t-ko">실제 프로토콜로 구현: recall엔 Chain-of-Agents, state tracking엔 Prefix-Sum, k-hop엔 Iterative-Query — 각자 자기 이론 영역에 도달.</span></li>
+      <li><b><span class="t-en">Validate on real LLMs</span><span class="t-ko">실제 LLM 검증</span></b><span class="t-en">Run Llama-70B / 8B on controlled synthetic benchmarks vs. a majority-voting baseline, confirming the predicted depth–communication tradeoffs hold in practice.</span><span class="t-ko">통제된 합성 벤치마크에서 Llama-70B/8B를 다수결 베이스라인과 비교 실행, 예측된 깊이–통신 트레이드오프가 실제로 성립함을 확인.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>More agents ≠ less work.</strong> By conservation of size, parallelism only redistributes computation — it can cut wall-clock time but never the total bill. Budget accordingly.</p><p class="t-ko"><strong>에이전트가 많다고 일이 줄지 않는다.</strong> size 보존에 따라 병렬화는 연산을 재분배할 뿐 — 벽시계 시간은 줄여도 총량은 못 줄인다. 그에 맞게 예산을 짜라.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Speedup has a fixed price: communication.</strong> If a task doesn't tolerate growing inter-agent messages, no multi-agent setup will make it faster than a single model.</p><p class="t-ko"><strong>속도 향상의 가격은 통신으로 고정돼 있다.</strong> 과제가 에이전트 간 메시지 증가를 못 견디면, 어떤 멀티에이전트 구성도 단일 모델보다 빠르게 만들 수 없다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Match protocol to regime.</strong> Recall → flat map-reduce; state tracking → hierarchical prefix-sum; k-hop → iterative query rounds. The task's regime dictates the right architecture.</p><p class="t-ko"><strong>프로토콜을 영역에 맞춰라.</strong> recall → 평평한 map-reduce, state tracking → 계층적 prefix-sum, k-hop → 반복 쿼리 라운드. 과제의 영역이 올바른 아키텍처를 결정한다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Theory that predicts real LLMs.</strong> The depth–communication curve isn't just asymptotic — it shows up in Llama-8B parity runs, giving the bounds empirical teeth.</p><p class="t-ko"><strong>실제 LLM을 예측하는 이론.</strong> 깊이–통신 곡선은 점근적 결과에 그치지 않고 Llama-8B parity 실험에서 그대로 나타나, 이론적 한계에 경험적 무게를 더한다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The bounds assume bounded communication per step and cleanly partitioned inputs, and the agent model is hard-attention UHAT — an idealization, not a real softmax LLM. Validation uses three synthetic algorithmic tasks on Llama-70B/8B; whether the same regimes govern messy, open-ended real-world multi-agent workloads (where agents disagree, hallucinate, or renegotiate) is exactly where the theory stops and is left to future work.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이 한계들은 스텝당 통신이 유계이고 입력이 깔끔하게 분할된다고 가정하며, 에이전트 모델은 hard-attention UHAT — 실제 softmax LLM이 아닌 이상화다. 검증도 Llama-70B/8B 위 세 합성 알고리즘 과제에 한정된다. 에이전트가 서로 반박·환각·재협상하는 지저분하고 개방형인 실제 멀티에이전트 작업에도 같은 영역 구분이 적용되는지는 정확히 이론이 멈추는 지점이며 향후 과제로 남는다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2510.13903">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2510.13903">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2510.13903">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2510.13903">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

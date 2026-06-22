@@ -23,7 +23,11 @@ def meta(path):
         t = re.search(r'<span class="chip">(.*?)</span>', txt, re.S)
     topic = strip(t.group(1)) if t else ""
     a = re.search(r"arXiv:([0-9.]+)", txt)
-    arxiv = a.group(1) if a else ""
+    if a:
+        arxiv = a.group(1)
+    else:                       # OpenReview-only paper: use its forum id as the identifier
+        o = re.search(r"openreview\.net/forum\?id=([A-Za-z0-9_-]+)", txt)
+        arxiv = o.group(1) if o else ""
     fn = os.path.basename(path)
     d = re.match(r"(\d{4})-(\d{2})-(\d{2})", fn)
     date = f"{d.group(1)}.{d.group(2)}.{d.group(3)}" if d else ""
@@ -36,7 +40,8 @@ def card(it):
     hasfull = bool(it["arxiv"]) and os.path.exists(os.path.join(REVIEWS, it["arxiv"] + ".html"))
     full = ('\n      <a class="full" href="reviews/' + html.escape(it["arxiv"]) +
             '.html"><span class="t-en">Full Review</span><span class="t-ko">풀 리뷰</span></a>') if hasfull else ""
-    sub = html.escape(it["topic"]) + ((" · arXiv:" + html.escape(it["arxiv"])) if it["arxiv"] else "")
+    idlabel = "arXiv:" if re.match(r'^\d{4}\.\d+$', it["arxiv"] or "") else "OpenReview:"
+    sub = html.escape(it["topic"]) + ((" · " + idlabel + html.escape(it["arxiv"])) if it["arxiv"] else "")
     return ('    <div class="rowwrap" data-arxiv="' + html.escape(it["arxiv"]) + '"' + (' data-full="1"' if hasfull else '') + '>\n'
             '      <a class="row" href="' + html.escape(it["file"]) + '">\n'
             '        <div class="d"><span class="dd">' + html.escape(it["date"]) + '</span></div>\n'

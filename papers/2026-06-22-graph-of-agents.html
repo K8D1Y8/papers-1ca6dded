@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Graph-of-Agents: A Graph-based Framework for Multi-Agent LLM Collaboration</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · Graph Collab</span><span class="t-ko">🤝 Multi-Agent · Graph Collab</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Graph-of-Agents: A Graph-based Framework for Multi-Agent LLM Collaboration<br>
+      <span class="glow t-en">— Don't ask every agent: build a query-specific graph and talk only to the relevant ones</span>
+      <span class="glow t-ko">— 모두에게 묻지 말고, 질문마다 그래프를 짜서 '관련 있는' 에이전트끼리만 대화하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Sukwon Yun</b> <span class="t-en">et al.</span><span class="t-ko">외</span></span>
+      <span>🏛 UNC Chapel Hill · Eigent AI · MIT-IBM Watson AI Lab · Stanford</span>
+      <span>🗓 2026 (ICLR 2026)</span>
+      <span>📄 <a href="https://arxiv.org/abs/2604.17148">arXiv:2604.17148</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Mixture-of-Agents (MoA) sends every query to <b>all</b> LLMs and concatenates everything back — an "agent explosion" that is noisy and expensive. Graph-of-Agents (GoA) reframes collaboration as a <span class="hl">query-specific directed graph</span>: pick the few relevant agents (node sampling), wire them by mutual relevance (edge sampling), exchange messages along those edges, then pool into one answer. With <b>only 3 agents</b>, GoA beats baselines that use all <b>6</b> — at <b>~1/3 the tokens</b> and <b>under half the latency</b>.</p>
+    <p class="t-ko">Mixture-of-Agents(MoA)는 모든 질의를 <b>전체</b> LLM에 보내고 응답을 통째로 이어 붙인다 — 잡음 많고 비싼 "에이전트 폭발". Graph-of-Agents(GoA)는 협업을 <span class="hl">질문별 방향 그래프</span>로 재정의한다: 관련 있는 소수만 고르고(node sampling), 상호 관련도로 엣지를 연결하고(edge sampling), 그 엣지를 따라 메시지를 주고받은 뒤 하나로 풀링한다. <b>단 3개 에이전트</b>로 6개를 다 쓰는 베이스라인을 능가 — <b>토큰은 약 1/3</b>, <b>지연시간은 절반 이하</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">As the "LLM zoo" grows, the question is not how to use more models, but which ones to route a query to — and how they should talk.</p>
+    <p class="lead t-ko">"LLM 동물원"이 커질수록, 핵심은 모델을 더 많이 쓰는 게 아니라 어떤 모델에 질문을 보내고 그들이 어떻게 대화하느냐다.</p>
+    <p class="t-en">MoA-style frameworks have three structural weaknesses: they forward queries to <strong>all</strong> agents regardless of relevance (cost + noise), they aggregate responses as a single undifferentiated chunk (no one-to-one weighting), and they integrate by concatenating every agent's tokens (expensive, treats all agents as equal). GoA attacks all three by making the <strong>communication topology itself a function of the query</strong>: only relevant agents become nodes, directed edges encode who should influence whom, and pooling prioritizes the most-trusted agent. It works purely through the prompt interface, so it runs on black-box APIs with no fine-tuning.</p>
+    <p class="t-ko">MoA류 프레임워크의 구조적 약점은 셋이다: 관련도와 무관하게 <strong>모든</strong> 에이전트에 질의를 뿌리고(비용+잡음), 응답을 구분 없는 한 덩어리로 모으고(1:1 가중 없음), 모든 에이전트의 토큰을 이어 붙여 통합한다(비싸고 모두를 동등 취급). GoA는 <strong>통신 위상 자체를 질문의 함수로</strong> 만들어 셋을 동시에 친다: 관련 있는 에이전트만 노드가 되고, 방향 엣지가 누가 누구에게 영향을 줄지 인코딩하며, 풀링은 가장 신뢰받는 에이전트를 우선한다. 프롬프트 인터페이스만으로 작동해 블랙박스 API에서 파인튜닝 없이 돌아간다.</p>
+    <figure class="fig">
+      <img src="fig/2604.17148/fig1.png" alt="Current multi-agent LLM pipeline vs. proposed Graph-of-Agents approach">
+      <figcaption class="t-en"><b>Figure 1.</b> (a) A query spanning diverse domains is routed to a pool of LLMs. (b–c) Existing systems and MoA push the query to <b>all</b> agents and aggregate everything, with heavy intra-layer cost. (d) <b>GoA</b> samples only relevant agents and wires query-specific directed edges for targeted message passing.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> (a) 다양한 도메인에 걸친 질의가 LLM 풀로 전달된다. (b–c) 기존 시스템과 MoA는 질의를 <b>모든</b> 에이전트에 보내 전부 합치며 레이어 내 비용이 크다. (d) <b>GoA</b>는 관련 에이전트만 샘플링하고 질문별 방향 엣지를 만들어 표적 메시지 패싱을 한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.17148</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">3 vs 6</div><div class="l"><span class="t-en">Agents used by GoA<br>vs. baselines (it still wins)</span><span class="t-ko">GoA가 쓴 에이전트<br>vs 베이스라인 6개 (그래도 우위)</span></div></div>
+      <div class="stat"><div class="n">19.2k</div><div class="l"><span class="t-en">GoA_Max tokens<br>vs MoA's 56.1k (~−66%)</span><span class="t-ko">GoA_Max 토큰<br>vs MoA 56.1k (~−66%)</span></div></div>
+      <div class="stat"><div class="n">100s</div><div class="l"><span class="t-en">GoA_Max latency<br>vs MoA's 240s (~−58%)</span><span class="t-ko">GoA_Max 지연<br>vs MoA 240s (~−58%)</span></div></div>
+      <div class="stat"><div class="n">11</div><div class="l"><span class="t-en">GoA_Max LLM calls<br>vs MoA's 19</span><span class="t-ko">GoA_Max LLM 호출<br>vs MoA 19</span></div></div>
+      <div class="stat"><div class="n">54.78</div><div class="l"><span class="t-en">GoA_Max MMLU-Pro acc.<br>vs MoA 53.33</span><span class="t-ko">GoA_Max MMLU-Pro 정확도<br>vs MoA 53.33</span></div></div>
+      <div class="stat"><div class="n">6</div><div class="l"><span class="t-en">Domains in agent pool<br>(7–8B LLMs)</span><span class="t-ko">에이전트 풀 도메인 수<br>(7–8B LLM)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — fewer agents, better answers, less cost</span><span class="t-ko">결과 — 더 적은 에이전트, 더 나은 답, 더 적은 비용</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 (MMLU-Pro efficiency).</b> GoA uses 3 agents; MoA uses 6. GoA matches/beats accuracy while cutting calls, tokens, and latency.</caption>
+        <caption class="t-ko"><b>Table 2 (MMLU-Pro 효율).</b> GoA는 3개, MoA는 6개 에이전트. GoA가 정확도는 동등·상회하면서 호출·토큰·지연을 모두 줄인다.</caption>
+        <thead><tr><th>Method</th><th>Accuracy</th><th>LLM calls</th><th>Tokens</th><th>Latency</th></tr></thead>
+        <tbody>
+          <tr><td>MoA</td><td>53.33</td><td>19</td><td>56.05k</td><td>240.26s</td></tr>
+          <tr><td>GoA_Mean</td><td>54.27</td><td>12</td><td>22.58k</td><td>118.52s</td></tr>
+          <tr><td>GoA_Max</td><td class="up">54.78</td><td class="up">11</td><td class="up">19.18k</td><td class="up">100.43s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt (accuracy %).</b> GoA variants top the per-benchmark bests despite using only 3 of 6 agents.</caption>
+        <caption class="t-ko"><b>Table 1 발췌 (정확도 %).</b> GoA 변형들이 6개 중 3개만 쓰고도 벤치마크별 최고치를 차지한다.</caption>
+        <thead><tr><th>Benchmark</th><th>Best variant</th><th>Score</th></tr></thead>
+        <tbody>
+          <tr><td>MMLU</td><td>GoA_Max</td><td class="up">79.18</td></tr>
+          <tr><td>MMLU-Pro</td><td>GoA_Max</td><td class="up">54.78</td></tr>
+          <tr><td>MedMCQA</td><td>GoA_Max</td><td class="up">60.04</td></tr>
+          <tr><td>GPQA</td><td>GoA_Mean</td><td class="up">40.54</td></tr>
+          <tr><td>MATH</td><td>GoA_Mean</td><td class="up">73.12</td></tr>
+          <tr><td>HumanEval</td><td>GoA_Mean</td><td class="up">84.98</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">① Node sampling</span><span class="t-ko">① 노드 샘플링</span></div>
+          <div class="sub"><span class="t-en">Meta-LLM reads model cards</span><span class="t-ko">Meta-LLM이 모델 카드 읽음</span></div>
+          <div class="latent"><span class="t-en">Top-k=3 relevant agents</span><span class="t-ko">Top-k=3 관련 에이전트</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">② Edge sampling</span><span class="t-ko">② 엣지 샘플링</span></div>
+          <div class="sub"><span class="t-en">agents score each other</span><span class="t-ko">에이전트끼리 상호 채점</span></div>
+          <div class="latent"><span class="t-en">prune below τ=0.05</span><span class="t-ko">τ=0.05 미만 가지치기</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">③ Message passing</span><span class="t-ko">③ 메시지 패싱</span></div>
+          <div class="sub"><span class="t-en">source→target, then back</span><span class="t-ko">source→target, 다시 역방향</span></div>
+          <div class="latent"><span class="t-en">bidirectional refine</span><span class="t-ko">양방향 정제</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">④ Graph pooling</span><span class="t-ko">④ 그래프 풀링</span></div>
+          <div class="sub"><span class="t-en">Max (top node) / Mean (weighted)</span><span class="t-ko">Max(최상위 노드) / Mean(가중)</span></div>
+          <div class="latent"><span class="t-en">one unified answer</span><span class="t-ko">하나의 통합 답</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>The graph is built per query.</b> Influence flows from high-relevance source nodes down to targets to refine them, then back up so sources absorb the neighborhood consensus.</div>
+      <div class="cap t-ko"><b>그래프는 질문마다 새로 만들어진다.</b> 영향력은 관련도 높은 source 노드에서 target으로 흘러 정제하고, 다시 위로 돌아가 source가 이웃의 합의를 흡수한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core idea: communication topology as a graph</span><span class="t-ko">핵심 아이디어: 통신 위상을 그래프로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 선택 + 연결</span>
+        <h3><span class="t-en">Node &amp; edge sampling</span><span class="t-ko">노드·엣지 샘플링</span></h3>
+        <p class="t-en">A Meta-LLM (Qwen2.5-7B-Instruct) reads summarized <span class="term">Hugging Face model cards</span> (domain, task, size) and Top-k selects the agents that fit the query. Selected agents then <span class="term">score each other's drafts</span> (correctness, coherence, relevance); received scores form a weighted directed adjacency matrix, and agents scoring below τ are pruned.</p>
+        <p class="t-ko">Meta-LLM(Qwen2.5-7B-Instruct)이 요약된 <span class="term">Hugging Face 모델 카드</span>(도메인·태스크·크기)를 읽고 질의에 맞는 에이전트를 Top-k로 고른다. 선택된 에이전트들은 서로의 초안을 <span class="term">상호 채점</span>(정확성·일관성·관련성)하고, 받은 점수로 가중 방향 인접행렬을 만들며 τ 미만은 가지치기한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 정제 + 통합</span>
+        <h3><span class="t-en">Bidirectional passing + pooling</span><span class="t-ko">양방향 패싱 + 풀링</span></h3>
+        <p class="t-en">Messages flow <span class="term">source→target</span> (strong agents refine weaker ones), then <span class="term">target→source</span> (sources absorb the improved consensus). Final answer is read off by <span class="term">Max-pooling</span> (most-incoming-edges node) or <span class="term">Mean-pooling</span> (Meta-LLM weighted-merges all refined responses).</p>
+        <p class="t-ko">메시지는 <span class="term">source→target</span>(강한 에이전트가 약한 쪽을 정제) 후 <span class="term">target→source</span>(source가 개선된 합의를 흡수)로 흐른다. 최종 답은 <span class="term">Max-풀링</span>(들어오는 엣지가 가장 많은 노드) 또는 <span class="term">Mean-풀링</span>(Meta-LLM이 정제 응답들을 가중 병합)으로 읽어낸다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Node sampling</span><span class="t-ko">노드 샘플링</span></b><span class="t-en">A Meta-LLM matches the query against summarized model cards and Top-k selects the k=3 most relevant agents, avoiding the "ask everyone" explosion.</span><span class="t-ko">Meta-LLM이 질의와 요약 모델 카드를 대조해 가장 관련 있는 k=3 에이전트를 Top-k로 고른다 — "모두에게 묻기" 폭발을 회피.</span></li>
+      <li><b><span class="t-en">Edge sampling</span><span class="t-ko">엣지 샘플링</span></b><span class="t-en">Each agent drafts an answer and scores the others (its own excluded). Received scores define a weighted directed adjacency matrix; agents below threshold τ=0.05 are pruned.</span><span class="t-ko">각 에이전트가 답을 작성하고 다른 에이전트를 채점(자기 제외). 받은 점수로 가중 방향 인접행렬을 정의하고, 임계 τ=0.05 미만은 가지치기.</span></li>
+      <li><b><span class="t-en">Two-way message passing</span><span class="t-ko">양방향 메시지 패싱</span></b><span class="t-en">Source→target: targets refine drafts using messages from higher-relevance sources. Target→source: sources then re-refine using the improved target outputs.</span><span class="t-ko">source→target: target가 관련도 높은 source 메시지로 초안을 정제. target→source: source가 개선된 target 출력으로 다시 정제.</span></li>
+      <li><b><span class="t-en">Graph pooling</span><span class="t-ko">그래프 풀링</span></b><span class="t-en">GoA_Max returns the top node's refined answer; GoA_Mean has the Meta-LLM weighted-merge all refined responses into one final output.</span><span class="t-ko">GoA_Max는 최상위 노드의 정제 답을 반환; GoA_Mean은 Meta-LLM이 정제 응답을 가중 병합해 최종 출력을 만든다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Selectivity beats scale.</strong> 3 well-routed agents outperform 6 broadcast ones — strategic interaction matters more than adding bodies.</p><p class="t-ko"><strong>선택성이 규모를 이긴다.</strong> 잘 라우팅된 3개가 무차별 6개를 능가 — 머릿수보다 전략적 상호작용이 중요.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Topology is the protocol.</strong> Making the communication graph query-dependent gives fine-grained, one-to-one routing that flat aggregation can't.</p><p class="t-ko"><strong>위상이 곧 프로토콜.</strong> 통신 그래프를 질문 의존적으로 만들면 평면적 집계가 못 하는 세밀한 1:1 라우팅이 가능.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Prompt-only, API-ready.</strong> No fine-tuning; works with black-box LLMs and generalizes to gpt-4o, beating an 8-agent DyLAN with just 3.</p><p class="t-ko"><strong>프롬프트만으로, API 즉시 적용.</strong> 파인튜닝 불필요; 블랙박스 LLM과 동작하고 gpt-4o로 일반화돼 8-에이전트 DyLAN을 3개로 능가.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Generalizes MoA.</strong> Set k=N, fully-connect with unit weights, add a query self-loop, and mean-pool — GoA collapses back into MoA.</p><p class="t-ko"><strong>MoA의 일반화.</strong> k=N, 단위 가중 완전연결, 질의 self-loop 추가, mean-pool하면 GoA는 MoA로 환원된다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The whole pipeline leans on the Meta-LLM's judgments — node selection from model cards and the agents' mutual scoring. A weak or biased Meta-LLM (or self-serving peer scores) could systematically misroute, and the agent pool is small (six 7–8B models with hand-summarized cards), so it's unclear how node/edge sampling holds up at zoo scale or with adversarial/overconfident agents.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 파이프라인 전체가 Meta-LLM의 판단(모델 카드 기반 노드 선택, 에이전트 상호 채점)에 의존한다. Meta-LLM이 약하거나 편향되면(혹은 자기 유리한 동료 채점) 체계적 오라우팅이 생길 수 있고, 에이전트 풀도 작아(수동 요약 카드의 7–8B 6개) 동물원 규모나 적대적·과신 에이전트에서 node/edge 샘플링이 버틸지는 불명확.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2604.17148">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2604.17148">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2604.17148">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2604.17148">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

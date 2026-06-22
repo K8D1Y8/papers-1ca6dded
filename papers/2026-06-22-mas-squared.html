@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · MAS²: Self-Generative, Self-Configuring, Self-Rectifying Multi-Agent Systems</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · Auto Protocols</span><span class="t-ko">🤝 Multi-Agent · Auto Protocols</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>MAS²: Self-Generative, Self-Configuring, Self-Rectifying Multi-Agent Systems<br><span class="glow t-en">— A multi-agent system that builds, wires, and repairs other multi-agent systems</span><span class="glow t-ko">— 다른 멀티에이전트 시스템을 직접 설계·배선·수리하는 멀티에이전트 시스템</span></h1>
+    <div class="meta">
+      <span>👥 <b>Kun Wang</b>, Guibin Zhang, ManKit Ye <span class="t-en">et al.</span><span class="t-ko">외</span></span>
+      <span>🏛 NTU · NUS · USTC · ZJU · BUAA · PKU</span>
+      <span>🗓 2025.09.29</span>
+      <span>📄 <a href="https://arxiv.org/abs/2509.24323">arXiv:2509.24323</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Most automatic multi-agent systems follow a brittle <b>"generate-once-and-deploy"</b> recipe: one fixed team is built per task and runs to the end no matter what breaks. MAS² flips this into <span class="hl">recursive self-generation</span> — a meta-team of three agents (<b>Generator · Implementor · Rectifier</b>) designs a target MAS, assigns LLM backbones to each role, and then <b>monitors and repairs the running system in real time</b>. Trained with an offline RL scheme called <b>Collaborative Tree Optimization (CTO)</b>, it hits <b>97.0% on HumanEval</b> and <b>89.3% on HotpotQA</b>, beats SC (GPT-4o) on Bamboogle by <b>12.8 points while being 25× cheaper</b>, and slots in <b>unseen LLM backbones with no retraining</b>.</p>
+    <p class="t-ko">대부분의 자동 멀티에이전트 시스템은 깨지기 쉬운 <b>"한 번 생성 후 배포"</b> 방식이다 — 작업마다 고정된 팀을 한 번 짜고, 무엇이 고장 나든 끝까지 그대로 돌린다. MAS²는 이를 <span class="hl">재귀적 자기생성</span>으로 뒤집는다 — 세 에이전트로 된 메타 팀(<b>Generator · Implementor · Rectifier</b>)이 대상 MAS를 설계하고, 각 역할에 LLM 백본을 배정하며, <b>실행 중인 시스템을 실시간으로 감시·수리</b>한다. <b>Collaborative Tree Optimization(CTO)</b>라는 오프라인 RL로 학습해 <b>HumanEval 97.0%</b>, <b>HotpotQA 89.3%</b>를 달성하고, Bamboogle에서 SC(GPT-4o)를 <b>12.8점 능가하면서 비용은 25× 저렴</b>, <b>재학습 없이 미학습 LLM 백본</b>까지 끼워 쓴다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The hard part of multi-agent design is not building a team once — it is keeping it alive when the real world breaks it.</p>
+    <p class="lead t-ko">멀티에이전트 설계의 진짜 어려움은 팀을 한 번 짜는 게 아니라, 현실이 그 팀을 망가뜨릴 때 살아남게 하는 것이다.</p>
+    <p class="t-en">Automated MAS design has matured from hand-written specs (AutoGen, MetaGPT) to learned topologies (GPTSwarm) to fully synthesized pipelines (ADAS, AFlow, MaAS). But almost all of them <strong>generate once and deploy</strong>: the configuration is frozen at launch, so an API failure, a malformed tool output, or a runaway cost budget simply sinks the run. MAS² treats the <strong>communication protocol, role roster, tool set, and backbone assignment as things another agent system should author and rewrite on the fly</strong> — re-framing MAS construction itself as a learned, self-correcting agentic task rather than a one-shot search.</p>
+    <p class="t-ko">자동 MAS 설계는 수작업 명세(AutoGen, MetaGPT) → 학습된 토폴로지(GPTSwarm) → 완전 합성 파이프라인(ADAS, AFlow, MaAS)으로 발전했다. 그러나 거의 모두 <strong>한 번 생성 후 배포</strong> — 설정이 시작 시점에 고정되므로 API 실패, 잘못된 도구 출력, 폭주하는 비용이 그대로 실행을 침몰시킨다. MAS²는 <strong>통신 프로토콜·역할 구성·도구 세트·백본 배정 자체를 또 다른 에이전트 시스템이 실시간으로 작성·재작성</strong>해야 할 대상으로 본다 — MAS 구축을 단발성 탐색이 아니라 학습된 자기교정 에이전트 과제로 재정의한다.</p>
+    <figure class="fig">
+      <img src="fig/2509.24323/fig1.png" alt="MAS² framework: Generator–Implementor–Rectifier meta-team, Collaborative Tree, and specialized meta-agent training">
+      <figcaption class="t-en"><b>Figure 2.</b> MAS² overview. (a) The meta-team designs a MAS template, implements its backbone assignment, executes it, and rectifies configs live (e.g., swapping a failing web tool). (b) Collaborative Tree: Generator → Implementor → Rectifier nodes are expanded and scored by a reward over performance, cost, and diversity, with path-credit propagation. (c) The value-annotated tree specializes the three meta-agents.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> MAS² 개요. (a) 메타 팀이 MAS 템플릿을 설계하고, 백본 배정을 구현하며, 실행 후 설정을 실시간 수정한다(예: 실패한 웹 도구 교체). (b) Collaborative Tree: Generator → Implementor → Rectifier 노드를 확장하고 성능·비용·다양성 보상으로 채점, 경로 크레딧 전파. (c) 값이 부여된 트리로 세 메타 에이전트를 특화 학습.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2509.24323</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">97.0%</div><div class="l"><span class="t-en">HumanEval pass rate<br>(+4.1 over AFlow)</span><span class="t-ko">HumanEval 통과율<br>(AFlow 대비 +4.1)</span></div></div>
+      <div class="stat"><div class="n">89.3%</div><div class="l"><span class="t-en">HotpotQA accuracy<br>(+8.5 over DyLAN)</span><span class="t-ko">HotpotQA 정확도<br>(DyLAN 대비 +8.5)</span></div></div>
+      <div class="stat"><div class="n">+12.8</div><div class="l"><span class="t-en">Bamboogle pts over SC (GPT-4o)<br>at >25× lower cost</span><span class="t-ko">Bamboogle SC(GPT-4o) 대비 점수<br>비용은 25× 이상 저렴</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">Meta-agents<br>Generator·Implementor·Rectifier</span><span class="t-ko">메타 에이전트<br>Generator·Implementor·Rectifier</span></div></div>
+      <div class="stat"><div class="n">8</div><div class="l"><span class="t-en">Benchmarks<br>across 4 domains</span><span class="t-ko">벤치마크<br>4개 도메인</span></div></div>
+      <div class="stat"><div class="n">82.5%</div><div class="l"><span class="t-en">Bamboogle w/ unseen backbones<br>(from 32.8% vanilla)</span><span class="t-ko">미학습 백본 투입 시 Bamboogle<br>(바닐라 32.8%에서)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — competence at a Pareto-optimal cost</span><span class="t-ko">결과 — 파레토 최적 비용에서의 성능</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table (excerpt).</b> MAS² vs. strong baselines across domains. Numbers are accuracy / pass rate (%); Δ is MAS² minus the cited baseline.</caption>
+        <caption class="t-ko"><b>표 (발췌).</b> 도메인별 MAS² 대 강력 베이스라인. 수치는 정확도/통과율(%), Δ는 MAS² − 해당 베이스라인.</caption>
+        <thead><tr><th>Benchmark</th><th>MAS²</th><th>Baseline</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>HumanEval</td><td>97.0</td><td>92.9 (AFlow)</td><td class="up">+4.1</td></tr>
+          <tr><td>HotpotQA</td><td>89.3</td><td>80.8 (DyLAN)</td><td class="up">+8.5</td></tr>
+          <tr><td>Multi-hop search (avg)</td><td>78.5</td><td>75.7 (ScoreFlow)</td><td class="up">+2.8</td></tr>
+          <tr><td>MATH</td><td>71.3</td><td>67.3 (LLM-Debate)</td><td class="up">+4.0</td></tr>
+          <tr><td>MATH</td><td>71.3</td><td>64.4 (ScoreFlow)</td><td class="up">+6.9</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">Generator</div>
+          <div class="sub"><span class="t-en">design MAS template</span><span class="t-ko">MAS 템플릿 설계</span></div>
+          <div class="latent"><span class="t-en">roles · protocol · tools</span><span class="t-ko">역할 · 프로토콜 · 도구</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role">Implementor</div>
+          <div class="sub"><span class="t-en">assign LLM backbones</span><span class="t-ko">LLM 백본 배정</span></div>
+          <div class="latent"><span class="t-en">role → model mapping</span><span class="t-ko">역할 → 모델 매핑</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">Rectifier</div>
+          <div class="sub"><span class="t-en">monitor + repair live</span><span class="t-ko">실시간 감시·수리</span></div>
+          <div class="latent"><span class="t-en">on error / over-budget</span><span class="t-ko">오류·예산 초과 시</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>A meta-MAS authors a target MAS.</b> The Rectifier closes the loop: when cost exceeds budget θ_C or a tool/code call fails, it rewrites the configuration (local prompt/tool swaps or a global workflow edit) and execution resumes.</div>
+      <div class="cap t-ko"><b>메타-MAS가 대상 MAS를 작성한다.</b> Rectifier가 루프를 닫는다 — 비용이 예산 θ_C를 넘거나 도구·코드 호출이 실패하면 설정을 다시 쓰고(로컬 프롬프트·도구 교체 또는 글로벌 워크플로 수정) 실행을 재개한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core idea: recursive self-generation, trained by a tree</span><span class="t-ko">핵심 아이디어: 트리로 학습하는 재귀적 자기생성</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 메타 스케줄링</span>
+        <h3>Generator · Implementor · Rectifier</h3>
+        <p class="t-en">A target MAS is formalized as ⟨R, P, T, B⟩: roles, communication <span class="term">protocols</span>, tools, and backbone assignment. The Generator emits an abstract template ⟨R,P,T⟩ (architecture, no models); the Implementor binds each role to a concrete LLM from a candidate pool; the Rectifier fires when a budget/error trigger A_R(s_t)=1 and edits the live config.</p>
+        <p class="t-ko">대상 MAS를 ⟨R, P, T, B⟩로 형식화한다: 역할, 통신 <span class="term">프로토콜</span>, 도구, 백본 배정. Generator가 추상 템플릿 ⟨R,P,T⟩(모델 없는 아키텍처)를 내고, Implementor가 각 역할을 후보 풀의 구체 LLM에 묶고, Rectifier는 예산·오류 트리거 A_R(s_t)=1일 때 발동해 실행 중 설정을 수정한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 오프라인 RL</span>
+        <h3>Collaborative Tree Optimization (CTO)</h3>
+        <p class="t-en">Per query, a decision tree branches Generator→Implementor→Rectifier choices. A <span class="term">cost-sensitive reward</span> gives failed paths 0 and rewards success inversely to normalized LLM cost; Monte-Carlo path-credit propagates a value V(v) to every node. Value-scaled preference pairs (Δ V as weight) then specialize each meta-agent — DPO-style, but weighted by how much the choice actually mattered.</p>
+        <p class="t-ko">질의마다 Generator→Implementor→Rectifier 선택을 분기하는 결정 트리를 만든다. <span class="term">비용 민감 보상</span>은 실패 경로에 0, 성공에는 정규화 LLM 비용에 반비례해 보상하고, 몬테카를로 경로 크레딧으로 모든 노드에 값 V(v)를 전파한다. 이후 값-스케일 선호쌍(Δ V를 가중치로)으로 각 메타 에이전트를 특화한다 — DPO 방식이되 선택의 실제 중요도로 가중.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Generate a template</span><span class="t-ko">템플릿 생성</span></b><span class="t-en">From the task query, the Generator architects an abstract workflow ⟨R, P, T⟩ — roles, message protocols, and tools — without committing to any model yet.</span><span class="t-ko">작업 질의로부터 Generator가 추상 워크플로 ⟨R, P, T⟩(역할·메시지 프로토콜·도구)를 설계한다 — 아직 어떤 모델도 확정하지 않는다.</span></li>
+      <li><b><span class="t-en">Implement backbones</span><span class="t-ko">백본 구현</span></b><span class="t-en">The Implementor maps each role to a concrete LLM from the candidate pool — small/cheap models for easy roles, strong models for hard reasoning — yielding an executable MAS.</span><span class="t-ko">Implementor가 각 역할을 후보 풀의 구체 LLM에 매핑한다 — 쉬운 역할엔 작고 저렴한 모델, 어려운 추론엔 강한 모델 — 실행 가능한 MAS가 된다.</span></li>
+      <li><b><span class="t-en">Execute and monitor</span><span class="t-ko">실행·감시</span></b><span class="t-en">The MAS runs; the Rectifier watches resource use C(s_t) and outcomes O(s_t). A budget overrun or a failure (search/code/validation error) flips the trigger.</span><span class="t-ko">MAS가 실행되고, Rectifier가 자원 사용 C(s_t)과 결과 O(s_t)를 감시한다. 예산 초과나 실패(검색·코드·검증 오류)가 트리거를 켠다.</span></li>
+      <li><b><span class="t-en">Rectify and resume</span><span class="t-ko">수정·재개</span></b><span class="t-en">On trigger, the Rectifier edits the config — local (re-assign a tool, change a prompt) or global (rewrite workflow code) — and execution continues from the updated state.</span><span class="t-ko">트리거 시 Rectifier가 설정을 수정한다 — 로컬(도구 재배정·프롬프트 변경) 또는 글로벌(워크플로 코드 재작성) — 갱신된 상태에서 실행을 이어간다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Self-rectification is the real win.</strong> Ablations show removing the Rectifier costs ~3.5 pts on MBPP and ~6.6 on MATH — proof that runtime repair, not just smarter initial design, drives robustness.</p><p class="t-ko"><strong>자기수정이 진짜 핵심.</strong> 어블레이션에서 Rectifier 제거 시 MBPP ~3.5점, MATH ~6.6점 하락 — 더 똑똑한 초기 설계가 아니라 실행 중 수리가 견고함을 만든다는 증거.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Communication protocol becomes a learned output.</strong> Roles, message structure, tools, and model routing are all emitted by a trained meta-team rather than hand-wired — agentic design as a policy.</p><p class="t-ko"><strong>통신 프로토콜이 학습 산출물이 된다.</strong> 역할·메시지 구조·도구·모델 라우팅을 손으로 배선하지 않고 학습된 메타 팀이 출력한다 — 정책으로서의 에이전트 설계.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Future-proof routing.</strong> It plugs in unseen backbones (Qwen3-Coder, GPT-5-Mini, Gemini-2.5-Pro) at inference with no retraining, lifting Bamboogle from 32.8% to 82.5%.</p><p class="t-ko"><strong>미래 대비 라우팅.</strong> 재학습 없이 미학습 백본(Qwen3-Coder, GPT-5-Mini, Gemini-2.5-Pro)을 추론 시 끼워 Bamboogle을 32.8%→82.5%로 끌어올린다.</p></div>
+      <div class="t"><span class="ic">💸</span><p class="t-en"><strong>Cost as a first-class reward.</strong> CTO rewards cheaper successful paths, so easy tasks get lean teams and small models — landing on a new cost-performance Pareto front.</p><p class="t-ko"><strong>비용을 일급 보상으로.</strong> CTO가 더 저렴한 성공 경로에 보상해, 쉬운 작업엔 가벼운 팀·작은 모델이 붙는다 — 새 비용-성능 파레토 프런티어.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline gains lean on a trained Generator/Implementor/Rectifier plus a curated candidate pool of strong proprietary models, so it is hard to separate how much comes from the meta-policy versus simply having GPT-5-Mini / Gemini-2.5-Pro on tap. The Rectifier's ablation deltas (3–7 pts) are real but modest, and "unseen-backbone generalization" is demonstrated mainly by adding stronger models — not by stress-testing weaker or adversarial ones. Robustness claims would be more convincing with injected real-world failures (rate limits, flaky APIs) rather than the framework's own simulated triggers.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 성능은 학습된 Generator/Implementor/Rectifier에 더해 강력한 상용 모델로 큐레이션된 후보 풀에 기대므로, 이득이 메타 정책에서 온 것인지 단지 GPT-5-Mini·Gemini-2.5-Pro를 손에 쥔 덕인지 분리하기 어렵다. Rectifier 어블레이션 차이(3~7점)는 실재하지만 크지 않고, "미학습 백본 일반화"도 주로 더 강한 모델 추가로 입증될 뿐 더 약하거나 적대적인 모델로는 검증되지 않았다. 견고함 주장은 프레임워크 자체의 시뮬레이션 트리거가 아니라 실제 장애(레이트 리밋, 불안정 API)를 주입해 보일 때 더 설득력 있다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2509.24323">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2509.24323">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2509.24323">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2509.24323">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

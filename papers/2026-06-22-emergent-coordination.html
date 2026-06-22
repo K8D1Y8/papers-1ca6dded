@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Emergent Coordination in Multi-Agent Language Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · Emergent Comm</span><span class="t-ko">🤝 Multi-Agent · Emergent Comm</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Emergent Coordination in Multi-Agent Language Models<br><span class="glow t-en">— When do LLM agents become a collective, not just a crowd?</span><span class="glow t-ko">— LLM 에이전트는 언제 '무리'가 아니라 '집단'이 되는가?</span></h1>
+    <div class="meta">
+      <span>👥 <b>Christoph Riedl</b></span>
+      <span>🏛 Northeastern University (Network Science Institute · Khoury · D'Amore-McKim)</span>
+      <span>🗓 2025.10.05</span>
+      <span>📄 <a href="https://arxiv.org/abs/2510.05174">arXiv:2510.05174</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Multi-agent LLM systems often "beat the sum of their parts," but is that real <b>emergence</b> or just lucky noise? This paper builds an <span class="hl">information-theoretic test</span> — partial information decomposition of time-delayed mutual information — and runs it on a no-communication group guessing game. Plain agents show <b>temporal synergy but almost no coordinated alignment</b>; adding <b>personas + a "think about what other agents will do" (Theory-of-Mind) prompt</b> flips the group into a stable, goal-directed collective. Synergy and redundancy only help performance <b>together</b> (interaction β=0.24, p=0.014).</p>
+    <p class="t-ko">멀티에이전트 LLM 시스템은 종종 "부분의 합을 넘어서지만", 그게 진짜 <b>창발(emergence)</b>인가 아니면 단순 운 좋은 잡음인가? 이 논문은 <span class="hl">정보이론적 검정</span>(시간지연 상호정보의 부분정보분해, PID-TDMI)을 만들어, <b>직접 통신이 없는</b> 그룹 추측 게임에 적용한다. 기본(Plain) 에이전트는 <b>시간적 시너지는 있지만 정렬된 협응은 거의 없다</b>. 여기에 <b>페르소나 + "다른 에이전트가 뭘 할지 생각하라"(마음이론, ToM) 프롬프트</b>를 더하면 그룹이 안정적·목표지향적 집단으로 전환된다. 시너지와 중복성은 <b>함께</b> 있을 때만 성능을 높인다(상호작용 β=0.24, p=0.014).</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">"Multi-agent is better" is everywhere — but nobody has a principled test for <em>when</em> agents truly act as one.</p>
+    <p class="lead t-ko">"멀티에이전트가 더 낫다"는 말은 흔하지만, 에이전트가 <em>언제</em> 진짜 하나처럼 작동하는지에 대한 원칙적 검정은 없었다.</p>
+    <p class="t-en">Most multi-agent claims rest on win-rates and intuition. This work asks the deeper question with tools borrowed from collective-intelligence research: does the group's <strong>future state carry information that no single agent can predict alone</strong> (synergy / emergence)? And critically — is that emergence <strong>steerable</strong> by prompt design, and does it actually <strong>help the task</strong>? The framework not only detects emergence but <strong>localizes</strong> it and separates spurious temporal coupling from performance-relevant cross-agent synergy.</p>
+    <p class="t-ko">대부분의 멀티에이전트 주장은 승률과 직관에 기댄다. 이 논문은 집단지성 연구의 도구를 빌려 더 깊은 질문을 던진다: 그룹의 <strong>미래 상태가, 어떤 개별 에이전트도 혼자서는 예측할 수 없는 정보를 담고 있는가</strong>(시너지/창발)? 그리고 핵심적으로 — 그 창발은 프롬프트 설계로 <strong>조향(steer)</strong> 가능한가, 또 실제로 <strong>과제에 도움</strong>이 되는가? 이 프레임워크는 창발을 탐지할 뿐 아니라 <strong>위치까지 특정</strong>하고, 가짜 시간적 결합과 성능 관련 교차 에이전트 시너지를 구분한다.</p>
+    <figure class="fig">
+      <img src="fig/2510.05174/fig1.png" alt="Information decomposition framework (left) and group guessing task setup (right)">
+      <figcaption class="t-en"><b>Figure 1.</b> (a) The information-decomposition framework — synergy / redundancy / unique information decomposed on a PID triangle. (b) The group guessing task: LLM agents privately propose integers whose sum must hit a hidden target, with only group-level "too high / too low" feedback — no direct communication.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> (a) 정보분해 프레임워크 — 시너지 / 중복 / 고유 정보를 PID 삼각형 위에서 분해. (b) 그룹 추측 과제: LLM 에이전트들이 비공개로 정수를 제안하고 그 합이 숨겨진 목표값에 맞아야 하며, "너무 높음 / 너무 낮음"이라는 그룹 단위 피드백만 주어진다 — 직접 통신 없음.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2510.05174</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">p&lt;10⁻¹⁶</div><div class="l"><span class="t-en">Emergence capacity present<br>(Fisher test, all conditions)</span><span class="t-ko">창발 능력 존재<br>(Fisher 검정, 전 조건)</span></div></div>
+      <div class="stat"><div class="n">p=2.9×10⁻¹⁴</div><div class="l"><span class="t-en">ToM raises Total Stability<br>(vs. ≈0 in Plain/Persona)</span><span class="t-ko">ToM가 Total Stability 상승<br>(Plain/Persona는 ≈0)</span></div></div>
+      <div class="stat"><div class="n">β=0.24</div><div class="l"><span class="t-en">Synergy×Redundancy<br>on success (p=0.014)</span><span class="t-ko">시너지×중복성의<br>성공 효과 (p=0.014)</span></div></div>
+      <div class="stat"><div class="n">+27%</div><div class="l"><span class="t-en">Redundancy amplifies synergy's<br>benefit (log-odds)</span><span class="t-ko">중복성이 시너지 이득을<br>증폭 (로그-오즈)</span></div></div>
+      <div class="stat"><div class="n">ACME=0.034</div><div class="l"><span class="t-en">ToM → performance via synergy<br>(mediation, p=0.053)</span><span class="t-ko">ToM → 시너지 경유 성능<br>(매개분석, p=0.053)</span></div></div>
+      <div class="stat"><div class="n">5</div><div class="l"><span class="t-en">LLMs tested<br>(GPT-4.1 + 4 others)</span><span class="t-ko">검증 LLM 수<br>(GPT-4.1 + 4종)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — three prompts, three coordination regimes</span><span class="t-ko">결과 — 세 프롬프트, 세 협응 양상</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table.</b> How the three interventions reshape the group (GPT-4.1). Bias-corrected significance against permutation nulls; Wilcoxon / Fisher tests.</caption>
+        <caption class="t-ko"><b>표.</b> 세 가지 개입이 그룹을 어떻게 바꾸는가 (GPT-4.1). 순열 귀무분포 대비 편향보정 유의성; Wilcoxon / Fisher 검정.</caption>
+        <thead><tr><th>Condition</th><th><span class="t-en">Practical emergence</span><span class="t-ko">실용적 창발</span></th><th>Total Stability</th><th><span class="t-en">Differentiation</span><span class="t-ko">차별화</span></th></tr></thead>
+        <tbody>
+          <tr><td>Plain</td><td>p=1.5×10⁻¹⁶</td><td class="down">≈0 (p&gt;0.8)</td><td><span class="t-en">noise-driven</span><span class="t-ko">잡음 기반</span></td></tr>
+          <tr><td>Persona</td><td>p=6.6×10⁻⁷</td><td class="down">≈0 (p&gt;0.8)</td><td><span class="t-en">identity-linked</span><span class="t-ko">정체성 연동</span></td></tr>
+          <tr><td>ToM</td><td>p=0.02</td><td class="up">↑ p=2.9×10⁻¹⁴</td><td class="up"><span class="t-en">stable roles</span><span class="t-ko">안정적 역할</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en"><span class="hl">Plain &amp; Persona look like crowds</span> — strong moment-to-moment synergy but near-zero stable, coordinated structure. <span class="hl">ToM turns them into a collective</span>: a predictable, goal-aligned group state. Yet triadic gain G3 stays ≈0 under Persona/ToM — the coupling is "mean-field" pairwise alignment, not irreducible 3-way complexity.</p>
+    <p class="t-ko"><span class="hl">Plain·Persona는 '무리'처럼 보인다</span> — 순간적 시너지는 강하지만 안정적·협응적 구조는 거의 0. <span class="hl">ToM는 이를 '집단'으로 바꾼다</span>: 예측 가능하고 목표 정렬된 그룹 상태. 다만 Persona/ToM에서 삼중 이득 G3는 ≈0 — 결합은 "평균장(mean-field)" 쌍별 정렬이지, 환원 불가능한 3자 복잡성은 아니다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">Plain</div>
+          <div class="sub"><span class="t-en">bare instructions</span><span class="t-ko">기본 지시만</span></div>
+          <div class="latent"><span class="t-en">crowd: synergy, no alignment</span><span class="t-ko">무리: 시너지O, 정렬X</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role">+ Persona</div>
+          <div class="sub"><span class="t-en">name · traits · values</span><span class="t-ko">이름·성향·가치</span></div>
+          <div class="latent"><span class="t-en">identity-linked diversity</span><span class="t-ko">정체성 연동 다양성</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">+ ToM</div>
+          <div class="sub"><span class="t-en">"think what others will do"</span><span class="t-ko">"남이 뭘 할지 생각"</span></div>
+          <div class="latent"><span class="t-en">collective: stable goal-directed roles</span><span class="t-ko">집단: 안정적 목표지향 역할</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Prompt design is a control knob.</b> Persona injects differentiation; Theory-of-Mind converts that diversity into self-reinforcing, complementary roles — moving a mere aggregate to a higher-order collective.</div>
+      <div class="cap t-ko"><b>프롬프트 설계가 곧 제어 손잡이.</b> 페르소나는 차별화를 주입하고, 마음이론(ToM)은 그 다양성을 자기강화적·상보적 역할로 바꾼다 — 단순 집합을 고차원 집단으로 끌어올린다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: measure emergence, then steer it</span><span class="t-ko">아이디어: 창발을 측정하고, 조향하라</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 측정</span>
+        <h3>PID of time-delayed MI</h3>
+        <p class="t-en">Decompose how much of the group's <span class="term">future</span> is predicted by parts together vs. alone. Two criteria: <span class="term">emergence capacity</span> (pairwise dynamical synergy Syn<sub>ij</sub>) and a <span class="term">practical criterion</span> on a macro signal (group error). Permutation nulls (row-shuffle, time-shift) separate real structure from artifacts.</p>
+        <p class="t-ko">그룹의 <span class="term">미래</span>가 부분들의 합으로 얼마나 예측되는지를 분해. 두 기준: <span class="term">창발 능력</span>(쌍별 동적 시너지 Syn<sub>ij</sub>)과 거시 신호(그룹 오차)에 대한 <span class="term">실용적 기준</span>. 순열 귀무분포(행 셔플·시간 이동)로 진짜 구조와 인공물을 분리.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 조향</span>
+        <h3>Persona + Theory of Mind</h3>
+        <p class="t-en">Three prompt interventions on the <em>same</em> task: <span class="term">Plain</span>, <span class="term">Persona</span> (identity), <span class="term">ToM</span> (predict others). No agent ever sees another's guess — all coordination must emerge from feedback + social reasoning, isolating the prompt as the causal lever.</p>
+        <p class="t-ko"><em>같은</em> 과제에 세 프롬프트 개입: <span class="term">Plain</span>, <span class="term">Persona</span>(정체성), <span class="term">ToM</span>(타인 예측). 어떤 에이전트도 남의 추측을 보지 못한다 — 모든 협응은 피드백 + 사회적 추론에서 창발해야 하며, 이로써 프롬프트를 인과적 지렛대로 분리한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Set up the no-comm game</span><span class="t-ko">무통신 게임 구성</span></b><span class="t-en">N agents privately propose integers; their sum must equal a hidden target. Only group-level "too high / too low" feedback is returned — success demands complementary, not identical, strategies.</span><span class="t-ko">N명의 에이전트가 비공개로 정수를 제안, 합이 숨겨진 목표값과 같아야 한다. "너무 높음/낮음" 그룹 피드백만 반환 — 성공하려면 동일이 아닌 상보적 전략이 필요.</span></li>
+      <li><b><span class="t-en">Convert guesses to coordination signals</span><span class="t-ko">추측을 협응 신호로 변환</span></b><span class="t-en">Each guess is recast as a deviation from an equal-share contribution; the group error becomes the macro signal V. Quantile-bin, then estimate entropy with Miller–Madow / Jeffreys corrections.</span><span class="t-ko">각 추측을 균등분담 대비 편차로 재정의하고, 그룹 오차를 거시 신호 V로 삼는다. 분위수 비닝 후 Miller–Madow / Jeffreys 보정으로 엔트로피 추정.</span></li>
+      <li><b><span class="t-en">Test emergence vs. nulls</span><span class="t-ko">귀무분포 대비 창발 검정</span></b><span class="t-en">Compute emergence capacity, practical criterion, and triadic gain G3 with time lag ℓ=1; bias-correct against permutation nulls; Wilcoxon tests check the corrected values exceed zero.</span><span class="t-ko">창발 능력·실용적 기준·삼중 이득 G3를 시간지연 ℓ=1로 계산, 순열 귀무분포로 편향보정, Wilcoxon 검정으로 보정값이 0을 넘는지 확인.</span></li>
+      <li><b><span class="t-en">Link to performance, causally</span><span class="t-ko">성능과 인과적으로 연결</span></b><span class="t-en">Compute synergy/redundancy on early rounds, correct sample-selection with inverse-probability weighting, and run causal mediation: ToM → ↑synergy → ↑success.</span><span class="t-ko">초기 라운드에서 시너지/중복성을 계산, 역확률 가중으로 표본선택 보정, 인과 매개분석 수행: ToM → 시너지↑ → 성공↑.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Emergence is steerable.</strong> A single ToM clause — "think about what others will do" — moves an LLM group from chaotic aggregate to stable, goal-directed collective. Prompt design <em>is</em> a control parameter for coordination.</p><p class="t-ko"><strong>창발은 조향 가능하다.</strong> "남이 뭘 할지 생각하라"는 한 줄 ToM 지시만으로 LLM 그룹이 혼란스러운 집합에서 안정적·목표지향적 집단으로 전환된다. 프롬프트 설계가 곧 협응의 제어 변수.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Synergy alone isn't enough.</strong> Neither synergy nor redundancy predicts success on its own — only their <em>interaction</em> does. Good teams balance shared alignment (redundancy) with useful diversity (synergy).</p><p class="t-ko"><strong>시너지만으론 부족.</strong> 시너지도 중복성도 단독으론 성공을 예측 못 한다 — 오직 둘의 <em>상호작용</em>이 한다. 좋은 팀은 공유된 정렬(중복성)과 유용한 다양성(시너지)을 균형 잡는다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>A real diagnostic, not a vibe.</strong> The PID-TDMI framework gives a falsifiable, permutation-tested measure of <em>where</em> emergence lives — usable to audit any multi-agent system, not just this game.</p><p class="t-ko"><strong>분위기가 아니라 진짜 진단 도구.</strong> PID-TDMI 프레임워크는 창발이 <em>어디</em> 있는지를 반증가능·순열검정된 척도로 제공한다 — 이 게임뿐 아니라 어떤 멀티에이전트 시스템도 감사 가능.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>ToM is the bottleneck.</strong> Small Llama-3.1-8B fails to develop goal-directed synergy, and reasoning model Qwen3 hits "paralysis under coordination ambiguity" — endless chains-of-thought. Coordination rides on Theory-of-Mind capacity.</p><p class="t-ko"><strong>병목은 ToM 능력.</strong> 소형 Llama-3.1-8B는 목표지향 시너지를 못 만들고, 추론모델 Qwen3는 "협응 모호성 하 마비"(무한 사고연쇄)에 빠진다. 협응은 마음이론 능력에 달려 있다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> Everything rests on a <em>single, highly artificial</em> task (a sum-to-target guessing game) where "complementarity" is baked into the rules — so the headline that ToM induces a "collective" may be partly a property of this game, not of LLM groups in general. The performance link is also thin: the key mediation effect (ToM→success via synergy) is only marginally significant (p=0.053), and G3≈0 means the celebrated structure is just pairwise alignment, not genuine higher-order emergence.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 모든 결론이 <em>단일하고 매우 인위적인</em> 과제(합-맞추기 추측 게임)에 기댄다 — 여기선 "상보성"이 규칙에 내장돼 있어, "ToM가 집단을 만든다"는 핵심 주장은 일반적 LLM 그룹이 아니라 이 게임의 성질일 수 있다. 성능 연결도 약하다: 핵심 매개효과(ToM→시너지→성공)는 한계적 유의(p=0.053)에 그치고, G3≈0은 칭송받는 구조가 진짜 고차 창발이 아니라 쌍별 정렬에 불과함을 뜻한다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2510.05174">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2510.05174">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2510.05174">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2510.05174">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
