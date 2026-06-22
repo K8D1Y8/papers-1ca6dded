@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Test-Time Training Done Right</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · TTT Layers</span><span class="t-ko">⚡ Efficient Seq · TTT Layers</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Test-Time Training Done Right<br><span class="glow t-en">— Stop the tiny mini-batches: update fast weights in huge chunks instead</span><span class="glow t-ko">— 잘게 쪼개지 마라: fast weight를 '큰 청크' 단위로 갱신하라</span></h1>
+    <div class="meta">
+      <span>👥 <b>Tianyuan Zhang</b> <span class="t-en">et al.</span><span class="t-ko">외 8인</span></span>
+      <span>🏛 MIT · Adobe Research</span>
+      <span>🗓 2025.05.29</span>
+      <span>📄 <a href="https://arxiv.org/abs/2505.23884">arXiv:2505.23884</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Test-Time Training (TTT) adapts a small set of "fast weights" online during inference to act as a learnable memory — but prior TTT layers updated those weights on tiny mini-batches (16–64 tokens), pushing GPU FLOPs utilization <b>below 5%</b> and forcing hand-written kernels. This paper proposes <span class="hl">Large-Chunk TTT (LaCT)</span>: update fast weights over <b>2K–1M-token chunks</b> at once. That single change lifts hardware utilization by orders of magnitude (<b>up to ~70%</b> on A100), lets the nonlinear state grow to <b>40% of model params</b>, runs in <b>a few dozen lines of pure PyTorch</b>, and scales to a <b>14B</b> video model and <b>over 1M-token</b> context — all matching or beating full attention.</p>
+    <p class="t-ko">Test-Time Training(TTT)은 추론 중에 소수의 "fast weight"를 온라인으로 적응시켜 학습형 메모리로 쓰는 기법이다. 그런데 기존 TTT 레이어는 fast weight를 아주 작은 미니배치(16~64 토큰)로 갱신해 GPU FLOPs 활용률이 <b>5% 미만</b>으로 떨어졌고, 손수 짠 커널이 필요했다. 이 논문은 <span class="hl">Large-Chunk TTT(LaCT)</span>를 제안한다: fast weight를 <b>2K~1M 토큰 청크</b> 단위로 한 번에 갱신. 이 한 가지 변경으로 하드웨어 활용률이 수십 배(<b>A100 최대 ~70%</b>)로 오르고, 비선형 state가 <b>모델 파라미터의 40%</b>까지 커지며, <b>순수 PyTorch 수십 줄</b>로 구현되고, <b>14B</b> 비디오 모델과 <b>100만 토큰 이상</b> 문맥까지 확장된다 — 모두 full attention과 동등하거나 능가하면서.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">TTT's bottleneck was never the idea — it was that tiny updates starve the GPU.</p>
+    <p class="lead t-ko">TTT의 병목은 아이디어가 아니라, 잘게 쪼갠 갱신이 GPU를 굶겼다는 점이었다.</p>
+    <p class="t-en">Linear attention and SSMs (Mamba, GLA, DeltaNet) compress the past into a fixed-size recurrent state. TTT goes further — the "state" is the weights of a tiny network, adapted online by gradient descent so memory is genuinely <em>learned</em> in context. But to respect fine-grained causality, prior work updated those fast weights every 16–64 tokens, which means tiny matmuls, poor parallelism, and FLOPs utilization often <strong>below 5%</strong> — only achievable at all via fragile custom CUDA kernels. LaCT's claim is almost embarrassingly simple: stop doing that. Treat a <strong>large chunk</strong> (thousands to a million tokens) as one update unit. Big matmuls saturate the hardware, the state can grow huge, the code becomes plain PyTorch, and — because a chunk is treated as an unordered set — the same layer now handles images, video, and text alike.</p>
+    <p class="t-ko">선형 어텐션과 SSM(Mamba, GLA, DeltaNet)은 과거를 고정 크기 순환 state로 압축한다. TTT는 한발 더 나아가 그 "state"를 작은 네트워크의 가중치로 두고, 추론 중 경사하강으로 온라인 적응시켜 문맥 메모리를 진짜로 <em>학습</em>한다. 그러나 세밀한 인과성을 지키려고 기존 연구는 fast weight를 16~64 토큰마다 갱신했고, 이는 작은 matmul·낮은 병렬성·흔히 <strong>5% 미만</strong>의 FLOPs 활용률을 의미했다 — 그것마저 까다로운 커스텀 CUDA 커널로만 가능했다. LaCT의 주장은 거의 민망할 만큼 단순하다: 그러지 마라. <strong>큰 청크</strong>(수천~100만 토큰)를 하나의 갱신 단위로 삼아라. 큰 matmul이 하드웨어를 채우고, state가 거대해지며, 코드는 평범한 PyTorch가 되고 — 청크를 순서 없는 집합으로 다루기에 — 같은 레이어가 이미지·비디오·텍스트를 모두 처리한다.</p>
+    <figure class="fig">
+      <img src="fig/2505.23884/fig1.png" alt="LaCT block: window attention for locality + large-chunk TTT layer (Update/Apply on fast weight W) + feed-forward">
+      <figcaption class="t-en"><b>Figure 2.</b> A LaCT block. A window-attention path captures local structure, while the large-chunk TTT layer splits the sequence into big chunks and runs Update (gradient step on fast weight W from K,V) then Apply (use W on Q) to store non-local context.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> LaCT 블록. window-attention 경로가 국소 구조를 잡고, large-chunk TTT 레이어는 시퀀스를 큰 청크로 나눠 Update(K,V로 fast weight W에 경사 한 걸음) → Apply(Q에 W 적용)로 비국소 문맥을 저장한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2505.23884</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">&lt;5% → ~70%</div><div class="l"><span class="t-en">GPU FLOPs utilization<br>prior TTT → LaCT (A100)</span><span class="t-ko">GPU FLOPs 활용률<br>기존 TTT → LaCT (A100)</span></div></div>
+      <div class="stat"><div class="n">2K–1M</div><div class="l"><span class="t-en">Chunk size for one<br>fast-weight update</span><span class="t-ko">한 번의 fast-weight<br>갱신 청크 크기</span></div></div>
+      <div class="stat"><div class="n">40%</div><div class="l"><span class="t-en">Nonlinear state size<br>as share of model params</span><span class="t-ko">비선형 state 크기<br>(모델 파라미터 대비)</span></div></div>
+      <div class="stat"><div class="n">14B</div><div class="l"><span class="t-en">AR video diffusion model<br>scaled to (≤56K tokens)</span><span class="t-ko">확장한 AR 비디오<br>디퓨전 모델 (≤56K 토큰)</span></div></div>
+      <div class="stat"><div class="n">&gt;1M</div><div class="l"><span class="t-en">Context length in<br>novel view synthesis</span><span class="t-ko">novel view synthesis<br>최대 문맥 길이</span></div></div>
+      <div class="stat"><div class="n">~few dozen</div><div class="l"><span class="t-en">Lines of pure PyTorch<br>(no custom kernels)</span><span class="t-ko">순수 PyTorch 줄 수<br>(커스텀 커널 불필요)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — fast prefill, strong quality</span><span class="t-ko">결과 — 빠른 prefill, 강한 품질</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table (NVS, GSO 48 views, 512×512).</b> LaCT matches full attention on PSNR while slashing prefill latency, and clearly tops the Perceiver-attention baseline.</caption>
+        <caption class="t-ko"><b>표 (NVS, GSO 48뷰, 512×512).</b> LaCT는 PSNR에서 full attention과 동등하면서 prefill 지연을 대폭 줄이고, Perceiver-attention baseline을 명확히 능가.</caption>
+        <thead><tr><th>Model</th><th>PSNR ↑</th><th>Prefill latency ↓</th><th>vs Full</th></tr></thead>
+        <tbody>
+          <tr><td>Full attention</td><td>39.3</td><td>16.1 s</td><td>—</td></tr>
+          <tr><td>Perceiver attn</td><td>33.7</td><td>—</td><td class="up">−5.6 PSNR</td></tr>
+          <tr><td>LaCT (ours)</td><td>39.1</td><td>1.4 s</td><td class="up">≈ same, 11× faster</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table (scene-level NVS, DL3DV, 960×536).</b> LaCT scales to 128 input views (&gt;1M tokens), beyond LongLRM's 32-view limit.</caption>
+        <caption class="t-ko"><b>표 (장면 단위 NVS, DL3DV, 960×536).</b> LaCT는 입력 128뷰(&gt;100만 토큰)까지 확장 — LongLRM의 32뷰 한계를 넘어선다.</caption>
+        <thead><tr><th>Setting</th><th>PSNR ↑</th><th>SSIM ↑</th><th>LPIPS ↓</th></tr></thead>
+        <tbody>
+          <tr><td>LaCT · 128 views</td><td>28.9</td><td>0.861</td><td class="up">0.166</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Tiny mini-batch TTT</span><span class="t-ko">소형 미니배치 TTT</span></div>
+          <div class="sub"><span class="t-en">update every 16–64 tokens</span><span class="t-ko">16~64 토큰마다 갱신</span></div>
+          <div class="latent"><span class="t-en">FLOPs util &lt;5% · needs CUDA</span><span class="t-ko">FLOPs &lt;5% · CUDA 필요</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Large chunk = 1 update</span><span class="t-ko">큰 청크 = 1회 갱신</span></div>
+          <div class="sub"><span class="t-en">2K–1M tokens · Update→Apply</span><span class="t-ko">2K~1M 토큰 · Update→Apply</span></div>
+          <div class="latent"><span class="t-en">big matmuls · Muon optimizer</span><span class="t-ko">큰 matmul · Muon 옵티마이저</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">+ window attention</span><span class="t-ko">+ window attention</span></div>
+          <div class="sub"><span class="t-en">local structure, shared QKV</span><span class="t-ko">국소 구조, QKV 공유</span></div>
+          <div class="latent"><span class="t-en">~70% util · pure PyTorch</span><span class="t-ko">~70% 활용 · 순수 PyTorch</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>One knob, three wins</b> — enlarging the update unit turns starved tiny matmuls into hardware-saturating big ones, frees the state to grow, and makes the layer a plain-PyTorch drop-in across modalities.</div>
+      <div class="cap t-ko"><b>다이얼 하나, 세 가지 이득</b> — 갱신 단위를 키우면 굶주린 작은 matmul이 하드웨어를 채우는 큰 matmul로 바뀌고, state가 커질 여유가 생기며, 레이어가 모달리티 전반에 쓰이는 순수 PyTorch 부품이 된다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea, in two pieces</span><span class="t-ko">아이디어, 두 조각으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 큰 청크 갱신</span>
+        <h3>Large-Chunk Update / Apply</h3>
+        <p class="t-en">A chunk's tokens are treated as an unordered set. <span class="term">Update</span> takes a gradient step on the fast weight (a bias-free <span class="term">SwiGLU-MLP</span>, W₁/W₂/W₃) minimizing −f<sub>W</sub>(k)ᵀv over all (k,v) in the chunk; <span class="term">Apply</span> runs the updated W on the queries. Decoupling the two lets you reorder them to emulate full / block-causal / strided masks for sets, text, or video.</p>
+        <p class="t-ko">청크의 토큰을 순서 없는 집합으로 본다. <span class="term">Update</span>는 청크 내 모든 (k,v)에 대해 −f<sub>W</sub>(k)ᵀv를 최소화하도록 fast weight(편향 없는 <span class="term">SwiGLU-MLP</span>, W₁/W₂/W₃)에 경사 한 걸음을 두고, <span class="term">Apply</span>는 갱신된 W를 쿼리에 적용한다. 둘을 분리하면 순서를 바꿔 집합·텍스트·비디오용 full / block-causal / strided 마스크를 흉내 낼 수 있다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 안정화 + 국소성</span>
+        <h3>Muon optimizer + window attention</h3>
+        <p class="t-en">Large nonlinear updates can explode in magnitude. LaCT uses the <span class="term">Muon</span> optimizer — it orthogonalizes the matrix gradient and L2-normalizes the fast weight (akin to post-LayerNorm), and consistently beats vanilla GD and momentum. A parallel <span class="term">window-attention</span> path (sharing the QKV projection) handles local structure so the fixed-size fast weight spends its capacity on non-local memory.</p>
+        <p class="t-ko">큰 비선형 갱신은 크기가 폭발할 수 있다. LaCT는 <span class="term">Muon</span> 옵티마이저를 쓴다 — 행렬 그래디언트를 직교화하고 fast weight를 L2 정규화(post-LayerNorm과 유사)하며, vanilla GD·momentum를 일관되게 능가. 병렬 <span class="term">window-attention</span> 경로(QKV 투영 공유)가 국소 구조를 맡아, 고정 크기 fast weight가 용량을 비국소 메모리에 집중하게 한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Chunk the sequence big</span><span class="t-ko">시퀀스를 크게 청킹</span></b><span class="t-en">Split into chunks of 2K–1M tokens, aligned to the data's structure (image patches, a frame, a text window) and treat each chunk as an unordered set.</span><span class="t-ko">2K~1M 토큰 청크로 나누되 데이터 구조(이미지 패치·프레임·텍스트 윈도)에 맞추고, 각 청크를 순서 없는 집합으로 다룬다.</span></li>
+      <li><b><span class="t-en">Update the fast weight once per chunk</span><span class="t-ko">청크당 한 번 fast weight 갱신</span></b><span class="t-en">Compute the summed loss −f<sub>W</sub>(k)ᵀv over the chunk's keys/values and take one large-matmul gradient step, stabilized by the Muon optimizer.</span><span class="t-ko">청크의 key/value로 −f<sub>W</sub>(k)ᵀv 합 손실을 구해 큰 matmul 한 걸음을 두고, Muon 옵티마이저로 안정화한다.</span></li>
+      <li><b><span class="t-en">Apply + window attention</span><span class="t-ko">Apply + window attention</span></b><span class="t-en">Run the updated fast weight on the chunk's queries for non-local memory, and add a local window-attention output (shared QKV) for intra-chunk structure.</span><span class="t-ko">갱신된 fast weight를 청크의 쿼리에 적용해 비국소 메모리를, 국소 window-attention 출력(QKV 공유)을 더해 청크 내 구조를 얻는다.</span></li>
+      <li><b><span class="t-en">Reorder masks per modality + parallelize</span><span class="t-ko">모달리티별 마스크 재배치 + 병렬화</span></b><span class="t-en">Pick the Update/Apply order (full for image sets, shifted block-causal for text, strided for video) and shard via context/tensor parallelism to reach 1M-token and 14B-param regimes.</span><span class="t-ko">Update/Apply 순서를 고르고(이미지 집합=full, 텍스트=shifted block-causal, 비디오=strided), context/tensor 병렬로 샤딩해 100만 토큰·14B 파라미터 영역에 도달한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Granularity was the wall.</strong> Updating in huge chunks instead of tiny mini-batches lifts FLOPs utilization from &lt;5% to ~70% — efficiency comes from rethinking the unit, not a new kernel.</p><p class="t-ko"><strong>벽은 '갱신 단위'였다.</strong> 작은 미니배치 대신 큰 청크로 갱신하니 FLOPs 활용률이 &lt;5%→~70%로 — 효율은 새 커널이 아니라 단위 재고에서 나온다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Bigger, nonlinear state wins.</strong> Scaling the SwiGLU-MLP fast weight to 40% of model params consistently improves quality; nonlinear beats linear even at smaller state.</p><p class="t-ko"><strong>크고 비선형인 state가 이긴다.</strong> SwiGLU-MLP fast weight를 모델의 40%까지 키우면 품질이 일관되게 향상되고, 비선형은 더 작은 state로도 선형을 능가.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>One layer, three modalities.</strong> The same LaCT block powers image-set view synthesis, language modeling, and 14B video diffusion — matching or beating full attention each time.</p><p class="t-ko"><strong>한 레이어, 세 모달리티.</strong> 같은 LaCT 블록이 이미지셋 뷰 합성·언어 모델·14B 비디오 디퓨전을 구동 — 매번 full attention과 동등하거나 능가.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Pure-PyTorch, kernel-free.</strong> A few dozen lines, no custom CUDA — lowering the barrier so the TTT design space is finally easy to explore.</p><p class="t-ko"><strong>순수 PyTorch, 커널 불필요.</strong> 수십 줄·커스텀 CUDA 없음 — 진입장벽을 낮춰 TTT 설계 공간을 마침내 쉽게 탐색.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> "Large chunk" trades temporal granularity for throughput — within a chunk, tokens are an unordered set, so fine-grained causal/positional dependencies must be patched back via window attention and carefully reordered masks. How much that hidden coupling (chunk size ↔ window size ↔ task causality) costs on tasks needing sharp token-level recall, and whether the ~70% utilization holds outside the A100/Adobe-scale setups reported, are not fully settled.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> "큰 청크"는 시간적 세밀함을 처리량과 맞바꾼다 — 청크 안에서는 토큰이 순서 없는 집합이므로, 세밀한 인과·위치 의존성은 window attention과 신중히 재배치한 마스크로 되메워야 한다. 이 숨은 결합(청크 크기 ↔ 윈도 크기 ↔ 과제 인과성)이 토큰 단위 정밀 회상이 필요한 과제에서 얼마나 비용을 치르는지, 그리고 ~70% 활용률이 보고된 A100·Adobe 규모 밖에서도 유지되는지는 충분히 규명되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2505.23884">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2505.23884">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2505.23884">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2505.23884">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

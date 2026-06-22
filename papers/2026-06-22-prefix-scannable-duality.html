@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Sequential Parallel Duality in Prefix Scannable Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · Sub-quad Theory</span><span class="t-ko">⚡ Efficient Seq · Sub-quad Theory</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Sequential-Parallel Duality in Prefix-Scannable Models<br>
+      <span class="glow t-en">— One prefix-scan lens that unifies Mamba, GLA & friends — and lets attention join the club</span>
+      <span class="glow t-ko">— Mamba·GLA를 하나로 묶는 prefix-scan 렌즈 — 그리고 어텐션까지 합류시키다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Morris Yau</b> <span class="t-en">et al.</span><span class="t-ko">외 5인</span></span>
+      <span>🏛 MIT CSAIL · TU Munich · Harvard</span>
+      <span>🗓 2025.06.12</span>
+      <span>📄 <a href="https://arxiv.org/abs/2506.10918">arXiv:2506.10918</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Modern efficient sequence models all chase "<b>sequential-parallel duality</b>" (SPD): parallel training like Transformers, cheap recurrent inference like RNNs. This paper shows that Mamba, GLA, mLSTM, RetNet, DeltaNet are all the <em>same algorithm</em> — a <b>parallel prefix scan</b> with an associative operator. Relaxing that operator to be <span class="hl">non-associative</span> defines a broader class, <b>Prefix-Scannable Models (PSMs)</b>, which can even put a <b>softmax-attention block inside the scan</b> — keeping <b>O(N) training</b> and <b>O(log N) memory</b> inference. The resulting Transformer-PSM matches GPT-2 perplexity while generalizing to far longer sequences than it was trained on.</p>
+    <p class="t-ko">요즘의 효율적 시퀀스 모델들은 모두 "<b>순차-병렬 이중성</b>"(SPD)을 노린다: Transformer처럼 병렬 학습, RNN처럼 값싼 순차 추론. 이 논문은 Mamba·GLA·mLSTM·RetNet·DeltaNet이 사실 <em>같은 알고리즘</em>임을 보인다 — 결합법칙을 만족하는 연산자를 쓴 <b>병렬 prefix scan</b>. 이 연산자를 <span class="hl">비결합(non-associative)</span>으로 풀면 더 넓은 부류 <b>Prefix-Scannable Models(PSM)</b>가 정의되고, 심지어 <b>softmax 어텐션 블록을 scan 안에</b> 넣고도 <b>O(N) 학습</b>·<b>O(log N) 메모리</b> 추론을 유지한다. 그렇게 만든 Transformer-PSM은 GPT-2 수준 perplexity를 내면서, 학습보다 훨씬 긴 시퀀스로도 일반화한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The zoo of "efficient Transformers" isn't a zoo — it's one animal seen from different angles.</p>
+    <p class="lead t-ko">난립하는 '효율적 Transformer'들은 동물원이 아니라, 한 동물을 여러 각도에서 본 것이다.</p>
+    <p class="t-en">Transformers train in parallel but pay O(N²) compute and O(N) memory at inference. SSMs and linear-attention variants (Mamba, GLA, RetNet, mLSTM, DeltaNet) fix this with linear-time training and constant-memory recurrence — but each was derived from a different starting point, so it was never clear <strong>what exactly</strong> makes a model both parallelizable and cheaply recurrent. This work answers that with an <strong>algorithmic characterization</strong>: a model has SPD precisely when its state can be built by the classic <strong>parallel prefix scan</strong>. The twist is that the scan still works even when the combining operator is <strong>not associative</strong> — Blelloch's tree just fixes a parenthesization — which opens the door to dropping a full attention block inside the aggregator without losing efficiency.</p>
+    <p class="t-ko">Transformer는 병렬 학습이 되지만 추론에서 O(N²) 연산·O(N) 메모리를 치른다. SSM과 선형 어텐션 계열(Mamba·GLA·RetNet·mLSTM·DeltaNet)은 선형 학습·상수 메모리 순환으로 이를 해결하지만, 저마다 다른 출발점에서 유도돼 <strong>정확히 무엇이</strong> '병렬+값싼 순환'을 가능케 하는지는 불명확했다. 이 논문은 <strong>알고리즘적 특성화</strong>로 답한다: 모델이 SPD를 가지는 것은, 그 상태를 고전적 <strong>병렬 prefix scan</strong>으로 만들 수 있을 때뿐이다. 핵심 반전은, 결합 연산자가 <strong>결합법칙을 안 만족</strong>해도 scan이 동작한다는 점 — Blelloch 트리가 괄호 묶음을 하나로 고정해 주기 때문이다. 덕분에 효율을 잃지 않고 aggregator 안에 어텐션 블록 전체를 넣을 수 있다.</p>
+    <figure class="fig">
+      <img src="fig/2506.10918/fig1.png" alt="Blelloch parallel prefix scan: upsweep (reduction) and downsweep (prefix propagation) over chunk tokens">
+      <figcaption class="t-en"><b>Figure 1.</b> The Blelloch scan that powers PSM training — an <b>upsweep</b> (reduce chunks up a binary tree) then a <b>downsweep</b> (propagate prefixes back down), yielding all prefix states in O(N) work and O(log N) depth. For a non-associative aggregator this tree fixes a unique parenthesization.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> PSM 학습을 떠받치는 Blelloch scan — <b>upsweep</b>(이진트리를 따라 청크를 위로 reduce)에 이어 <b>downsweep</b>(prefix를 다시 아래로 전파), O(N) work·O(log N) depth로 모든 prefix 상태를 만든다. 비결합 aggregator에서는 이 트리가 괄호 묶음을 유일하게 고정한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2506.10918</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">O(N)</div><div class="l"><span class="t-en">PSM training work<br>(parallel, O(log N) depth)</span><span class="t-ko">PSM 학습 work<br>(병렬, O(log N) depth)</span></div></div>
+      <div class="stat"><div class="n">O(log N)</div><div class="l"><span class="t-en">PSM inference memory<br>(SPD-(N, log N))</span><span class="t-ko">PSM 추론 메모리<br>(SPD-(N, log N))</span></div></div>
+      <div class="stat"><div class="n">O(1)</div><div class="l"><span class="t-en">Amortized compute<br>per token at inference</span><span class="t-ko">토큰당 분할상환<br>추론 연산량</span></div></div>
+      <div class="stat"><div class="n">22.45</div><div class="l"><span class="t-en">Transformer-PSM PPL on<br>WikiText-103 (vs GPT-2 22.28)</span><span class="t-ko">Transformer-PSM PPL<br>WikiText-103 (GPT-2 22.28)</span></div></div>
+      <div class="stat"><div class="n">10×</div><div class="l"><span class="t-en">S5 length generalization<br>train ≤18 → test 180 tokens</span><span class="t-ko">S5 길이 일반화<br>학습 ≤18 → 테스트 180 토큰</span></div></div>
+      <div class="stat"><div class="n">≈0.008s</div><div class="l"><span class="t-en">PSM per-token latency, flat<br>to 40k tok (GPT-2 → 0.04s)</span><span class="t-ko">PSM 토큰당 지연, 40k까지<br>거의 평탄 (GPT-2 → 0.04s)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — recovers attention quality at sub-quadratic cost</span><span class="t-ko">결과 — 어텐션 품질을 sub-quadratic 비용으로 회복</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Selected results.</b> Transformer-PSM vs baselines across the three task families. Larger self-attention chunk size recovers GPT-2-level LM quality while keeping near-constant inference latency.</caption>
+        <caption class="t-ko"><b>대표 결과.</b> 세 과제군에서 Transformer-PSM와 베이스라인 비교. 셀프-어텐션 청크 크기를 키우면 추론 지연은 거의 일정하게 유지하면서 GPT-2 수준 LM 품질을 회복.</caption>
+        <thead><tr><th><span class="t-en">Task / metric</span><span class="t-ko">과제 / 지표</span></th><th>Transformer-PSM</th><th>GPT-2</th><th>Mamba</th></tr></thead>
+        <tbody>
+          <tr><td>WikiText-103 PPL (chunk 256)</td><td class="up">22.45</td><td>22.28</td><td>—</td></tr>
+          <tr><td><span class="t-en">MQAR accuracy (chunk 64)</span><span class="t-ko">MQAR 정확도 (청크 64)</span></td><td class="up">≈100%</td><td>≈100%</td><td><span class="t-en">struggles</span><span class="t-ko">고전</span></td></tr>
+          <tr><td><span class="t-en">S5 state-tracking, len 180 (train ≤18)</span><span class="t-ko">S5 상태추적, 길이 180 (학습 ≤18)</span></td><td class="up"><span class="t-en">low error</span><span class="t-ko">낮은 오류</span></td><td><span class="t-en">fails</span><span class="t-ko">실패</span></td><td><span class="t-en">fails</span><span class="t-ko">실패</span></td></tr>
+          <tr><td><span class="t-en">Per-token latency @40k tokens</span><span class="t-ko">토큰당 지연 @40k</span></td><td class="up">≈0.008s</td><td>≈0.04s</td><td>≈0.006s</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">Enc</div>
+          <div class="sub"><span class="t-en">chunk of c tokens → state</span><span class="t-ko">c토큰 청크 → 상태</span></div>
+          <div class="latent"><span class="t-en">x_i ∈ M</span><span class="t-ko">x_i ∈ M</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Agg θ (prefix scan)</span><span class="t-ko">Agg θ (prefix scan)</span></div>
+          <div class="sub"><span class="t-en">non-assoc. binary op, Blelloch tree</span><span class="t-ko">비결합 이항연산, Blelloch 트리</span></div>
+          <div class="latent"><span class="t-en">prefix states s_i</span><span class="t-ko">prefix 상태 s_i</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">Inf φ</div>
+          <div class="sub"><span class="t-en">prefix + chunk → logits</span><span class="t-ko">prefix + 청크 → 로짓</span></div>
+          <div class="latent"><span class="t-en">per-token y_t</span><span class="t-ko">토큰별 y_t</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Three modules define a PSM.</b> Training runs the static Blelloch scan (parallel); inference runs an <b>online binary-counter scan</b> keeping only ⌈log₂(t+1)⌉ "mini-tree roots" — so memory grows logarithmically, not linearly.</div>
+      <div class="cap t-ko"><b>세 모듈이 PSM을 정의한다.</b> 학습은 정적 Blelloch scan(병렬), 추론은 <b>온라인 이진카운터 scan</b>으로 ⌈log₂(t+1)⌉개의 '미니트리 루트'만 유지 — 메모리가 선형이 아니라 로그로 증가한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core idea: relax associativity</span><span class="t-ko">핵심 아이디어: 결합법칙을 풀어라</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① unify</span>
+        <h3>One affine template</h3>
+        <p class="t-en">Existing SPD models all fit <span class="term">s_t = E_t ▶ s_{t-1} + f_t</span> with the <strong>associative</strong> operator (E₂,f₂)⊕(E₁,f₁) = (E₂∘E₁, f₂ + E₂▶f₁). Because it's associative, prefix scan gives SPD-(N, 1): linear training, <strong>constant</strong>-memory recurrence. Linear Attention, DeltaNet, RetNet, mLSTM, S4/S6, Mamba and GLA are all special cases.</p>
+        <p class="t-ko">기존 SPD 모델은 모두 <span class="term">s_t = E_t ▶ s_{t-1} + f_t</span> 꼴에, <strong>결합적</strong> 연산자 (E₂,f₂)⊕(E₁,f₁) = (E₂∘E₁, f₂ + E₂▶f₁)를 쓴다. 결합적이라 prefix scan이 SPD-(N, 1)을 준다: 선형 학습·<strong>상수</strong> 메모리 순환. Linear Attention·DeltaNet·RetNet·mLSTM·S4/S6·Mamba·GLA가 모두 특수 케이스.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② generalize</span>
+        <h3>Non-associative Agg = PSM</h3>
+        <p class="t-en">Drop the associativity requirement: let <span class="term">Agg θ</span> be <strong>any</strong> binary operator — even a softmax-attention block. Blelloch's tree imposes a single fixed parenthesization, so training stays O(N)/O(log N) depth and online inference stays O(log N) memory, O(1) amortized compute. This is the new class: <strong>SPD-(N, log N)</strong>.</p>
+        <p class="t-ko">결합법칙 요구를 버린다: <span class="term">Agg θ</span>를 <strong>임의</strong>의 이항연산으로 — softmax 어텐션 블록까지. Blelloch 트리가 괄호 묶음을 하나로 고정하므로 학습은 O(N)/O(log N) depth, 온라인 추론은 O(log N) 메모리·O(1) 분할상환 연산을 유지. 이것이 새 부류 <strong>SPD-(N, log N)</strong>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Encode chunks</span><span class="t-ko">청크 인코딩</span></b><span class="t-en">Split the sequence into chunks of c tokens; Enc maps each chunk to a state x_i ∈ M (in Transformer-PSM, just an embedding layer).</span><span class="t-ko">시퀀스를 c토큰 청크로 나누고, Enc가 각 청크를 상태 x_i ∈ M으로 매핑(Transformer-PSM에선 단순 임베딩 층).</span></li>
+      <li><b><span class="t-en">Scan with a (non-assoc) aggregator</span><span class="t-ko">(비결합) aggregator로 scan</span></b><span class="t-en">Run the static Blelloch upsweep+downsweep over chunk states using Agg θ — a bidirectional GPT-style block that fuses two chunk states — to produce every prefix state in parallel.</span><span class="t-ko">청크 상태들에 Agg θ(두 청크 상태를 융합하는 양방향 GPT 블록)로 정적 Blelloch upsweep+downsweep을 돌려 모든 prefix 상태를 병렬 생성.</span></li>
+      <li><b><span class="t-en">Predict per token</span><span class="t-ko">토큰별 예측</span></b><span class="t-en">Inf φ (a causal GPT block) takes the prefix state s_{t-1} plus the current chunk and emits per-token logits — local attention over the chunk, global context summarized in the prefix.</span><span class="t-ko">Inf φ(인과적 GPT 블록)가 prefix 상태 s_{t-1}와 현재 청크를 받아 토큰별 로짓 출력 — 청크 내 지역 어텐션 + prefix에 요약된 전역 맥락.</span></li>
+      <li><b><span class="t-en">Infer with an online counter scan</span><span class="t-ko">온라인 카운터 scan으로 추론</span></b><span class="t-en">At test time process tokens left-to-right, keeping only the ⌈log₂(t+1)⌉ mini-tree roots and merging them like a binary counter — reproducing the training parenthesization at O(log N) memory.</span><span class="t-ko">추론 시 토큰을 좌→우로 처리하며 ⌈log₂(t+1)⌉개 미니트리 루트만 유지·이진카운터처럼 병합 — 학습 시 괄호 묶음을 O(log N) 메모리로 재현.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>A single primitive explains the field.</strong> "Parallelizable training + cheap recurrence" reduces to "computable by prefix scan" — a clean, testable definition (SPD) rather than a list of architectures.</p><p class="t-ko"><strong>하나의 원시연산이 분야를 설명한다.</strong> "병렬 학습 + 값싼 순환"은 "prefix scan으로 계산 가능"으로 환원된다 — 아키텍처 나열이 아닌, 깔끔하고 검증 가능한 정의(SPD).</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Attention can be efficient — inside a scan.</strong> Relaxing associativity lets a softmax block be the aggregator, recovering associative recall (MQAR) and state tracking (S5) that linear SSMs lose, at O(log N) memory.</p><p class="t-ko"><strong>어텐션도 효율적일 수 있다 — scan 안이라면.</strong> 결합법칙을 풀면 softmax 블록이 aggregator가 되어, 선형 SSM이 놓치는 연상회상(MQAR)·상태추적(S5)을 O(log N) 메모리로 회복.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Length generalization for free-ish.</strong> Transformer-PSM trained on ≤18-token S5 stays accurate at 180 tokens — the chunked prefix structure extrapolates where vanilla GPT-2 and Mamba both fail.</p><p class="t-ko"><strong>길이 일반화가 거의 공짜.</strong> ≤18 토큰 S5로 학습한 Transformer-PSM이 180 토큰에서도 정확 — 청크 prefix 구조가 일반화, 반면 GPT-2·Mamba는 둘 다 실패.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline gains are on synthetic probes (S5, MQAR) and small-scale WikiText-103; Transformer-PSM only <em>matches</em> GPT-2 perplexity (22.45 vs 22.28), and only at the largest 256-token chunk — at which point each chunk is itself a small quadratic-attention window, so the "O(log N) memory" claim hides a constant that grows with chunk size. Whether the framework's promise survives at LLM scale, against strong hybrid baselines, remains untested here.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 핵심 성과는 합성 과제(S5·MQAR)와 소규모 WikiText-103에 집중돼 있다. Transformer-PSM은 GPT-2 perplexity를 <em>동률</em>로 따라잡을 뿐(22.45 vs 22.28), 그것도 가장 큰 256토큰 청크에서만 — 이때 각 청크 자체가 작은 이차 어텐션 윈도우라, "O(log N) 메모리" 주장은 청크 크기에 비례해 커지는 상수를 숨긴다. 강력한 하이브리드 베이스라인을 상대로 LLM 스케일에서도 이 약속이 유지될지는 여기서 검증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2506.10918">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2506.10918">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2506.10918">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2506.10918">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

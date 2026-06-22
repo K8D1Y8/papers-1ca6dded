@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · A Theoretical Analysis of Mamba's Training Dynamics: Filtering Relevant Features for Generalization in State Space Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · Mamba Theory</span><span class="t-ko">⚡ Efficient Seq · Mamba Theory</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>A Theoretical Analysis of Mamba's Training Dynamics<br>
+      <span class="glow t-en">— How a gated SSM learns to filter relevant features through gradient descent</span>
+      <span class="glow t-ko">— 게이트형 SSM이 경사하강으로 '관련 특징'만 걸러내는 법</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Mugunthan Shandirasegaran</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 NJIT · UPenn · UL Lafayette · RPI</span>
+      <span>🗓 2026.02.13</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.12499">arXiv:2602.12499</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Mamba beats Transformers on efficiency, but <b>why</b> its selective gating actually <em>learns</em> the right features during training was never proven. This paper gives the <span class="hl">first generalization analysis of a Mamba block trained by gradient descent</span>. On structured data, the gating vector <b>provably aligns with class-relevant features and ignores irrelevant ones</b> — feature selection by selective recurrence, not attention. It derives non-asymptotic sample-complexity and convergence bounds that <b>scale as 1/gap² and 1/noise²</b>, and verifies them on synthetic data.</p>
+    <p class="t-ko">Mamba는 효율로 트랜스포머를 이기지만, 그 선택적 게이팅이 학습 중에 <b>왜</b> 올바른 특징을 실제로 <em>배워내는지</em>는 증명된 적이 없었다. 이 논문은 <span class="hl">경사하강으로 학습되는 Mamba 블록의 첫 일반화 분석</span>을 제시한다. 구조화된 데이터에서 게이팅 벡터는 <b>클래스 관련 특징과 정렬되고 무관한 특징은 무시함</b>이 증명된다 — 어텐션이 아닌 선택적 재귀로 구현된 특징 선택. 표본 복잡도·수렴 경계가 <b>1/gap²·1/noise²로 스케일</b>함을 유도하고 합성 데이터로 검증한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Mamba's empirical magic is the selective gate — but no one had shown training actually delivers that selection.</p>
+    <p class="lead t-ko">Mamba의 경험적 비결은 선택적 게이트인데, 학습이 그 선택을 정말 만들어낸다는 것을 아무도 보이지 못했다.</p>
+    <p class="t-en">Prior SSM theory focused on <strong>expressive power</strong> — what Mamba <em>could</em> represent — not on whether gradient descent <em>actually trains</em> the gate to do feature selection, nor on its generalization. That gap matters because Mamba is known to be sensitive to hyperparameters; without a learning-dynamics account, "selectivity" stays a story. This work analyzes a simplified but faithful Mamba block (single-layer, single-head selective SSM with input-dependent gating + a 2-layer MLP) on two canonical data regimes — <strong>majority-voting</strong> (label set by aggregate evidence) and <strong>locality-structured</strong> (label set by where relevant tokens cluster) — and tracks how the gate's gradient evolves token-by-token. It is, to the authors' knowledge, the first generalization guarantee for a gated SSM.</p>
+    <p class="t-ko">기존 SSM 이론은 <strong>표현력</strong> — Mamba가 무엇을 표현할 <em>수 있는가</em> — 에 집중했고, 경사하강이 게이트를 특징 선택용으로 <em>실제 학습</em>시키는지, 또 그 일반화는 다루지 않았다. Mamba가 하이퍼파라미터에 민감하다는 점에서 이 공백은 중요하다. 학습 동역학 설명이 없으면 '선택성'은 이야기일 뿐이다. 본 연구는 단순화하되 충실한 Mamba 블록(단층·단일헤드 선택적 SSM + 입력 의존 게이팅 + 2층 MLP)을 두 표준 데이터 체제 — <strong>다수결</strong>(집계 증거로 라벨 결정)과 <strong>국소성 구조</strong>(관련 토큰이 모이는 위치로 라벨 결정) — 에서 분석하고, 게이트 그래디언트가 토큰별로 어떻게 진화하는지 추적한다. 저자들이 아는 한 게이트형 SSM에 대한 첫 일반화 보장이다.</p>
+    <figure class="fig">
+      <img src="fig/2602.12499/fig1.png" alt="Cosine alignment of the gating vector with class-relevant vs irrelevant features during training">
+      <figcaption class="t-en"><b>Figure 2.</b> During training the gating vector w<sub>Δ</sub> climbs to ~0.6 cosine alignment with the <b>class-relevant</b> feature, while alignment with the <b>class-irrelevant</b> feature stays flat at ~0 — feature selection emerging directly from gradient descent.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 학습 중 게이팅 벡터 w<sub>Δ</sub>는 <b>클래스 관련</b> 특징과의 코사인 정렬이 ~0.6까지 상승하는 반면, <b>무관</b> 특징과의 정렬은 ~0에 머문다 — 경사하강에서 직접 발현되는 특징 선택.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.12499</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">1st</div><div class="l"><span class="t-en">Generalization analysis<br>of a trained gated SSM</span><span class="t-ko">학습된 게이트형 SSM의<br>첫 일반화 분석</span></div></div>
+      <div class="stat"><div class="n">N ∝ 1/(α<sub>r</sub>−α<sub>c</sub>)²</div><div class="l"><span class="t-en">Sample complexity<br>vs. majority-voting gap</span><span class="t-ko">표본 복잡도<br>vs. 다수결 격차</span></div></div>
+      <div class="stat"><div class="n">T ∝ 1/(α<sub>r</sub>−α<sub>c</sub>)²</div><div class="l"><span class="t-en">Iterations to converge<br>vs. voting gap</span><span class="t-ko">수렴 반복수<br>vs. 투표 격차</span></div></div>
+      <div class="stat"><div class="n">~0.6</div><div class="l"><span class="t-en">Cosine align w<sub>Δ</sub> →<br>relevant feature (vs ~0 irrelevant)</span><span class="t-ko">w<sub>Δ</sub> 코사인 정렬 →<br>관련 특징 (무관 ~0)</span></div></div>
+      <div class="stat"><div class="n">∝ 1/τ²</div><div class="l"><span class="t-en">Both N and T improve<br>as token noise τ shrinks</span><span class="t-ko">토큰 잡음 τ 감소 시<br>N·T 모두 개선</span></div></div>
+      <div class="stat"><div class="n">2 regimes</div><div class="l"><span class="t-en">Majority-voting +<br>locality-structured data</span><span class="t-ko">다수결 +<br>국소성 구조 데이터</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — what the bounds say</span><span class="t-ko">결과 — 경계가 말하는 것</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Theorems 1–2.</b> Non-asymptotic scaling of sample complexity N and iterations T. Smaller bound = easier/faster learning. L = sequence length, d = dim, η = learning rate, τ = token noise.</caption>
+        <caption class="t-ko"><b>정리 1–2.</b> 표본 복잡도 N·반복수 T의 비점근 스케일링. 경계가 작을수록 학습이 쉽고 빠름. L=시퀀스 길이, d=차원, η=학습률, τ=토큰 잡음.</caption>
+        <thead><tr><th>Regime</th><th>Sample complexity N</th><th>Iterations T</th><th><span class="t-en">Faster when…</span><span class="t-ko">더 빠를 때…</span></th></tr></thead>
+        <tbody>
+          <tr><td>Majority-voting</td><td>Ω( L²d / η²(α<sub>r</sub>−α<sub>c</sub>)² )</td><td>Θ( L² / η(α<sub>r</sub>−α<sub>c</sub>)² )</td><td class="up"><span class="t-en">voting gap larger</span><span class="t-ko">투표 격차 클수록</span></td></tr>
+          <tr><td>Locality-structured</td><td>Ω( L²d / η²·Δ² )</td><td>Θ( L² / η·Δ )</td><td class="up"><span class="t-en">relevant tokens local</span><span class="t-ko">관련 토큰 국소적일수록</span></td></tr>
+          <tr><td><span class="t-en">Both</span><span class="t-ko">공통</span></td><td>↓ with lower noise τ</td><td>↓ with lower noise τ</td><td class="up"><span class="t-en">noise τ smaller</span><span class="t-ko">잡음 τ 작을수록</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="font-size:.86em;opacity:.75">Δ here denotes the locality separation term ( (1/2)<sup>ΔL⁺</sup> − (1/2)<sup>ΔL⁻</sup> ): learning accelerates when relevant features are more tightly clustered in positive samples than in negatives.</p>
+    <p class="t-ko" style="font-size:.86em;opacity:.75">여기서 Δ는 국소성 분리항 ( (1/2)<sup>ΔL⁺</sup> − (1/2)<sup>ΔL⁻</sup> )으로, 양성 표본에서 관련 특징이 음성보다 더 조밀히 모일수록 학습이 빨라진다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Tokens in</span><span class="t-ko">입력 토큰</span></div>
+          <div class="sub"><span class="t-en">relevant + irrelevant + noise</span><span class="t-ko">관련+무관+잡음</span></div>
+          <div class="latent"><span class="t-en">structured sequence</span><span class="t-ko">구조화된 시퀀스</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Selective gate w<sub>Δ</sub></span><span class="t-ko">선택 게이트 w<sub>Δ</sub></span></div>
+          <div class="sub"><span class="t-en">GD aligns it to relevant feature</span><span class="t-ko">GD가 관련 특징과 정렬</span></div>
+          <div class="latent"><span class="t-en">amplify / suppress</span><span class="t-ko">증폭 / 억제</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">MLP + readout</span><span class="t-ko">MLP + 출력</span></div>
+          <div class="sub"><span class="t-en">"lucky neurons" fire on signal</span><span class="t-ko">'행운 뉴런'이 신호에 발화</span></div>
+          <div class="latent"><span class="t-en">zero generalization error</span><span class="t-ko">일반화 오차 0</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Selection via recurrence, not attention</b> — the input-dependent gate learns, through plain gradient descent, to amplify class-relevant tokens (majority-voting) or suppress irrelevant ones (locality), so downstream "lucky neurons" cleanly separate the classes.</div>
+      <div class="cap t-ko"><b>어텐션이 아닌 재귀로 선택</b> — 입력 의존 게이트가 단순 경사하강만으로 클래스 관련 토큰을 증폭(다수결)하거나 무관 토큰을 억제(국소성)하도록 학습하여, 하류 '행운 뉴런'이 클래스를 깔끔히 분리한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: two ways the gate selects</span><span class="t-ko">아이디어: 게이트가 선택하는 두 방식</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① <span class="t-en">amplify</span><span class="t-ko">증폭</span></span>
+        <h3><span class="t-en">Majority-voting → align up</span><span class="t-ko">다수결 → 정렬 상승</span></h3>
+        <p class="t-en">When the label depends on aggregate evidence, w<sub>Δ</sub> grows a <strong>positive</strong> inner product with both class-relevant directions (o⁺, o⁻) while staying ~0 on irrelevant ones (Lemma 4.1). The gate <strong>amplifies informative tokens</strong>; bigger voting gap α<sub>r</sub>−α<sub>c</sub> ⇒ faster learning.</p>
+        <p class="t-ko">라벨이 집계 증거에 의존하면 w<sub>Δ</sub>는 두 클래스 관련 방향(o⁺, o⁻)과 <strong>양의</strong> 내적을 키우고 무관 방향에는 ~0을 유지(보조정리 4.1). 게이트는 <strong>정보성 토큰을 증폭</strong>한다. 투표 격차 α<sub>r</sub>−α<sub>c</sub>가 클수록 학습이 빠르다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② <span class="t-en">suppress</span><span class="t-ko">억제</span></span>
+        <h3><span class="t-en">Locality → push down noise</span><span class="t-ko">국소성 → 잡음 억제</span></h3>
+        <p class="t-en">When relevant and confusing tokens are balanced, w<sub>Δ</sub> can't amplify the signal — instead it drives a <strong>strongly negative</strong> inner product along irrelevant directions (Lemma 4.2), <strong>suppressing distractors</strong> so locality becomes discriminative. Tighter clustering of relevant tokens ⇒ faster learning.</p>
+        <p class="t-ko">관련·혼동 토큰이 균형이면 w<sub>Δ</sub>는 신호를 증폭할 수 없다 — 대신 무관 방향으로 <strong>강한 음의</strong> 내적을 만들어(보조정리 4.2) <strong>방해 요소를 억제</strong>해 국소성이 변별력을 갖게 한다. 관련 토큰이 조밀할수록 학습이 빠르다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Define a faithful toy Mamba</span><span class="t-ko">충실한 토이 Mamba 정의</span></b><span class="t-en">Single-layer, single-head selective SSM with input-dependent gating + 2-layer MLP; W<sub>O</sub> Gaussian-init, gate w<sub>Δ</sub> zero-init, readout v fixed — tractable yet keeps the core gate.</span><span class="t-ko">단층·단일헤드 선택적 SSM + 입력 의존 게이팅 + 2층 MLP. W<sub>O</sub>는 가우시안 초기화, 게이트 w<sub>Δ</sub>는 0 초기화, 출력 v는 고정 — 분석 가능하면서 핵심 게이트는 유지.</span></li>
+      <li><b><span class="t-en">Structured data with planted features</span><span class="t-ko">특징을 심은 구조화 데이터</span></b><span class="t-en">Tokens carry class-relevant and class-irrelevant patterns under token-level noise τ, in majority-voting and locality-structured regimes.</span><span class="t-ko">토큰은 토큰 단위 잡음 τ 아래 클래스 관련·무관 패턴을 담으며, 다수결·국소성 구조 두 체제로 구성.</span></li>
+      <li><b><span class="t-en">Track gradients via "lucky neurons"</span><span class="t-ko">'행운 뉴런'으로 그래디언트 추적</span></b><span class="t-en">Follow MLP neurons whose init happens to align with the signal, and decompose the gate's gradient by token position to handle Mamba's multiplicative recurrence.</span><span class="t-ko">초기화가 우연히 신호와 정렬된 MLP 뉴런을 추적하고, Mamba의 곱셈적 재귀를 다루기 위해 게이트 그래디언트를 토큰 위치별로 분해.</span></li>
+      <li><b><span class="t-en">Prove bounds + verify</span><span class="t-ko">경계 증명 + 검증</span></b><span class="t-en">Derive non-asymptotic N, T for zero generalization error; synthetic experiments confirm faster convergence with larger voting gap, stronger locality, and lower noise.</span><span class="t-ko">일반화 오차 0을 위한 비점근 N·T를 유도하고, 합성 실험으로 투표 격차·국소성이 크고 잡음이 작을수록 빠른 수렴을 확인.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Selectivity is learnable, not just expressible.</strong> Plain gradient descent provably turns Mamba's gate into a feature selector — closing the gap between Mamba's story and its training reality.</p><p class="t-ko"><strong>선택성은 표현 가능할 뿐 아니라 학습 가능하다.</strong> 단순 경사하강이 Mamba 게이트를 특징 선택기로 만든다는 것이 증명됨 — Mamba의 서사와 학습 현실 사이 간극을 메운다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Attention-like, but via recurrence.</strong> The gate filters relevant features the way attention does, yet without quadratic cost — a theoretical counter-point to Transformer-centric explanations.</p><p class="t-ko"><strong>어텐션 같되 재귀로.</strong> 게이트는 어텐션처럼 관련 특징을 거르되 이차 비용이 없다 — 트랜스포머 중심 설명에 대한 이론적 반례.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Data structure governs speed.</strong> Bounds scale as 1/gap² and 1/noise², so a bigger voting margin or tighter locality directly buys faster, cheaper learning.</p><p class="t-ko"><strong>데이터 구조가 속도를 좌우.</strong> 경계가 1/gap²·1/noise²로 스케일하므로, 큰 투표 마진이나 조밀한 국소성이 곧 더 빠르고 저렴한 학습으로 이어진다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>A reusable framework for gated nets.</strong> The "lucky neuron" + position-decomposed gradient toolkit could analyze other gated/hybrid architectures beyond attention.</p><p class="t-ko"><strong>게이트 네트워크용 재사용 프레임워크.</strong> '행운 뉴런' + 위치 분해 그래디언트 도구는 어텐션 너머의 다른 게이트형·하이브리드 구조 분석에도 쓸 수 있다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> This is a heavily simplified setting — a single-layer, single-head block on planted-feature synthetic data with fixed readout and zero-init gate. Real Mamba stacks (multi-layer, multi-head, residuals, layernorm, selective Δ over continuous SSM kernels) and messy real-world sequences are exactly where the multiplicative-recurrence analysis gets hard. The bounds are illuminating but should be read as existence-of-mechanism proofs, not predictions for production Mamba.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 매우 단순화된 설정이다 — 단층·단일헤드 블록, 특징을 심은 합성 데이터, 고정 출력, 0 초기화 게이트. 실제 Mamba 스택(다층·다중헤드·잔차·layernorm, 연속 SSM 커널 위의 선택적 Δ)과 지저분한 실세계 시퀀스가 바로 곱셈적 재귀 분석이 어려워지는 지점이다. 경계는 통찰을 주지만, 실전 Mamba에 대한 예측이 아니라 '메커니즘 존재 증명'으로 읽어야 한다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.12499">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.12499">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.12499">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.12499">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · MesaNet: Sequence Modeling by Locally Optimal Test-Time Training</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · TTT</span><span class="t-ko">⚡ Efficient Seq · TTT</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>MesaNet: Sequence Modeling by Locally Optimal Test-Time Training<br>
+      <span class="glow t-en">— A linear-attention RNN that solves, not just nudges, its in-context least-squares at every token</span>
+      <span class="glow t-ko">— 매 토큰마다 in-context 최소제곱을 '한 번 밀기'가 아니라 '최적으로 푸는' 선형 어텐션 RNN</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Johannes von Oswald</b>, Nino Scherrer <span class="t-en">et al.</span><span class="t-ko">외 다수</span></span>
+      <span>🏛 Google (Paradigms of Intelligence) · DeepMind · MIT CSAIL</span>
+      <span>🗓 2025.06.05</span>
+      <span>📄 <a href="https://arxiv.org/abs/2506.05233">arXiv:2506.05233</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Modern linear-attention RNNs (DeltaNet, Mamba2, xLSTM) update their fast-weight memory with a <b>single online gradient step</b> per token. MesaNet revives the <b>Mesa layer</b>: at every position it returns the <span class="hl">exact minimizer of a cumulative regularized least-squares loss over all tokens seen so far</span>, computed by a fast <b>conjugate-gradient (CG) solver</b>. The trick is that one CG iteration can be written as Gated Linear Attention, so the whole thing is chunkwise-parallel and trains as fast as a Transformer. Result: lower perplexity and the best in-context recall and long-context behavior among RNNs — at the price of extra inference FLOPs, which it can spend <b>dynamically per token</b>.</p>
+    <p class="t-ko">최신 선형 어텐션 RNN(DeltaNet, Mamba2, xLSTM)은 토큰마다 fast-weight 메모리를 <b>온라인 경사 한 스텝</b>으로만 갱신한다. MesaNet은 <b>Mesa layer</b>를 부활시킨다: 매 위치에서 <span class="hl">지금까지 본 모든 토큰에 대한 누적 정규화 최소제곱 손실의 정확한 최소해</span>를 빠른 <b>켤레기울기(CG) 솔버</b>로 구해 출력한다. 핵심은 CG 한 반복을 Gated Linear Attention로 쓸 수 있다는 점 — 덕분에 chunk 단위 병렬화가 되고 Transformer만큼 빠르게 학습된다. 결과적으로 더 낮은 perplexity와 RNN 중 최고의 in-context recall·장문 성능을 얻되, 추론 FLOPs가 더 들고 그 비용은 <b>토큰별로 동적</b>으로 조절된다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">If many RNNs are secretly doing test-time regression, why settle for one gradient step when you can solve it exactly?</p>
+    <p class="lead t-ko">많은 RNN이 사실 test-time 회귀를 한다면, 경사 한 스텝에 만족할 게 아니라 그냥 정확히 풀면 되지 않을까?</p>
+    <p class="t-en">A unifying view of modern efficient RNNs is that each one fits a tiny linear "fast-weight" map to predict values from keys, updating it online as tokens arrive. DeltaNet, Mamba2 and friends approximate this with a single gradient step per token. MesaNet asks for the <strong>locally optimal</strong> answer instead: the closed-form least-squares solution over the entire history, recomputed at every step. The two hard parts — doing this in parallel on accelerators, and doing it stably with forgetting gates — are exactly what the original Mesa layer could not do. This paper fixes both, and does so under a strict apples-to-apples protocol (identical backbone, tokenizer, data order, parameter count; per-model tuned learning rates), so the gains are attributable to the sequence-mixing layer itself.</p>
+    <p class="t-ko">최신 효율 RNN들의 통합적 관점은, 각자가 키→값을 예측하는 작은 선형 "fast-weight" 맵을 학습하며 토큰이 들어올 때마다 온라인으로 갱신한다는 것이다. DeltaNet·Mamba2 등은 이를 토큰당 경사 한 스텝으로 근사한다. MesaNet은 대신 <strong>국소 최적</strong> 해, 즉 전체 히스토리에 대한 최소제곱의 닫힌 형식 해를 매 스텝 다시 구한다. 어려운 두 지점 — 가속기에서 병렬로 푸는 것, 그리고 forget 게이트와 함께 안정적으로 푸는 것 — 이 바로 원조 Mesa layer가 못 하던 일이다. 본 논문은 둘 다 해결하고, 엄격한 동일조건 프로토콜(동일 백본·토크나이저·데이터 순서·파라미터 수, 모델별 학습률 튜닝)로 검증해 성능 향상을 sequence-mixing 층 자체에 귀속시킨다.</p>
+    <figure class="fig">
+      <img src="fig/2506.05233/fig1.png" alt="MesaNet architecture: residual block, gated MLP, and recurrent block with the Mesa Rule">
+      <figcaption class="t-en"><b>Figure 1.</b> MesaNet architecture. (A) Decoder-only Transformer backbone of N residual blocks. (B) Channel mixing is a SwiGLU MLP. (C) Sequence mixing is the Mesa layer: k/q/v are projected, short-convolved and gated, then combined by the <b>Mesa Rule</b> — the slot where MHA, xLSTM, Mamba2, DeltaNet or Mesa can be dropped in.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> MesaNet 구조. (A) N개 residual block의 디코더 전용 Transformer 백본. (B) Channel mixing은 SwiGLU MLP. (C) Sequence mixing이 Mesa layer: k/q/v를 투영·짧은 convolution·게이팅한 뒤 <b>Mesa Rule</b>로 결합 — MHA, xLSTM, Mamba2, DeltaNet, Mesa를 끼워 넣을 수 있는 자리.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2506.05233</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">30 → ~9</div><div class="l"><span class="t-en">CG steps: trained with 30,<br>dynamic stop (ε=1e-4) avg ~9 at inference</span><span class="t-ko">CG 스텝: 30으로 학습,<br>동적 정지(ε=1e-4) 시 추론 평균 ~9</span></div></div>
+      <div class="stat"><div class="n">O(T)</div><div class="l"><span class="t-en">Chunkwise-parallel training<br>complexity (CG ≈ Gated Linear Attn)</span><span class="t-ko">chunk 병렬 학습 복잡도<br>(CG ≈ Gated Linear Attn)</span></div></div>
+      <div class="stat"><div class="n">3 sizes</div><div class="l"><span class="t-en">140M · 440M · 1B params,<br>same backbone for all baselines</span><span class="t-ko">140M · 440M · 1B 파라미터,<br>모든 베이스라인 동일 백본</span></div></div>
+      <div class="stat"><div class="n">32k</div><div class="l"><span class="t-en">Length extrapolation tested<br>(trained at 2048 ctx)</span><span class="t-ko">길이 외삽 평가<br>(학습 문맥 2048)</span></div></div>
+      <div class="stat"><div class="n">15 / 50 B</div><div class="l"><span class="t-en">SlimPajama training tokens<br>(two budgets)</span><span class="t-ko">SlimPajama 학습 토큰<br>(두 가지 예산)</span></div></div>
+      <div class="stat"><div class="n">Best RNN</div><div class="l"><span class="t-en">in-context recall &amp; MAD;<br>matches Transformer on RegBench</span><span class="t-ko">in-context recall · MAD 최고;<br>RegBench는 Transformer 동급</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — optimal beats approximate, but not yet full attention</span><span class="t-ko">결과 — 최적이 근사를 이기나, 풀 어텐션엔 아직</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Qualitative result map.</b> How MesaNet ranks vs. RNN baselines and the full Transformer (MHA), 1B scale. "vs RNNs" = against Mamba2/GLA/xLSTM/DeltaNet/Gated-DeltaNet/Hawk.</caption>
+        <caption class="t-ko"><b>정성적 결과 지도.</b> 1B 규모에서 MesaNet이 RNN 베이스라인과 풀 Transformer(MHA) 대비 어디에 위치하는가. "vs RNNs" = Mamba2/GLA/xLSTM/DeltaNet/Gated-DeltaNet/Hawk 대비.</caption>
+        <thead><tr><th><span class="t-en">Capability</span><span class="t-ko">능력</span></th><th>vs RNNs</th><th>vs MHA</th><th><span class="t-en">Note</span><span class="t-ko">비고</span></th></tr></thead>
+        <tbody>
+          <tr><td><span class="t-en">In-context recall (SWDE, SQUAD, FDA, NQ…)</span><span class="t-ko">in-context recall</span></td><td class="up"><span class="t-en">Best</span><span class="t-ko">최고</span></td><td><span class="t-en">Below</span><span class="t-ko">미달</span></td><td><span class="t-en">beats even SWA-1024</span><span class="t-ko">SWA-1024도 능가</span></td></tr>
+          <tr><td><span class="t-en">Global reasoning (Lambada, HellaSwag, RACE)</span><span class="t-ko">글로벌 추론</span></td><td class="up"><span class="t-en">Best</span><span class="t-ko">최고</span></td><td><span class="t-en">Below</span><span class="t-ko">미달</span></td><td><span class="t-en">RNN-leading, gap to MHA</span><span class="t-ko">RNN 선두, MHA와 격차</span></td></tr>
+          <tr><td>MAD synthetic suite</td><td class="up"><span class="t-en">Best</span><span class="t-ko">최고</span></td><td class="up"><span class="t-en">Matches</span><span class="t-ko">동급</span></td><td><span class="t-en">highest avg accuracy</span><span class="t-ko">평균 정확도 최고</span></td></tr>
+          <tr><td>RegBench in-context learning</td><td class="up"><span class="t-en">Best</span><span class="t-ko">최고</span></td><td class="up"><span class="t-en">Matches</span><span class="t-ko">동급</span></td><td><span class="t-en">infers grammars from context</span><span class="t-ko">문맥서 문법 추론</span></td></tr>
+          <tr><td><span class="t-en">Few-shot word scrambling (GPT-3 tasks)</span><span class="t-ko">few-shot 글자 재배열</span></td><td class="up"><span class="t-en">Strong</span><span class="t-ko">우수</span></td><td class="up"><span class="t-en">Beats</span><span class="t-ko">능가</span></td><td><span class="t-en">but loses on WMT translation</span><span class="t-ko">단, WMT 번역은 열세</span></td></tr>
+          <tr><td><span class="t-en">Long-context PPL @32k</span><span class="t-ko">장문 PPL @32k</span></td><td class="up"><span class="t-en">≈ Gated-DeltaNet, beats GLA/xLSTM/Hawk</span><span class="t-ko">≈ Gated-DeltaNet, GLA/xLSTM/Hawk 능가</span></td><td><span class="t-en">SWA-1024 still competitive</span><span class="t-ko">SWA-1024 여전히 경쟁적</span></td><td><span class="t-en">strong but not dominant</span><span class="t-ko">강하나 압도는 아님</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Approximate RNN</span><span class="t-ko">근사 RNN</span></div>
+          <div class="sub"><span class="t-en">DeltaNet / Mamba2</span><span class="t-ko">DeltaNet / Mamba2</span></div>
+          <div class="latent"><span class="t-en">1 gradient step / token</span><span class="t-ko">토큰당 경사 1스텝</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Mesa Rule</span><span class="t-ko">Mesa Rule</span></div>
+          <div class="sub"><span class="t-en">solve (H+Λ)⁻¹q by CG</span><span class="t-ko">(H+Λ)⁻¹q를 CG로 풀이</span></div>
+          <div class="latent"><span class="t-en">exact least-squares / token</span><span class="t-ko">토큰당 정확 최소제곱</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Optimal output</span><span class="t-ko">최적 출력</span></div>
+          <div class="sub"><span class="t-en">Δe = Gₜ · (H+Λ)⁻¹qₜ</span><span class="t-ko">Δe = Gₜ · (H+Λ)⁻¹qₜ</span></div>
+          <div class="latent"><span class="t-en">dynamic FLOPs per token</span><span class="t-ko">토큰별 동적 FLOPs</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>From a nudge to a solve.</b> Each CG iteration is a matrix-vector product with the key-covariance state H — which is exactly a Gated-Linear-Attention op — so the optimal solver reuses the same hardware-efficient parallel kernels as approximate RNNs.</div>
+      <div class="cap t-ko"><b>'살짝 밀기'에서 '풀기'로.</b> CG 한 반복은 키 공분산 상태 H와의 행렬-벡터 곱이고, 이는 정확히 Gated Linear Attention 연산 — 그래서 최적 솔버가 근사 RNN과 동일한 하드웨어 친화 병렬 커널을 재사용한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea: optimal vs. approximate test-time training</span><span class="t-ko">아이디어: 최적 vs. 근사 test-time training</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 최적 해</span>
+        <h3>Solve, don't step</h3>
+        <p class="t-en">The Mesa layer defines its output as the <strong>exact minimizer</strong> of a cumulative, forget-weighted, regularized squared-error loss over all past (key, value) pairs. Closed form: Δeₜ = Gₜ·(Hₜ+Λ)⁻¹qₜ, where Gₜ = Σ ζ vₖᵀ and Hₜ = Σ ζ kkᵀ are running state matrices and Λ is a learned diagonal regularizer (≥0.25 after softplus).</p>
+        <p class="t-ko">Mesa layer는 출력을 과거 (키,값) 쌍 전체에 대한 누적·forget 가중·정규화 제곱오차 손실의 <strong>정확한 최소해</strong>로 정의한다. 닫힌 형식: Δeₜ = Gₜ·(Hₜ+Λ)⁻¹qₜ, 여기서 Gₜ = Σ ζ vₖᵀ, Hₜ = Σ ζ kkᵀ는 누적 상태 행렬, Λ는 학습되는 대각 정규화(softplus 후 ≥0.25)다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 병렬화 + 안정화</span>
+        <h3>CG = Gated Linear Attention</h3>
+        <p class="t-en">Inverting (Hₜ+Λ) per token sounds fatal. Instead, conjugate gradient solves the linear system iteratively, and its expensive step — multiplying by (Hₜ+Λ) — is algebraically a Gated-Linear-Attention operation. That makes the solver chunkwise-parallel (O(T)), numerically stable even with forgetting, and able to stop early per head/sequence/token.</p>
+        <p class="t-ko">토큰마다 (Hₜ+Λ)를 역행렬화하면 치명적일 듯하다. 대신 켤레기울기로 선형계를 반복적으로 풀고, 그 비싼 연산 — (Hₜ+Λ) 곱 — 이 대수적으로 Gated Linear Attention이다. 덕분에 솔버는 chunk 병렬(O(T)), forget 게이트 하에서도 수치적으로 안정, 그리고 헤드·시퀀스·토큰별 조기 종료가 가능하다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Project &amp; gate</span><span class="t-ko">투영·게이팅</span></b><span class="t-en">From token embeddings, project keys/queries/values, apply a width-4 temporal conv + SiLU, L2-normalize keys and queries, and compute input gate β and forget gate γ ∈ [0,1] via sigmoids.</span><span class="t-ko">토큰 임베딩에서 키/쿼리/값을 투영하고, 폭-4 시간 convolution + SiLU 후 키·쿼리를 L2 정규화, 입력 게이트 β와 forget 게이트 γ ∈ [0,1]를 sigmoid로 계산한다.</span></li>
+      <li><b><span class="t-en">Accumulate state</span><span class="t-ko">상태 누적</span></b><span class="t-en">Maintain forget-weighted running sums Gₜ = Σ ζ·vkᵀ (value–key) and Hₜ = Σ ζ·kkᵀ (key covariance) — the sufficient statistics of the in-context regression.</span><span class="t-ko">forget 가중 누적합 Gₜ = Σ ζ·vkᵀ(값–키)와 Hₜ = Σ ζ·kkᵀ(키 공분산)를 유지 — in-context 회귀의 충분통계량.</span></li>
+      <li><b><span class="t-en">Solve with CG</span><span class="t-ko">CG로 풀기</span></b><span class="t-en">Run conjugate gradient to compute (Hₜ+Λ)⁻¹qₜ to a tolerance ε; each iteration is a Gated-Linear-Attention matmul, so it parallelizes over chunks during training.</span><span class="t-ko">켤레기울기로 (Hₜ+Λ)⁻¹qₜ를 허용오차 ε까지 계산; 각 반복이 Gated Linear Attention matmul이라 학습 시 chunk 단위로 병렬화된다.</span></li>
+      <li><b><span class="t-en">Spend compute dynamically</span><span class="t-ko">연산을 동적으로 소비</span></b><span class="t-en">Trained with 30 CG steps, a dynamic stopping rule (ε=1e-4) cuts the inference average to ~9 steps with matching perplexity — hard contexts (high condition number) get more steps, easy ones fewer.</span><span class="t-ko">30 CG 스텝으로 학습하되, 동적 정지(ε=1e-4)가 추론 평균을 ~9 스텝으로 줄이며 perplexity는 유지 — 어려운 문맥(높은 조건수)은 더, 쉬운 문맥은 덜 쓴다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Optimal TTT is now practical.</strong> The "solve it exactly" version of an RNN memory finally trains as fast as a Transformer and beats one-step RNNs on perplexity, recall, and synthetic ICL.</p><p class="t-ko"><strong>최적 TTT가 이제 실용적.</strong> RNN 메모리를 "정확히 푸는" 버전이 드디어 Transformer만큼 빨리 학습되고, 한 스텝 RNN을 perplexity·recall·합성 ICL에서 능가한다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>One algebra unlocks it.</strong> Reframing a conjugate-gradient step as Gated Linear Attention is the key move — it lets an iterative solver borrow existing efficient kernels.</p><p class="t-ko"><strong>대수 하나가 열쇠.</strong> 켤레기울기 한 스텝을 Gated Linear Attention로 재해석한 것이 핵심 — 반복 솔버가 기존 효율 커널을 빌려 쓸 수 있게 된다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Compute becomes adaptive.</strong> Condition numbers are bimodal across heads, so dynamic CG stopping gives a principled, per-token compute dial — a rare property for fixed-cost RNNs.</p><p class="t-ko"><strong>연산이 적응적.</strong> 헤드별 조건수가 이봉 분포라, 동적 CG 정지가 원리적인 토큰별 연산 다이얼을 제공 — 고정비용 RNN엔 드문 성질.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>A fair-comparison testbed.</strong> Identical backbone/data/params across Mamba2, GLA, xLSTM, DeltaNet, Hawk and MHA makes this one of the cleaner head-to-heads of sequence-mixing layers.</p><p class="t-ko"><strong>공정 비교 테스트베드.</strong> Mamba2·GLA·xLSTM·DeltaNet·Hawk·MHA를 동일 백본/데이터/파라미터로 맞춰, sequence-mixing 층의 보기 드물게 깔끔한 정면 비교.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> "Optimal" is only optimal for a <em>linear</em> least-squares memory — it does not close the gap to full attention on global reasoning, long-context recall, or translation, and a plain Sliding-Window-Attention-1024 control often matches or beats it at very long lengths. And the headline efficiency leans on a CG-as-GLA implementation and TPU/H100 kernels; the extra inference FLOPs are real, just amortized by memory-boundedness during decode. Whether "solve exactly" is worth it over a well-tuned one-step rule at frontier scale remains unproven (≤1B params, ≤50B tokens).</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> "최적"은 어디까지나 <em>선형</em> 최소제곱 메모리에 한해 최적이다 — 글로벌 추론·장문 recall·번역에서 풀 어텐션과의 격차를 메우지 못하고, 단순한 Sliding-Window-Attention-1024 대조군이 아주 긴 길이에선 동등하거나 능가하기도 한다. 또한 핵심 효율성은 CG-as-GLA 구현과 TPU/H100 커널에 기댄다; 추가 추론 FLOPs는 실재하며, 디코드 시 메모리 바운드로 상쇄될 뿐이다. 프런티어 규모에서 잘 튜닝된 한 스텝 규칙 대비 "정확히 풀기"가 값어치 있는지는 아직 미검증(≤1B 파라미터, ≤50B 토큰).</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2506.05233">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2506.05233">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2506.05233">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2506.05233">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

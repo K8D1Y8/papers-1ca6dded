@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Log-Linear Attention</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · Linear Attn</span><span class="t-ko">⚡ Efficient Seq · Linear Attn</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Log-Linear Attention<br><span class="glow t-en">— Between a fixed-size memory and full attention: let the hidden state grow with log T</span><span class="glow t-ko">— 고정 크기 메모리와 전체 어텐션 사이: 은닉 상태를 log T로 키워라</span></h1>
+    <div class="meta">
+      <span>👥 <b>Han Guo</b> <span class="t-en">&amp; Songlin Yang et al.</span><span class="t-ko">· Songlin Yang 외</span></span>
+      <span>🏛 MIT · CMU · Princeton · Together AI</span>
+      <span>🗓 2025.06.05</span>
+      <span>📄 <a href="https://arxiv.org/abs/2506.04761">arXiv:2506.04761</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Linear attention is fast (<b>O(T)</b> compute, <b>O(1)</b> memory) but squeezes all of history into one fixed-size state; softmax attention is expressive but costs <b>O(T²)</b>. Log-Linear Attention replaces the single hidden state with a <span class="hl">logarithmically growing set of states</span> organized by a <b>Fenwick tree</b>: recent tokens stay fine-grained, distant ones are summarized coarsely. The result is <b>O(T log T)</b> compute and <b>O(log T)</b> memory, a matmul-rich parallel form that <b>beats FlashAttention-2 beyond 8K tokens</b>, and consistent gains when bolted onto Mamba-2 and Gated DeltaNet.</p>
+    <p class="t-ko">선형 어텐션은 빠르지만(<b>O(T)</b> 연산, <b>O(1)</b> 메모리) 모든 과거를 하나의 고정 크기 상태에 욱여넣고, softmax 어텐션은 표현력은 좋지만 <b>O(T²)</b> 비용이 든다. Log-Linear Attention은 단일 은닉 상태를 <span class="hl">로그 스케일로 증가하는 상태 집합</span>으로 바꾸고 이를 <b>Fenwick 트리</b>로 조직한다: 최근 토큰은 세밀하게, 먼 토큰은 거칠게 요약한다. 그 결과 <b>O(T log T)</b> 연산과 <b>O(log T)</b> 메모리, 그리고 <b>8K 토큰을 넘으면 FlashAttention-2를 능가</b>하는 matmul 중심 병렬 형태를 얻고, Mamba-2·Gated DeltaNet에 얹으면 일관된 성능 향상을 보인다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The real lever isn't "linear vs. quadratic" — it's how much of the past you can keep without paying quadratic cost.</p>
+    <p class="lead t-ko">진짜 핵심은 "선형이냐 이차냐"가 아니라, 이차 비용 없이 과거를 얼마나 보존하느냐다.</p>
+    <p class="t-en">Linear attention and SSMs (Mamba-2, Gated DeltaNet) win on efficiency by compressing the entire prefix into one fixed-size hidden state — but that single summary fundamentally caps associative recall over long context. Full attention keeps everything but pays O(T²). Log-Linear Attention finds a principled middle ground: instead of one state or T states, keep <strong>O(log T) states</strong> at exponentially growing time scales. The authors show this corresponds to swapping the semiseparable masking matrix of linear attention for a <strong>hierarchical (HODLR-type) matrix</strong>, which still admits a sub-quadratic, hardware-friendly training algorithm.</p>
+    <p class="t-ko">선형 어텐션과 SSM(Mamba-2, Gated DeltaNet)은 전체 프리픽스를 하나의 고정 크기 은닉 상태로 압축해 효율을 얻지만, 그 단일 요약이 긴 문맥에서의 연상 회상(associative recall)을 근본적으로 제한한다. 전체 어텐션은 모든 것을 보존하지만 O(T²)를 치른다. Log-Linear Attention은 원칙적인 중간 지점을 찾는다: 상태 1개도 T개도 아닌, 지수적으로 커지는 시간 스케일 위에 <strong>O(log T)개의 상태</strong>를 유지한다. 저자들은 이것이 선형 어텐션의 semiseparable 마스킹 행렬을 <strong>계층적(HODLR형) 행렬</strong>로 교체하는 것에 해당하며, 그럼에도 하위 이차(sub-quadratic)이고 하드웨어 친화적인 학습 알고리즘이 가능함을 보인다.</p>
+    <figure class="fig">
+      <img src="fig/2506.04761/fig1.png" alt="Decomposition of the hierarchical matrix M_H into levels, and the chunkwise parallel algorithm">
+      <figcaption class="t-en"><b>Figure 3.</b> Left: the hierarchical mask M<sub>H</sub> decomposes into a block-diagonal Level 0 plus block-low-rank Levels 1–3. Right: the chunkwise parallel scan runs one independent scan per memory level, each handling an exponentially larger time scale.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> 왼쪽: 계층적 마스크 M<sub>H</sub>는 블록 대각인 Level 0과 블록 저랭크인 Level 1~3으로 분해된다. 오른쪽: chunkwise 병렬 스캔은 메모리 레벨마다 독립적인 스캔을 돌리며, 각 레벨은 지수적으로 더 큰 시간 스케일을 담당한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2506.04761</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">O(T log T)</div><div class="l"><span class="t-en">Training compute<br>(vs. O(T²) softmax)</span><span class="t-ko">학습 연산량<br>(softmax의 O(T²) 대비)</span></div></div>
+      <div class="stat"><div class="n">O(log T)</div><div class="l"><span class="t-en">Decoding memory<br>(vs. O(1) linear, O(T) softmax)</span><span class="t-ko">디코딩 메모리<br>(선형 O(1)·softmax O(T) 대비)</span></div></div>
+      <div class="stat"><div class="n">8K</div><div class="l"><span class="t-en">Seq length beyond which kernel<br>beats FlashAttention-2 (fwd+bwd)</span><span class="t-ko">이 길이를 넘으면 커널이<br>FlashAttention-2(fwd+bwd) 능가</span></div></div>
+      <div class="stat"><div class="n">32K</div><div class="l"><span class="t-en">Seq length where Log-Linear Mamba-2<br>surpasses Transformer throughput</span><span class="t-ko">Log-Linear Mamba-2가 Transformer<br>처리량을 추월하는 시퀀스 길이</span></div></div>
+      <div class="stat"><div class="n">18.09</div><div class="l"><span class="t-en">LAMBADA ppl, Log-Linear Gated<br>DeltaNet (19.71 → 18.09)</span><span class="t-ko">LAMBADA ppl, Log-Linear Gated<br>DeltaNet (19.71 → 18.09)</span></div></div>
+      <div class="stat"><div class="n">&gt;99%</div><div class="l"><span class="t-en">MQAR accuracy reached by<br>log-linear variants</span><span class="t-ko">log-linear 변형이 도달한<br>MQAR 정확도</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — log-linear lifts both backbones</span><span class="t-ko">결과 — 두 백본 모두를 끌어올린다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> WikiText / LAMBADA perplexity (↓) and LM-Eval commonsense average (↑). Adding the log-linear mask improves both metrics for each backbone.</caption>
+        <caption class="t-ko"><b>Table 3.</b> WikiText / LAMBADA 퍼플렉시티(↓)와 LM-Eval 상식 추론 평균(↑). log-linear 마스크 추가가 각 백본의 두 지표 모두를 개선한다.</caption>
+        <thead><tr><th>Model</th><th>Wiki. ppl ↓</th><th>LMB. ppl ↓</th><th>LMEval avg ↑</th></tr></thead>
+        <tbody>
+          <tr><td>Transformer</td><td>21.56</td><td>22.14</td><td>44.0</td></tr>
+          <tr><td>Mamba-2</td><td>22.44</td><td>24.14</td><td>44.8</td></tr>
+          <tr><td>&nbsp;&nbsp;w/ Log-Linear</td><td class="up">22.11</td><td class="up">21.86</td><td class="up">44.9</td></tr>
+          <tr><td>Gated DeltaNet</td><td>21.73</td><td>19.71</td><td>45.0</td></tr>
+          <tr><td>&nbsp;&nbsp;w/ Log-Linear</td><td class="up">21.45</td><td class="up">18.09</td><td class="up">45.5</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Linear attention</span><span class="t-ko">선형 어텐션</span></div>
+          <div class="sub"><span class="t-en">1 fixed state</span><span class="t-ko">고정 상태 1개</span></div>
+          <div class="latent"><span class="t-en">O(1) memory · limited recall</span><span class="t-ko">O(1) 메모리 · 회상 제한</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Log-Linear</span><span class="t-ko">Log-Linear</span></div>
+          <div class="sub"><span class="t-en">Fenwick-tree buckets</span><span class="t-ko">Fenwick 트리 버킷</span></div>
+          <div class="latent"><span class="t-en">O(log T) states · multi-scale</span><span class="t-ko">O(log T) 상태 · 다중 스케일</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Softmax attention</span><span class="t-ko">Softmax 어텐션</span></div>
+          <div class="sub"><span class="t-en">T states (all tokens)</span><span class="t-ko">T개 상태(전체 토큰)</span></div>
+          <div class="latent"><span class="t-en">O(T²) compute · full recall</span><span class="t-ko">O(T²) 연산 · 완전 회상</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>One knob between two extremes</b> — buckets grow exponentially in size (1, 2, 4, …), so memory and compute grow only logarithmically while distant context is still retained, just coarsely.</div>
+      <div class="cap t-ko"><b>두 극단 사이의 하나의 다이얼</b> — 버킷 크기가 지수적으로 커지므로(1, 2, 4, …) 메모리·연산은 로그로만 증가하고, 먼 문맥도 거칠게나마 계속 보존된다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core idea, in two pieces</span><span class="t-ko">핵심 아이디어, 두 조각</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 다중 스케일 메모리</span>
+        <h3>Fenwick-tree buckets</h3>
+        <p class="t-en">Partition the prefix [0, t) into disjoint buckets of exponentially increasing size via a Fenwick (binary-indexed) tree, giving <span class="term">O(log T)</span> buckets. Each bucket ℓ keeps its own recurrent state S<sub>t</sub><sup>(ℓ)</sup>, and the output sums them with data-dependent weights λ<sub>t</sub><sup>(ℓ)</sup>. If all λ are equal, it collapses back to plain linear attention.</p>
+        <p class="t-ko">프리픽스 [0, t)를 Fenwick(이진 인덱스) 트리로 지수적으로 커지는 서로소 버킷들로 분할해 <span class="term">O(log T)</span>개의 버킷을 만든다. 각 버킷 ℓ은 자체 순환 상태 S<sub>t</sub><sup>(ℓ)</sup>를 유지하고, 출력은 데이터 의존 가중치 λ<sub>t</sub><sup>(ℓ)</sup>로 이들을 합산한다. 모든 λ가 같으면 평범한 선형 어텐션으로 환원된다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 구조화된 행렬</span>
+        <h3>Hierarchical mask M<sub>H</sub></h3>
+        <p class="t-en">In parallel form the bucketing becomes <span class="term">O = (QKᵀ ⊙ M<sub>H</sub>) V</span>, where M<sub>H</sub> is a hierarchical (HODLR / "quasi-H") matrix. Because the elementwise product of a semiseparable matrix and an H-matrix is still an H-matrix, the same trick drops straight into Mamba-2's gated mask and Gated DeltaNet's delta-rule mask.</p>
+        <p class="t-ko">병렬 형태에서 버킷화는 <span class="term">O = (QKᵀ ⊙ M<sub>H</sub>) V</span>가 되며, 여기서 M<sub>H</sub>는 계층적(HODLR/"준-H") 행렬이다. semiseparable 행렬과 H-행렬의 원소별 곱이 여전히 H-행렬이므로, 같은 기법이 Mamba-2의 게이트 마스크와 Gated DeltaNet의 delta-rule 마스크에 그대로 끼워진다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Bucket the past</span><span class="t-ko">과거를 버킷화</span></b><span class="t-en">A Fenwick-tree decomposition splits the prefix into O(log T) buckets of size 1, 2, 4, …, keeping recent tokens at fine resolution and older ones coarsely summarized.</span><span class="t-ko">Fenwick 트리 분해가 프리픽스를 크기 1, 2, 4, …인 O(log T)개의 버킷으로 나눠, 최근 토큰은 세밀하게 오래된 토큰은 거칠게 요약한다.</span></li>
+      <li><b><span class="t-en">Weight each scale</span><span class="t-ko">스케일별 가중</span></b><span class="t-en">A non-negative, data-dependent coefficient λ<sub>t</sub><sup>(ℓ)</sup> (a linear function of x<sub>t</sub>) decides how much each temporal scale contributes to the output.</span><span class="t-ko">비음(non-negative)이며 데이터 의존인 계수 λ<sub>t</sub><sup>(ℓ)</sup>(x<sub>t</sub>의 선형 함수)가 각 시간 스케일이 출력에 기여하는 정도를 결정한다.</span></li>
+      <li><b><span class="t-en">Train via chunkwise scan</span><span class="t-ko">chunkwise 스캔으로 학습</span></b><span class="t-en">Decompose M<sub>H</sub> into a block-diagonal intra-chunk part plus block-low-rank inter-chunk parts; run O(log T) independent parallel scans, fused in custom Triton kernels.</span><span class="t-ko">M<sub>H</sub>를 블록 대각인 chunk 내부 항과 블록 저랭크인 chunk 간 항으로 분해하고, O(log T)개의 독립 병렬 스캔을 돌려 커스텀 Triton 커널에서 융합한다.</span></li>
+      <li><b><span class="t-en">Decode in log-time</span><span class="t-ko">로그 시간 디코딩</span></b><span class="t-en">At inference, a Fenwick-like recurrence merges and promotes buckets based on the least-significant set bit of t, giving O(log T) time and memory per step.</span><span class="t-ko">추론 시에는 t의 최하위 set 비트에 따라 버킷을 병합·승격하는 Fenwick형 순환을 써서, 스텝당 O(log T) 시간·메모리를 달성한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>A new point on the efficiency–expressivity frontier.</strong> O(T log T) compute and O(log T) memory sit cleanly between linear and softmax attention, with a real kernel that beats FlashAttention-2 past 8K.</p><p class="t-ko"><strong>효율–표현력 곡선 위의 새 지점.</strong> O(T log T) 연산과 O(log T) 메모리는 선형과 softmax 어텐션 사이에 깔끔히 자리하며, 8K를 넘으면 FlashAttention-2를 실제로 능가하는 커널이 있다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>It's a drop-in upgrade, not a new model.</strong> The hierarchical mask composes with existing semiseparable masks, so Mamba-2 and Gated DeltaNet both improve without redesign.</p><p class="t-ko"><strong>새 모델이 아니라 끼워넣는 업그레이드.</strong> 계층적 마스크가 기존 semiseparable 마스크와 결합되어, 재설계 없이 Mamba-2와 Gated DeltaNet 모두 향상된다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Structured-matrix theory pays off.</strong> Framing the mask as a HODLR matrix is what unlocks both the sub-quadratic training algorithm and the log-memory decoder.</p><p class="t-ko"><strong>구조화 행렬 이론의 결실.</strong> 마스크를 HODLR 행렬로 본 것이 하위 이차 학습 알고리즘과 로그 메모리 디코더를 동시에 가능하게 한 열쇠다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The gains over strong linear baselines are real but modest (e.g., Wiki ppl 22.44 → 22.11; LMEval 44.8 → 44.9 for Mamba-2), and a gap to a parameter-matched Transformer remains. The Fenwick partitioning bakes in a recency-biased inductive prior that may not suit every task, and the engineering cost — bespoke intra-chunk kernels and a more intricate backward pass — is substantially higher than vanilla linear attention.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 강한 선형 베이스라인 대비 향상은 실재하지만 작다(예: Mamba-2의 Wiki ppl 22.44 → 22.11, LMEval 44.8 → 44.9). 파라미터 매칭 Transformer와의 격차도 남아 있다. Fenwick 분할은 최근성 편향의 귀납적 사전을 내장하므로 모든 과제에 맞지 않을 수 있고, 엔지니어링 비용(전용 chunk 내부 커널과 더 복잡한 역전파)은 평범한 선형 어텐션보다 상당히 크다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2506.04761">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2506.04761">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2506.04761">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2506.04761">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
