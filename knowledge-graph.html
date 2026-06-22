@@ -76,14 +76,16 @@ const DATA = {
         ['DroidSpeak','method','KV-cache sharing for cross-LLM communication','2411.02820'],
         ['KVCOMM','method','Online cross-context KV-cache communication between agents','2510.12872'],
         ['Latent-space agents','method','Agents communicate fully in latent space, no tokens','2511.09149'],
-        ['LCGuard','method','Safety guard for shared KV latent communication','2605.22863'] ]},
+        ['LCGuard','method','Safety guard for shared KV latent communication','2605.22863'],
+        ['Dual Latent Memory','method','Shared dual latent memories across a visual multi-agent system (L2-VMAS) · ICML 2026','2602.00471'] ]},
       { name:'Efficient MAS Serving', blurb:'Cache reuse, prefix sharing and compression to cut MAS cost.', nodes:[
         ['KVFlow','method','Prefix caching that accelerates multi-agent workflows','2507.07400'],
         ['TokenDance','method','Collective KV-cache sharing for scalable serving','2604.03143'],
         ['LRAgent','method','Efficient KV-cache sharing across multi-LoRA agents','2602.01053'],
         ['xKV','method','Cross-layer KV compression via aligned singular vectors','2503.18893'],
         ['KV-cache eviction','concept','Drop low-value cache entries to fit memory','2512.14946'],
-        ['Prefix caching','concept','Reuse KV of shared context prefixes','2509.16857'] ]},
+        ['Prefix caching','concept','Reuse KV of shared context prefixes','2509.16857'],
+        ['E-mem','method','Multi-agent episodic context reconstruction for long-term agent memory · ICML 2026','2601.21714'] ]},
       { name:'Protocols & Topology', blurb:'Message formats and communication graphs for text-based collaboration.', nodes:[
         ['A2A protocol','concept','Agent-to-Agent standard for task delegation','2505.02279'],
         ['Agora','method','Scalable communication protocol for LLM networks','2410.11905'],
@@ -111,14 +113,16 @@ const DATA = {
         ['Mamba','model','Selective SSM with input-dependent gating','2312.00752'],
         ['Mamba-2 / SSD','model','State space duality linking SSMs and attention','2405.21060'],
         ['Mamba-3','model','Improved SSM for inference-efficient quality','2603.15569'],
-        ['Hyena','method','Implicit long convolutions replacing attention','2302.10866'] ]},
+        ['Hyena','method','Implicit long convolutions replacing attention','2302.10866'],
+        ['GHOST','method','Structured pruning of Mamba-2 states via a balanced-truncation proxy · ICML 2026','2602.11408'] ]},
       { name:'Linear Attention & Delta Rule', blurb:'Matrix-state attention and delta-rule updates, chunked training.', nodes:[
         ['GLA','method','Gated linear attention, hardware-efficient chunked training','2312.06635'],
         ['DeltaNet','method','Delta-rule linear transformer parallelized over length','2406.06484'],
         ['Gated DeltaNet','model','Delta rule plus gating improving recall','2412.06464'],
         ['Based','method','Linear attention + sliding window balancing recall','2402.18668'],
         ['Log-Linear Attention','method','Log-state attention between linear and full','2506.04761'],
-        ['TTT','method','Test-time-training layers with learnable hidden states','2407.04620'] ]},
+        ['TTT','method','Test-time-training layers with learnable hidden states','2407.04620'],
+        ['TTT KV-Binding','method','Test-time training with KV binding is secretly learned linear attention · ICML 2026','2602.21204'] ]},
       { name:'Recurrent Alternatives', blurb:'RNN-style and retention-based transformer successors.', nodes:[
         ['RetNet','model','Retention with parallel, recurrent, chunkwise forms','2307.08621'],
         ['RWKV-7','model','Receptance weighted key-value, dynamic state','2503.14456'],
@@ -136,7 +140,8 @@ const DATA = {
         ['Liger','method','Linearizing pretrained LLMs into gated recurrence','2503.01496'],
         ['MQAR','benchmark','Multi-query associative recall probing memory','2312.04927'],
         ['Long Range Arena','benchmark','Benchmark suite for long-sequence models','2011.04006'],
-        ['Recall-throughput tradeoff','concept','Fixed-state recurrence trades recall for speed','2402.18668'] ]} ]},
+        ['Recall-throughput tradeoff','concept','Fixed-state recurrence trades recall for speed','2402.18668'],
+        ['Retrieval-Aware Distillation','method','Keep ~2% retrieval heads as attention, distill the rest to SSM · ICML 2026','2602.11374'] ]} ]},
 
     { key:'comp', subs:[
       { name:'Quantization', blurb:'Low-bit weights/activations, taming outliers via scaling/rotation.', nodes:[
@@ -145,21 +150,24 @@ const DATA = {
         ['SmoothQuant','method','Shifts activation outliers into weights, W8A8','2211.10438'],
         ['QuIP#','method','Hadamard incoherence + lattice codebooks, 2-bit','2402.04396'],
         ['SpinQuant','method','Learned rotations remove outliers, low-bit PTQ','2405.16406'],
-        ['QuaRot','concept','Hadamard rotation enables outlier-free 4-bit','2404.00456'] ]},
+        ['QuaRot','concept','Hadamard rotation enables outlier-free 4-bit','2404.00456'],
+        ['ReQAT','method','FP4 (W4A4KV4) quantization-aware training recovering BF16 reasoning accuracy · ICML 2026 Oral','2606.15682'] ]},
       { name:'Pruning & Sparsity', blurb:'Remove weights, neurons or layers by importance.', nodes:[
         ['SparseGPT','method','One-shot 50% unstructured pruning, no retrain','2301.00774'],
         ['Wanda','method','Prune by magnitude times input activation norm','2306.11695'],
         ['LLM-Pruner','method','Gradient-based structured pruning of groups','2305.11627'],
         ['Sheared LLaMA','method','Targeted structured pruning + continued pretrain','2310.06694'],
         ['ShortGPT','concept','Drop redundant layers by block influence','2403.03853'],
-        ['N:M sparsity','concept','Hardware-friendly fine-grained sparse patterns',''] ]},
+        ['N:M sparsity','concept','Hardware-friendly fine-grained sparse patterns',''],
+        ['GHOST','method','Structured pruning of Mamba-2 states via a balanced-truncation proxy · ICML 2026','2602.11408'] ]},
       { name:'Low-Rank Decomposition', blurb:'Factorize weights into low-rank products via activation/loss-aware SVD.', nodes:[
         ['ASVD','method','Activation-aware SVD for post-training compression','2312.05821'],
         ['SVD-LLM','method','Truncation-aware SVD linking singulars to loss','2403.07378'],
         ['FWSVD','method','Fisher-weighted SVD prioritizing important params','2207.00112'],
         ['LoRA','method','Low-rank adapters for parameter-efficient finetune','2106.09685'],
         ['QLoRA','method','4-bit quantized base model with LoRA adapters','2305.14314'],
-        ['Adaptive rank allocation','concept','Per-layer rank budgeting for SVD','2510.19389'] ]},
+        ['Adaptive rank allocation','concept','Per-layer rank budgeting for SVD','2510.19389'],
+        ['Swift-SVD','method','Closed-form activation-aware SVD compressing weights and KV cache · ICML 2026','2604.01609'] ]},
       { name:'Knowledge Distillation', blurb:'Transfer teacher behavior into a smaller student.', nodes:[
         ['MiniLLM','method','Reverse-KL on-policy white-box distillation','2306.08543'],
         ['GKD','method','Generalized on-policy distillation over samples','2306.13649'],
@@ -172,7 +180,8 @@ const DATA = {
         ['SnapKV','method','Prompt-time KV selection from attention','2404.14469'],
         ['KIVI','method','Tuning-free asymmetric 2-bit KV quantization','2402.02750'],
         ['MLA','concept','Multi-head latent attention compresses KV low-rank','2405.04434'],
-        ['PyramidKV','method','Layer-wise pyramidal KV budget allocation','2406.02069'] ]} ]},
+        ['PyramidKV','method','Layer-wise pyramidal KV budget allocation','2406.02069'],
+        ['CriticalKV','method','KV-cache eviction from an attention-output perturbation bound · ICML 2026','2502.03805'] ]} ]},
 
     { key:'world', subs:[
       { name:'World-Model Foundations', blurb:'Single-agent latent-dynamics models that train policies in imagination.', nodes:[
@@ -181,7 +190,9 @@ const DATA = {
         ['DIAMOND','model','Diffusion world model preserving visual detail','2405.12399'],
         ['TD-MPC2','method','Decoder-free latent model-predictive control','2310.16828'],
         ['Dreamer-4','model','Training agents inside scalable video world models','2509.24527'],
-        ['Imagination training','concept','Policy learning from rollouts in a learned model',''] ]},
+        ['Imagination training','concept','Policy learning from rollouts in a learned model',''],
+        ['VLAW','method','VLA policy and a video world model iteratively co-improve via synthetic rollouts · ICML 2026','2602.12063'],
+        ['Latent Action World Models','method','Learn continuous latent actions from unlabeled in-the-wild video · ICML 2026','2601.05230'] ]},
       { name:'Multi-Agent World Models', blurb:'Model-based MARL with shared/factored latent dynamics.', nodes:[
         ['CoDreamer','method','Decentralized world models with learned comm','2406.13600'],
         ['COMBO','method','Compositional world models for embodied cooperation','2404.10775'],
@@ -222,7 +233,19 @@ const DATA = {
     ['CoDreamer','Latent-space agents','inter-agent latent comm'],
     ['MAMBA','DreamerV3','imagination-based MARL'],
     ['TD-MPC2','Coconut','decoder-free latent rollout'],
-    ['MLA','Adaptive rank allocation','per-layer rank budgeting']
+    ['MLA','Adaptive rank allocation','per-layer rank budgeting'],
+    ['ReQAT','CriticalKV','both compress the KV cache (W4A4KV4)'],
+    ['ReQAT','MLA','low-bit / low-rank KV cache'],
+    ['Swift-SVD','SVD-LLM','truncation-aware low-rank SVD'],
+    ['Swift-SVD','MLA','low-rank KV-cache compression'],
+    ['CriticalKV','H2O','heavy-hitter KV eviction lineage'],
+    ['Retrieval-Aware Distillation','MOHAWK','attention-to-SSM distillation'],
+    ['TTT KV-Binding','TTT','TTT layers viewed as linear attention'],
+    ['GHOST','Mamba-2 / SSD','prune Mamba-2 state dimensions'],
+    ['Dual Latent Memory','LatentMAS','shared latent multi-agent collaboration'],
+    ['E-mem','KV-cache reuse','memory-efficient multi-agent recall'],
+    ['VLAW','DreamerV3','train a policy inside a learned world model'],
+    ['Latent Action World Models','Genie','latent-action generative world model']
   ]
 };
 

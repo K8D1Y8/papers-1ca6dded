@@ -165,25 +165,36 @@
   render();
 })();
 
-// archive index: "All / ⭐ Must Read" tab (Must Read = papers you rated ⭐ Must-read, from localStorage)
+// archive index tabs: All (hides "Not interested") / Must Read / Not interested. Ratings live in localStorage (this device).
 (function () {
   var tabs = document.querySelector('.tabs');
   var list = document.querySelector('.list');
   if (!tabs || !list) return;
   var rows = [].slice.call(list.querySelectorAll('.rowwrap'));
-  var empty = document.querySelector('.mr-empty');
-  function rated4(ax) { try { return localStorage.getItem('paper-rating:' + ax) === '4'; } catch (e) { return false; } }
+  var empties = {
+    mustread: document.querySelector('.mr-empty'),
+    hidden: document.querySelector('.ni-empty')
+  };
+  function rating(ax) { try { return localStorage.getItem('paper-rating:' + ax); } catch (e) { return null; } }
+  function shownIn(mode, r) {
+    var rt = rating(r.getAttribute('data-arxiv'));
+    if (mode === 'mustread') return rt === '4' || r.getAttribute('data-full') === '1';
+    if (mode === 'hidden') return rt === '1';            // "Not interested" bucket
+    return rt !== '1';                                    // 'all' = everything except Not interested
+  }
   function apply(mode) {
     var n = 0;
     rows.forEach(function (r) {
-      var show = (mode === 'all') || rated4(r.getAttribute('data-arxiv')) || r.getAttribute('data-full') === '1';
+      var show = shownIn(mode, r);
       r.style.display = show ? '' : 'none';
       if (show) n++;
     });
     [].slice.call(tabs.querySelectorAll('.tab')).forEach(function (t) {
       t.classList.toggle('on', t.getAttribute('data-mode') === mode);
     });
-    if (empty) empty.style.display = (mode === 'mustread' && n === 0) ? 'block' : 'none';
+    Object.keys(empties).forEach(function (k) {
+      if (empties[k]) empties[k].style.display = (mode === k && n === 0) ? 'block' : 'none';
+    });
   }
   [].slice.call(tabs.querySelectorAll('.tab')).forEach(function (t) {
     t.addEventListener('click', function () { apply(t.getAttribute('data-mode')); });
