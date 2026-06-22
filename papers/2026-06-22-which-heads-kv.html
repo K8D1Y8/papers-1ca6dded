@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Which Heads Matter for Reasoning? RL-Guided KV Cache Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Compression · KV Eviction</span><span class="t-ko">🗜 Compression · KV Eviction</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Which Heads Matter for Reasoning? RL-Guided KV Cache Compression<br>
+      <span class="glow t-en">— Let RL probe the model and tell you which attention heads to keep</span>
+      <span class="glow t-ko">— RL로 모델을 찔러보고, '살릴 헤드'를 직접 알아내라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Wenjie Du</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 Westlake University · McGill · Mila</span>
+      <span>🗓 2025.10.09</span>
+      <span>📄 <a href="https://arxiv.org/abs/2510.08525">arXiv:2510.08525</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Reasoning LLMs write very long chain-of-thought, blowing up the KV cache — and generic compression silently breaks the reasoning. RLKV uses <span class="hl">reinforcement learning as a probe</span>: it adds one learnable gate per attention head, then optimizes those gates with GRPO so that the model still answers correctly under sparsity. The heads RL refuses to compress are the <b>reasoning-critical heads</b>. Keeping only those at full cache yields <b>20–60% KV reduction with near-lossless accuracy</b> and up to <b>2.06× end-to-end speedup</b>, beating token-dropping (H2O, R-KV) and head-reallocation (DuoAttention, KVZip) baselines by up to <b>20 points</b>.</p>
+    <p class="t-ko">추론 LLM은 매우 긴 chain-of-thought를 쓰면서 KV 캐시가 폭증하고, 일반 압축은 추론을 조용히 망가뜨린다. RLKV는 <span class="hl">강화학습을 '탐침(probe)'으로</span> 사용한다 — 헤드마다 학습 가능한 게이트를 하나씩 달고, GRPO로 그 게이트를 최적화해 희소성 하에서도 정답을 유지하게 한다. RL이 끝까지 압축하지 않은 헤드가 바로 <b>추론에 결정적인 헤드</b>다. 그 헤드만 full 캐시로 두면 <b>20~60% KV 절감에 무손실에 가까운 정확도</b>와 최대 <b>2.06× 종단 속도향상</b>을 얻고, token-dropping(H2O, R-KV)·head-reallocation(DuoAttention, KVZip) 기준선을 최대 <b>20점</b> 앞선다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Reasoning breaks in a different way than retrieval — so you must find the heads that carry the reasoning, not the heads that carry recall.</p>
+    <p class="lead t-ko">추론은 검색(retrieval)과는 다른 방식으로 무너진다 — 그래서 '기억을 나르는 헤드'가 아니라 '추론을 나르는 헤드'를 찾아야 한다.</p>
+    <p class="t-en">Long chain-of-thought makes the KV cache the deployment bottleneck, but reasoning chains are fragile: drop the wrong intermediate state and the model spirals into repetitive loops. Token-dropping methods (H2O, R-KV) evict states by local importance and disrupt the chain. Head-reallocation methods (DuoAttention, KVZip) keep "important" heads — but their importance scores come from <strong>retrieval</strong> tasks, so they preserve recall heads while the heads that actually keep reasoning consistent and know <em>when to stop</em> get compressed, producing fluent-but-endless wrong answers. RLKV reframes the question as: <strong>directly observe which heads, when starved of cache, cause the answer to go wrong</strong> — and let on-policy RL discover them.</p>
+    <p class="t-ko">긴 CoT는 KV 캐시를 배포 병목으로 만들지만, 추론 사슬은 깨지기 쉽다 — 엉뚱한 중간 상태를 버리면 모델은 반복 루프로 빠진다. Token-dropping(H2O, R-KV)은 지역적 중요도로 상태를 퇴출해 사슬을 끊는다. Head-reallocation(DuoAttention, KVZip)은 '중요한' 헤드를 살리지만, 그 중요도는 <strong>검색</strong> 과제에서 나온 것이라 recall 헤드만 보존하고, 정작 추론 일관성과 <em>언제 멈출지</em>를 쥔 헤드는 압축돼 '유창하지만 끝없는 오답'을 낳는다. RLKV는 질문을 바꾼다 — <strong>어떤 헤드가 캐시를 굶기면 정답을 망치는가를 직접 관찰</strong>하고, on-policy RL이 그것을 스스로 찾게 한다.</p>
+    <figure class="fig">
+      <img src="fig/2510.08525/fig1.png" alt="RLKV overview: per-head gating mixes sink+local and full attention, optimized by a GRPO reward-plus-L1 pipeline">
+      <figcaption class="t-en"><b>Figure 2.</b> RLKV overview. Each head's attention is a gated mix of <i>sink+local</i> (compressed) and <i>full</i> attention via a learnable α. RL samples reasoning rollouts, rewards correct answers, and an L1 penalty pushes α toward sparsity — so only reasoning-critical heads keep α high.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> RLKV 개요. 각 헤드의 어텐션은 학습 가능한 α로 <i>sink+local</i>(압축)과 <i>full</i> 어텐션을 섞는다. RL이 추론 rollout을 샘플링해 정답에 보상을 주고, L1 패널티가 α를 희소화 — 추론에 결정적인 헤드만 α가 높게 남는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2510.08525</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">20–60%</div><div class="l"><span class="t-en">KV cache reduction<br>at near-lossless accuracy</span><span class="t-ko">KV 캐시 절감<br>무손실에 가까운 정확도로</span></div></div>
+      <div class="stat"><div class="n">2.06×</div><div class="l"><span class="t-en">End-to-end speedup<br>(SGLang, sp=0.6)</span><span class="t-ko">종단 속도향상<br>(SGLang, sp=0.6)</span></div></div>
+      <div class="stat"><div class="n">+20</div><div class="l"><span class="t-en">Points over baselines<br>at high sparsity (max)</span><span class="t-ko">기준선 대비 최대<br>높은 희소성에서(점)</span></div></div>
+      <div class="stat"><div class="n">+6.7</div><div class="l"><span class="t-en">AIME24 gain over Full<br>(Qwen-2.5-7B-R1, sp=0.2)</span><span class="t-ko">AIME24 Full 대비 향상<br>(Qwen-2.5-7B-R1, sp=0.2)</span></div></div>
+      <div class="stat"><div class="n">8K → 70K</div><div class="l"><span class="t-en">Train rollout → eval context<br>(LongReason transfer)</span><span class="t-ko">학습 rollout → 평가 컨텍스트<br>(LongReason 전이)</span></div></div>
+      <div class="stat"><div class="n">3,000</div><div class="l"><span class="t-en">Self-distilled math problems<br>(from DeepScaleR)</span><span class="t-ko">자기증류 수학 문제<br>(DeepScaleR에서)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — keep the right heads, beat the baselines</span><span class="t-ko">결과 — 맞는 헤드만 살리면 기준선을 이긴다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> RLKV accuracy (%) at its near-lossless sparsity threshold; (Δ vs. Full, sparsity sp). RLKV often matches or <b>exceeds</b> the full-cache baseline while dropping 20–60% of the cache.</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> 무손실에 가까운 희소성 임계에서 RLKV 정확도(%); (Full 대비 Δ, 희소성 sp). 캐시를 20~60% 줄이고도 full 기준선과 동등하거나 <b>능가</b>.</caption>
+        <thead><tr><th>Benchmark</th><th>Llama-3.1-8B-R1</th><th>Qwen-2.5-7B-R1</th><th>Qwen-3-4B-Thinking</th></tr></thead>
+        <tbody>
+          <tr><td>GSM8K</td><td>86.8 (−2.4, sp=0.4)</td><td class="up">90.1 (+1.0, sp=0.4)</td><td>94.4 (−0.7, sp=0.4)</td></tr>
+          <tr><td>Math500</td><td class="up">84.6 (+1.6, sp=0.4)</td><td>86.0 (−1.8, sp=0.4)</td><td>75.6 (−2.0, sp=0.6)</td></tr>
+          <tr><td>AIME24</td><td class="up">40.0 (+3.3, sp=0.4)</td><td class="up">50.0 (+6.7, sp=0.2)</td><td class="up">50.0 (+6.7, sp=0.4)</td></tr>
+          <tr><td>MBPP</td><td class="up">63.8 (+1.2, sp=0.4)</td><td>63.2 (+0.0, sp=0.2)</td><td>81.0 (−0.2, sp=0.4)</td></tr>
+          <tr><td>MMLU-Pro (CS)</td><td class="up">47.8 (+0.7, sp=0.2)</td><td>50.7 (−2.7, sp=0.5)</td><td class="up">60.7 (+7.0, sp=0.6)</td></tr>
+          <tr><td>MMLU-Pro (Chem.)</td><td>40.0 (−0.2, sp=0.4)</td><td class="up">53.2 (+2.2, sp=0.4)</td><td class="up">74.2 (+5.8, sp=0.4)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Per-head gate α</span><span class="t-ko">헤드별 게이트 α</span></div>
+          <div class="sub"><span class="t-en">mix full ↔ sink+local</span><span class="t-ko">full ↔ sink+local 혼합</span></div>
+          <div class="latent">L × H params</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">GRPO probe</span><span class="t-ko">GRPO 탐침</span></div>
+          <div class="sub"><span class="t-en">reward = correct answer + L1 sparsity</span><span class="t-ko">보상 = 정답 + L1 희소성</span></div>
+          <div class="latent"><span class="t-en">LLM frozen, only α trains</span><span class="t-ko">LLM 동결, α만 학습</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Critical heads</span><span class="t-ko">결정적 헤드</span></div>
+          <div class="sub"><span class="t-en">high-α heads → full cache</span><span class="t-ko">α 높은 헤드 → full 캐시</span></div>
+          <div class="latent"><span class="t-en">rest → sink+local only</span><span class="t-ko">나머지 → sink+local만</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>RL as a probe, not a trainer.</b> The model weights stay frozen; RL only learns which heads <em>must</em> keep their full KV to still answer correctly. Reward = answer correctness, L1 = pressure to compress everything else.</div>
+      <div class="cap t-ko"><b>RL은 학습기가 아니라 탐침.</b> 모델 가중치는 동결, RL은 '정답을 유지하려면 full KV를 반드시 지켜야 하는' 헤드만 학습한다. 보상 = 정답 여부, L1 = 나머지를 모두 압축하라는 압력.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: use RL outcomes to define "critical"</span><span class="t-ko">아이디어: '결정적'을 RL 결과로 정의한다</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 혼합 어텐션 게이트</span>
+        <h3>Mixed Attention with Gating Adapters</h3>
+        <p class="t-en">Each head <span class="term">(l, h)</span> gets a scalar <span class="term">α ∈ [0,1]</span>: output = α·full + (1−α)·local, where local attention keeps only constant sink + recent tokens. This shrinks the search space to just <span class="term">L × H</span> gates, with all LLM weights frozen.</p>
+        <p class="t-ko">각 헤드 <span class="term">(l, h)</span>에 스칼라 <span class="term">α ∈ [0,1]</span>를 둔다 — 출력 = α·full + (1−α)·local, local은 고정 sink + 최근 토큰만 유지. 탐색 공간이 <span class="term">L × H</span> 게이트로 줄고, LLM 가중치는 모두 동결.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 안정화된 RL</span>
+        <h3>GRPO + adaptive L1, stabilized</h3>
+        <p class="t-en">GRPO maximizes answer-correctness reward with an <span class="term">L1 penalty</span> driving α→0. To stop the sparse-reward / dense-penalty collapse, RLKV uses <span class="term">self-distillation sampling</span> (train on problems the model already solves) and <span class="term">adaptive penalty weighting</span> (β shrinks, or hard-cuts off below threshold τ, when reward drops). KL penalty is dropped since weights are frozen.</p>
+        <p class="t-ko">GRPO가 정답 보상을 최대화하고 <span class="term">L1 패널티</span>가 α→0으로 민다. 희소 보상 / 조밀 패널티 붕괴를 막기 위해 <span class="term">자기증류 샘플링</span>(모델이 이미 푸는 문제로 학습)과 <span class="term">적응적 패널티 가중</span>(보상이 떨어지면 β 감소, 임계 τ 미만이면 완전 차단)을 쓴다. 가중치가 동결이라 KL 패널티는 제거.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Attach a gate per head</span><span class="t-ko">헤드마다 게이트 부착</span></b><span class="t-en">Add one learnable α per attention head that mixes full attention with a cheap sink+local window — only L×H new parameters, LLM frozen.</span><span class="t-ko">어텐션 헤드마다 full 어텐션과 값싼 sink+local 윈도를 섞는 학습 가능한 α를 하나 추가 — 새 파라미터는 L×H개뿐, LLM은 동결.</span></li>
+      <li><b><span class="t-en">Probe with on-policy RL</span><span class="t-ko">on-policy RL로 탐침</span></b><span class="t-en">Sample reasoning rollouts, reward correct final answers (GRPO), and apply an L1 penalty so α collapses to 0 for any head the model can do without.</span><span class="t-ko">추론 rollout을 샘플링하고 최종 정답에 보상(GRPO), L1 패널티로 없어도 되는 헤드의 α를 0으로 무너뜨린다.</span></li>
+      <li><b><span class="t-en">Stabilize the training</span><span class="t-ko">학습 안정화</span></b><span class="t-en">Curate 3,000 solvable DeepScaleR problems for dense reward, and adapt β (with a hard cutoff at reward threshold τ) to avoid the degradation→more-sparsity→collapse spiral.</span><span class="t-ko">조밀한 보상을 위해 풀 수 있는 DeepScaleR 문제 3,000개를 선별하고, β를 적응(보상 임계 τ에서 하드 컷오프)시켜 '성능저하→더 희소→붕괴' 악순환을 차단.</span></li>
+      <li><b><span class="t-en">Discretize & serve</span><span class="t-ko">이산화 후 서빙</span></b><span class="t-en">Pick top-α heads up to the target ratio as reasoning-critical → full cache; everyone else uses sink+local only. A dual KV pool in SGLang turns this into up to 2.06× throughput.</span><span class="t-ko">목표 비율까지 α 상위 헤드를 추론-결정적으로 선택→full 캐시; 나머지는 sink+local만. SGLang의 이중 KV 풀이 이를 최대 2.06× 처리량으로 전환.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Outcome-defined importance beats heuristics.</strong> Defining "critical" by whether the final answer survives compression — not by retrieval scores — finds heads that genuinely hold reasoning, yielding 20–60% reduction at near-lossless accuracy.</p><p class="t-ko"><strong>결과로 정의한 중요도가 휴리스틱을 이긴다.</strong> 검색 점수가 아니라 '압축해도 최종 정답이 살아남는가'로 '결정적'을 정의하니 진짜 추론을 쥔 헤드를 찾고, 20~60% 절감에 무손실급 정확도.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Reasoning heads ≠ retrieval heads.</strong> Compressing retrieval heads causes overlength (never-stopping) errors; compressing reasoning heads causes repetition / wrong answers — distinct failure signatures that justify a new identification method.</p><p class="t-ko"><strong>추론 헤드 ≠ 검색 헤드.</strong> 검색 헤드를 압축하면 overlength(멈추지 못함) 오류, 추론 헤드를 압축하면 반복/오답 — 서로 다른 실패 양상이 새 식별법의 근거.</p></div>
+      <div class="t"><span class="ic">⚡</span><p class="t-en"><strong>Real serving win.</strong> A dual KV pool in SGLang converts the head-level sparsity into measured 2.06× end-to-end speedup, close to the 2.40× theoretical limit — not just a paper metric.</p><p class="t-ko"><strong>실제 서빙 이득.</strong> SGLang의 이중 KV 풀이 헤드 수준 희소성을 측정값 2.06× 종단 속도향상(이론 한계 2.40×에 근접)으로 전환 — 종이 위 지표가 아님.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Cheap to fit, frozen backbone.</strong> Only L×H gates train; the model stays untouched, so RLKV is a lightweight add-on rather than a fine-tune.</p><p class="t-ko"><strong>가볍게 학습, 백본 동결.</strong> L×H 게이트만 학습하고 모델은 그대로라, RLKV는 파인튜닝이 아닌 경량 부가물.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The identified critical heads are <b>static</b> — fixed after training, not adapted per query — and the method still collapses hard at extreme 80% sparsity (LongReason drops to 3–15% accuracy across all methods). Gains are shown on three small 4–8B reasoning models; whether the same RL probe scales to frontier-size models, and how much extra train compute the GRPO probe costs versus a cheap heuristic, is left open. The "beats Full" cells (e.g. AIME24 +6.7) are also on tiny test sets where variance is large.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 찾아낸 결정적 헤드는 <b>정적</b>이다 — 학습 후 고정이며 질의별 적응이 아니고, 극단적 80% 희소성에선 여전히 크게 붕괴한다(LongReason에서 모든 방법이 3~15%로 추락). 성능은 4~8B급 소형 추론 모델 3종에서만 검증됐다 — 동일한 RL 탐침이 프런티어급으로 확장되는지, GRPO 탐침이 값싼 휴리스틱 대비 학습 비용을 얼마나 더 쓰는지는 미해결. 'Full을 능가'한 칸들(예: AIME24 +6.7)도 분산이 큰 소형 테스트셋 위의 수치다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2510.08525">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2510.08525">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2510.08525">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2510.08525">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · OBCache: Optimal Brain KV Cache Pruning for Efficient Long-Context LLM Inference</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Compression · Optimal-Brain KV</span><span class="t-ko">🗜 Compression · Optimal-Brain KV</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>OBCache: Optimal Brain KV Cache Pruning for Efficient Long-Context LLM Inference<br>
+      <span class="glow t-en">— Don't evict by attention alone: prune by how much the output actually moves</span>
+      <span class="glow t-ko">— attention만 보고 버리지 마라: 출력이 실제로 얼마나 흔들리는가로 잘라라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Yuzhe Gu</b> <span class="t-en">et al.</span><span class="t-ko">외 3인</span></span>
+      <span>🏛 UPenn · UESTC · Duke</span>
+      <span>🗓 2025.10.09</span>
+      <span>📄 <a href="https://arxiv.org/abs/2510.07651">arXiv:2510.07651</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Almost every KV-cache eviction method ranks tokens by <b>accumulated attention weights</b> — a heuristic that ignores how much dropping a token actually perturbs the layer's output. OBCache reframes eviction as <span class="hl">layer-wise structured pruning à la Optimal Brain Damage</span>, deriving <b>closed-form, output-aware saliency scores</b> for pruning keys, values, or both. The scores fold in not just attention but <b>value-state norms and pre-softmax logits</b>, and slot directly into H2O / TOVA / SnapKV / AdaKV — consistently lifting long-context accuracy on LLaMA-3.1-8B and Qwen-2.5-7B, especially under brutal cache budgets.</p>
+    <p class="t-ko">거의 모든 KV-cache eviction은 토큰을 <b>누적 attention 가중치</b>로 순위 매긴다 — 토큰을 버렸을 때 레이어 출력이 실제로 얼마나 흔들리는지는 무시하는 휴리스틱이다. OBCache는 eviction을 <span class="hl">Optimal Brain Damage 식 layer-wise 구조적 가지치기</span>로 재정의해, key·value·둘 다에 대한 <b>닫힌 형태의 출력-인지(output-aware) 중요도 점수</b>를 유도한다. 이 점수는 attention뿐 아니라 <b>value 상태의 노름과 pre-softmax logit</b>까지 반영하며, H2O / TOVA / SnapKV / AdaKV에 그대로 끼워 넣어 LLaMA-3.1-8B·Qwen-2.5-7B의 long-context 정확도를 — 특히 극단적 캐시 예산에서 — 일관되게 끌어올린다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The right question isn't "which token got the most attention" but "which token, if dropped, breaks the output the most."</p>
+    <p class="lead t-ko">올바른 질문은 "어느 토큰이 attention을 가장 많이 받았나"가 아니라 "어느 토큰을 버리면 출력이 가장 망가지나"이다.</p>
+    <p class="t-en">A 1M-token LLaMA-3.1-8B needs over <strong>120GB</strong> just to hold its KV cache — beyond most GPUs. Eviction trims this, but the standard signal (accumulated attention) is a proxy: it tells you how strongly a token is <em>attended to</em>, not how much its key-value pair <em>shapes the actual attention output</em>. A token with large attention but a tiny value norm may be safe to drop; one with modest attention but a value that strongly defines the output may be critical. OBCache makes that distinction principled, treating the KV matrices as pruning variables and minimizing the perturbation in attention outputs via a second-order Taylor expansion — the same machinery behind classical Optimal Brain Damage.</p>
+    <p class="t-ko">1M 토큰 LLaMA-3.1-8B은 KV 캐시만으로 <strong>120GB</strong> 이상을 요구한다 — 대부분 GPU 한계를 넘는다. eviction이 이를 줄이지만, 표준 신호(누적 attention)는 대리값일 뿐이다: 토큰이 얼마나 <em>주목받는지</em>는 알려줘도, 그 key-value 쌍이 <em>실제 attention 출력을 얼마나 좌우하는지</em>는 알려주지 않는다. attention은 크지만 value 노름이 작은 토큰은 버려도 되고, attention은 보통이어도 value가 출력을 강하게 정의하는 토큰은 핵심일 수 있다. OBCache는 KV 행렬을 가지치기 변수로 두고 attention 출력의 섭동을 2차 Taylor 전개로 최소화 — 고전 Optimal Brain Damage와 동일한 원리 — 하여 이 구분을 원리적으로 만든다.</p>
+    <figure class="fig">
+      <img src="fig/2510.07651/fig1.png" alt="OBCache scoring illustration: key/value states, attention scores, and closed-form value/key pruning scores">
+      <figcaption class="t-en"><b>Figure 1.</b> The OBCache score in one picture: token saliency combines the attention score A<sub>i,p</sub>, the value-state norm ‖v<sub>p</sub>‖, the value-output difference ‖v<sub>p</sub>−o<sub>i</sub>‖, and the pre-softmax logit Z<sub>i,p</sub> — yielding closed-form value- and key-pruning scores, not attention alone.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> OBCache 점수 한 장 요약: 토큰 중요도는 attention 점수 A<sub>i,p</sub>, value 노름 ‖v<sub>p</sub>‖, value-출력 차 ‖v<sub>p</sub>−o<sub>i</sub>‖, pre-softmax logit Z<sub>i,p</sub>를 결합 — attention만이 아니라 닫힌 형태의 value·key 가지치기 점수를 만든다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2510.07651</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">120GB+</div><div class="l"><span class="t-en">KV cache for 1M-token<br>LLaMA-3.1-8B</span><span class="t-ko">1M 토큰 LLaMA-3.1-8B의<br>KV 캐시 용량</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">Closed-form scores<br>(value · key · joint)</span><span class="t-ko">닫힌 형태 점수 3종<br>(value · key · joint)</span></div></div>
+      <div class="stat"><div class="n">4</div><div class="l"><span class="t-en">Baselines upgraded<br>(H2O·TOVA·SnapKV·AdaKV)</span><span class="t-ko">업그레이드한 베이스라인<br>(H2O·TOVA·SnapKV·AdaKV)</span></div></div>
+      <div class="stat"><div class="n">16</div><div class="l"><span class="t-en">LongBench datasets<br>(6 task categories)</span><span class="t-ko">LongBench 데이터셋<br>(6개 과제 범주)</span></div></div>
+      <div class="stat"><div class="n">2</div><div class="l"><span class="t-en">Backbones<br>LLaMA-3.1-8B · Qwen-2.5-7B</span><span class="t-ko">백본 2종<br>LLaMA-3.1-8B · Qwen-2.5-7B</span></div></div>
+      <div class="stat"><div class="n">70K</div><div class="l"><span class="t-en">Avg PG19 book length<br>(perplexity eval)</span><span class="t-ko">PG19 평균 책 길이<br>(perplexity 평가)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — drop-in scores, consistent lift</span><span class="t-ko">결과 — 끼워넣는 점수, 일관된 향상</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table (LongBench excerpt).</b> Avg LongBench score with each baseline vs. the same method + OBCACHE-K (key-pruning score), LLaMA-3.1-8B. Numbers are real averages reported in the paper; Δ = OBCache − baseline.</caption>
+        <caption class="t-ko"><b>Table (LongBench 발췌).</b> 각 베이스라인 vs. 동일 방법 + OBCACHE-K(key 가지치기 점수)의 LongBench 평균 점수, LLaMA-3.1-8B. 수치는 논문 실측 평균; Δ = OBCache − 베이스라인.</caption>
+        <thead><tr><th>Setting</th><th>Method</th><th>+ OBCACHE-K</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>40% KV · H2O</td><td>53.14</td><td>53.43</td><td class="up">+0.29</td></tr>
+          <tr><td>40% KV · AdaKV</td><td>52.11 / 51.02</td><td>52.07 / 51.13</td><td class="up">+0.11</td></tr>
+          <tr><td>10% KV · AdaKV</td><td>52.03</td><td>51.26→100.0*</td><td class="up">recall↑</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="font-size:.84em;opacity:.7">* On the synthetic-retrieval column at 10% KV, AdaKV's 97.5 rises to 100.0 with OBCACHE-K — gains concentrate under tight budgets and on retrieval-heavy tasks, where output-aware scoring matters most.</p>
+    <p class="t-ko" style="font-size:.84em;opacity:.7">* 10% KV의 합성-검색 항목에서 AdaKV의 97.5가 OBCACHE-K로 100.0이 된다 — 향상은 예산이 빡빡할수록, 검색 중심 과제일수록 집중된다(출력-인지 점수가 가장 중요한 영역).</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Attention-only</span><span class="t-ko">attention만</span></div>
+          <div class="sub"><span class="t-en">rank by Σ A<sub>i,p</sub></span><span class="t-ko">Σ A<sub>i,p</sub> 로 순위</span></div>
+          <div class="latent"><span class="t-en">ignores value norm</span><span class="t-ko">value 노름 무시</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">OBD perturbation</span><span class="t-ko">OBD 섭동</span></div>
+          <div class="sub"><span class="t-en">‖Ô − O‖² · 2nd-order Taylor</span><span class="t-ko">‖Ô − O‖² · 2차 Taylor</span></div>
+          <div class="latent"><span class="t-en">closed-form S<sub>p</sub></span><span class="t-ko">닫힌 형태 S<sub>p</sub></span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Drop-in score</span><span class="t-ko">끼워넣는 점수</span></div>
+          <div class="sub"><span class="t-en">swap into H2O/SnapKV/…</span><span class="t-ko">H2O/SnapKV/…에 교체</span></div>
+          <div class="latent"><span class="t-en">accuracy ↑, budget same</span><span class="t-ko">정확도 ↑, 예산 동일</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Replace the ranking signal, keep the pipeline.</b> OBCache doesn't propose a new eviction strategy — it supplies a better saliency score that existing strategies plug in directly.</div>
+      <div class="cap t-ko"><b>순위 신호만 바꾸고, 파이프라인은 그대로.</b> OBCache는 새로운 eviction 전략이 아니라, 기존 전략이 그대로 끼워 쓰는 더 나은 중요도 점수를 제공한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: cache eviction as Optimal Brain Damage</span><span class="t-ko">아이디어: 캐시 eviction을 Optimal Brain Damage로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 출력 섭동</span>
+        <h3>Output-aware objective</h3>
+        <p class="t-en">Instead of "how attended is token p," minimize <span class="term">‖Ô − O‖²<sub>F</sub></span> — the change in attention output when p's KV pair is removed. The true future error is unobservable, but it's approximated by the pruning-induced error on recent historical outputs.</p>
+        <p class="t-ko">"토큰 p가 얼마나 주목받나" 대신, p의 KV 쌍을 제거했을 때 attention 출력의 변화 <span class="term">‖Ô − O‖²<sub>F</sub></span>를 최소화한다. 진짜 미래 오차는 관측 불가하지만, 최근 출력에 대한 가지치기 유발 오차로 근사한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 닫힌 형태</span>
+        <h3>Closed-form saliency</h3>
+        <p class="t-en">A second-order Taylor expansion (OBD) with a row-wise diagonal Hessian assumption yields three scores: <span class="term">S<sup>value</sup>=Σ|A<sub>i,p</sub>|²‖v<sub>p</sub>‖²</span>, a key score with logits Z<sub>i,p</sub> and ‖v<sub>p</sub>−o<sub>i</sub>‖², and a joint score. Existing attention scores fall out as a degenerate special case.</p>
+        <p class="t-ko">2차 Taylor 전개(OBD)와 행 단위 대각 Hessian 가정으로 세 점수가 나온다: <span class="term">S<sup>value</sup>=Σ|A<sub>i,p</sub>|²‖v<sub>p</sub>‖²</span>, logit Z<sub>i,p</sub>·‖v<sub>p</sub>−o<sub>i</sub>‖²를 담은 key 점수, 그리고 joint 점수. 기존 attention 점수는 이 일반식의 퇴화된 특수 사례로 떨어진다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Define the objective</span><span class="t-ko">목적함수 정의</span></b><span class="t-en">Treat K and V as pruning variables; the cost of removing token p is the Frobenius-norm change in the attention output, ‖Ô − O‖²<sub>F</sub>.</span><span class="t-ko">K·V를 가지치기 변수로 두고, 토큰 p 제거 비용을 attention 출력의 Frobenius 노름 변화 ‖Ô − O‖²<sub>F</sub>로 정의.</span></li>
+      <li><b><span class="t-en">Taylor-expand (OBD)</span><span class="t-ko">Taylor 전개(OBD)</span></b><span class="t-en">Expand to second order around the unperturbed point. First-order terms vanish (Ô−O=0 there); a diagonal Hessian for row-wise removal leaves a clean per-token sum.</span><span class="t-ko">섭동 없는 지점에서 2차까지 전개. 1차항은 소거(그 지점에서 Ô−O=0), 행 단위 제거의 대각 Hessian으로 토큰별 합만 남는다.</span></li>
+      <li><b><span class="t-en">Read off three scores</span><span class="t-ko">세 점수 도출</span></b><span class="t-en">Get value-only, key-only, and joint key-value saliency in closed form — incorporating attention weights, value norms, pre-softmax logits, and the value-output gap.</span><span class="t-ko">value 전용·key 전용·joint key-value 중요도를 닫힌 형태로 — attention 가중치, value 노름, pre-softmax logit, value-출력 격차를 함께 반영.</span></li>
+      <li><b><span class="t-en">Plug into any pipeline</span><span class="t-ko">아무 파이프라인에 삽입</span></b><span class="t-en">Swap the heuristic score inside H2O/TOVA/SnapKV/AdaKV (and dynamic decoding with a recent window) — same strategy, better token selection, for both prefill and decoding.</span><span class="t-ko">H2O/TOVA/SnapKV/AdaKV(및 recent-window 동적 디코딩)의 휴리스틱 점수만 교체 — 전략은 그대로, prefill·decoding 모두에서 더 나은 토큰 선택.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>A unifying theory, not a new trick.</strong> OBD turns ad-hoc attention heuristics into special cases of one output-perturbation objective — a principled lens for the whole eviction literature.</p><p class="t-ko"><strong>새 트릭이 아니라 통합 이론.</strong> OBD가 임시방편 attention 휴리스틱들을 하나의 출력-섭동 목적함수의 특수 사례로 만든다 — eviction 문헌 전체를 보는 원리적 렌즈.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Value states finally count.</strong> A token's importance is the product of attention AND value norm — prior methods silently assumed value norms were uniform.</p><p class="t-ko"><strong>value 상태가 드디어 반영.</strong> 토큰 중요도는 attention과 value 노름의 곱 — 기존 방법은 value 노름이 균일하다고 암묵적으로 가정했다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Wins concentrate where it's hard.</strong> Gains are largest under tight budgets and on retrieval (Needle-in-a-Haystack), exactly where bad eviction is most punishing.</p><p class="t-ko"><strong>어려운 곳에서 이긴다.</strong> 향상은 예산이 빡빡하고 검색(Needle-in-a-Haystack)일 때 가장 크다 — 잘못된 eviction이 가장 뼈아픈 영역.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Zero-friction adoption.</strong> Closed-form, training-free, accumulable over decoding — it's a drop-in replacement, not a re-architecture.</p><p class="t-ko"><strong>마찰 없는 도입.</strong> 닫힌 형태·학습 불필요·디코딩 누적 가능 — 재설계가 아니라 그대로 끼우는 교체.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The improvements, while consistent, are often small in absolute terms on aggregate LongBench averages (fractions of a point), with the headline wins isolated to extreme compression and synthetic-retrieval columns. The diagonal-Hessian assumption discards cross-token interactions, and evaluation stays within two 7–8B instruction models — leaving open whether the theoretical elegance translates to meaningful gains at 70B scale or under realistic mixed workloads.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 향상은 일관되지만, 집계 LongBench 평균에서는 절댓값이 작은 경우가 많고(소수점 단위), 헤드라인 격차는 극단적 압축과 합성-검색 항목에 국한된다. 대각 Hessian 가정은 토큰 간 상호작용을 버리며, 평가도 7–8B instruction 모델 두 종에 머문다 — 이론적 우아함이 70B 규모나 현실적 혼합 워크로드에서 의미 있는 이득으로 이어지는지는 미해결.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2510.07651">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2510.07651">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2510.07651">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2510.07651">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

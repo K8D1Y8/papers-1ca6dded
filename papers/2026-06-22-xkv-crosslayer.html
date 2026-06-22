@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · xKV: Cross-Layer KV-Cache Compression via Aligned Singular Vector Extraction</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Compression · SVD KV</span><span class="t-ko">🗜 Compression · SVD KV</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>xKV: Cross-Layer KV-Cache Compression via Aligned Singular Vector Extraction<br>
+      <span class="glow t-en">— Adjacent layers share one basis: factorize the KV-cache across layers, not within</span>
+      <span class="glow t-ko">— 이웃한 레이어는 하나의 기저를 공유한다: 레이어 안이 아니라 '가로질러' KV를 분해하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Chi-Chih Chang</b> <span class="t-en">et al. (equal contribution: Wei-Cheng Lin)</span><span class="t-ko">외 (공동 1저자: Wei-Cheng Lin)</span></span>
+      <span>🏛 Cornell · NYCU · UW · UT Austin · Microsoft Research Asia · U. Surrey</span>
+      <span>🗓 2025.03.24</span>
+      <span>📄 <a href="https://arxiv.org/abs/2503.18893">arXiv:2503.18893</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Token-wise similarity across layers is low, so KV-merging methods (MiniCache) break down. But xKV finds that the <b>dominant singular vectors of KV-caches are highly aligned across adjacent layers</b> (high CKA). It groups a window of <b>W=4</b> layers, concatenates their caches, and runs a single SVD to get <span class="hl">one shared token basis + tiny per-layer reconstruction matrices</span>. Result: <b>up to 8× KV compression</b> with near-baseline accuracy, <b>4.23× end-to-end throughput</b> at 122k context, and it stacks with 4-bit quantization for <b>25.6× total</b>. Plug-and-play — no retraining.</p>
+    <p class="t-ko">레이어 간 토큰별 유사도는 낮아서 KV 병합 방식(MiniCache)은 무너진다. 하지만 xKV는 <b>KV-cache의 지배적 특이벡터가 이웃 레이어끼리 매우 잘 정렬돼 있다</b>(높은 CKA)는 사실을 발견한다. <b>W=4</b> 레이어를 한 윈도우로 묶어 캐시를 가로로 이어붙인 뒤 단 한 번의 SVD로 <span class="hl">공유 토큰 기저 + 레이어별 작은 복원 행렬</span>을 얻는다. 결과: <b>최대 8× KV 압축</b>에 정확도는 거의 무손실, 122k 문맥에서 <b>4.23× end-to-end 처리량</b>, 4-bit 양자화와 결합하면 <b>총 25.6×</b>. 재학습 없는 plug-and-play.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The redundancy isn't between tokens of adjacent layers — it's in the subspace they live in.</p>
+    <p class="lead t-ko">이웃 레이어의 중복성은 토큰끼리에 있는 게 아니라, 그들이 사는 '부분공간'에 있다.</p>
+    <p class="t-en">For long-context LLMs the KV-cache memory grows linearly with sequence length and becomes the throughput bottleneck. Prior cross-layer methods either rewrite the architecture (expensive pretraining) or merge adjacent layers' tokens assuming high cosine similarity — which xKV shows is simply false. The authors instead measure <strong>Centered Kernel Alignment (CKA)</strong> and find that, even when individual token vectors diverge, the <strong>dominant left singular vectors are shared across layers</strong>. That means one low-rank basis can represent several layers at once, far more compactly than per-layer SVD — and as a post-training, plug-and-play step.</p>
+    <p class="t-ko">긴 문맥 LLM에서 KV-cache 메모리는 시퀀스 길이에 비례해 커져 처리량 병목이 된다. 기존 cross-layer 방식은 아키텍처를 바꾸거나(비싼 사전학습), 코사인 유사도가 높다고 가정해 이웃 레이어 토큰을 병합하는데 — xKV는 이 가정이 거짓임을 보인다. 대신 <strong>Centered Kernel Alignment(CKA)</strong>를 측정해, 개별 토큰 벡터는 갈라져도 <strong>지배적 좌특이벡터는 레이어끼리 공유</strong>됨을 발견한다. 즉 하나의 저랭크 기저로 여러 레이어를 한꺼번에 표현할 수 있고, 이는 레이어별 SVD보다 훨씬 압축적이며 재학습 없는 plug-and-play 단계로 적용된다.</p>
+    <figure class="fig">
+      <img src="fig/2503.18893/fig1.png" alt="Comparison of cross-layer KV compression approaches and xKV's shared basis factorization">
+      <figcaption class="t-en"><b>Figure 1.</b> Cross-layer approaches contrasted. (a) Architectural KV-sharing needs expensive new training; (b) interpolation merging (MiniCache, SLERP) is training-free but limited to ~1.2× over 2 layers; (c) xKV factorizes W grouped layers into a <b>shared token basis A</b> and per-layer reconstruction matrices B — training-free, up to 8× compression.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> Cross-layer 방식 비교. (a) 아키텍처 KV 공유는 비싼 신규 학습 필요; (b) 보간 병합(MiniCache, SLERP)은 학습 불필요하나 2개 레이어로 ~1.2×에 그침; (c) xKV는 W개로 묶은 레이어를 <b>공유 토큰 기저 A</b>와 레이어별 복원 행렬 B로 분해 — 학습 불필요, 최대 8× 압축.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2503.18893</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">8×</div><div class="l"><span class="t-en">Native KV compression<br>(88.50% vs 91.89% baseline, RULER)</span><span class="t-ko">기본 KV 압축<br>(88.50% vs 베이스라인 91.89%, RULER)</span></div></div>
+      <div class="stat"><div class="n">4.23×</div><div class="l"><span class="t-en">End-to-end throughput<br>(xKV-SR @ 122k context)</span><span class="t-ko">End-to-end 처리량<br>(xKV-SR @ 122k 문맥)</span></div></div>
+      <div class="stat"><div class="n">25.6×</div><div class="l"><span class="t-en">Total compression<br>(xKV 8× + 4-bit RTN)</span><span class="t-ko">총 압축률<br>(xKV 8× + 4-bit RTN)</span></div></div>
+      <div class="stat"><div class="n">3.5×</div><div class="l"><span class="t-en">Attention-op speedup<br>(vs FlashAttention-2)</span><span class="t-ko">어텐션 연산 가속<br>(FlashAttention-2 대비)</span></div></div>
+      <div class="stat"><div class="n">W=4</div><div class="l"><span class="t-en">Layer window size<br>(accuracy saturates by W=8)</span><span class="t-ko">레이어 윈도우 크기<br>(W=8에서 정확도 포화)</span></div></div>
+      <div class="stat"><div class="n">0.84%</div><div class="l"><span class="t-en">Online SVD overhead<br>(of prefill @ 256k)</span><span class="t-ko">온라인 SVD 오버헤드<br>(256k prefill 대비)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — beating SVD, eviction, and prior cross-layer</span><span class="t-ko">결과 — SVD·eviction·기존 cross-layer를 능가</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table (selected).</b> Average accuracy (%) on RULER, Llama-3.1-8B-Instruct (baseline 91.89). xKV holds ~8× compression with minimal loss; MiniCache collapses even at 1.3×.</caption>
+        <caption class="t-ko"><b>표 (발췌).</b> RULER 평균 정확도(%), Llama-3.1-8B-Instruct (베이스라인 91.89). xKV는 ~8× 압축에서도 손실 최소; MiniCache는 1.3×에서도 붕괴.</caption>
+        <thead><tr><th>Method</th><th>Compression</th><th>Avg. Acc.</th><th>Δ vs base</th></tr></thead>
+        <tbody>
+          <tr><td>Single SVD</td><td>8.03×</td><td>45.71</td><td>−46.18</td></tr>
+          <tr><td>MiniCache</td><td>1.30×</td><td>45.04</td><td>−46.85</td></tr>
+          <tr><td>KIVI-2</td><td>~8×</td><td>86.87</td><td>−5.02</td></tr>
+          <tr><td><b>xKV</b></td><td>8.03×</td><td><b>88.50</b></td><td class="up">−3.39</td></tr>
+          <tr><td><b>xKV + 4-bit RTN</b></td><td>25.6×</td><td>87.64</td><td>−4.25</td></tr>
+          <tr><td><b>xKV-SR</b></td><td>5.35×</td><td><b>89.69</b></td><td class="up">−2.20</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">L<sub>1</sub> … L<sub>W</sub></div>
+          <div class="sub"><span class="t-en">W=4 adjacent layers</span><span class="t-ko">이웃 레이어 W=4개</span></div>
+          <div class="latent"><span class="t-en">concatenate KV caches</span><span class="t-ko">KV 캐시 가로 연결</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">CLF (one SVD)</span><span class="t-ko">CLF (한 번의 SVD)</span></div>
+          <div class="sub"><span class="t-en">shared basis A + per-layer B</span><span class="t-ko">공유 기저 A + 레이어별 B</span></div>
+          <div class="latent"><span class="t-en">store A once, tiny B each</span><span class="t-ko">A는 1회, B는 작게</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Decode (SR)</span><span class="t-ko">디코드 (SR)</span></div>
+          <div class="sub"><span class="t-en">reconstruct only relevant rows</span><span class="t-ko">관련 행만 복원</span></div>
+          <div class="latent"><span class="t-en">cost ≈ const in L</span><span class="t-ko">비용 ≈ L에 무관</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Compress across layers, reconstruct sparsely</b> — one shared low-rank basis spans the window; Selective Reconstruction rebuilds only query-relevant tokens so decode cost stays flat as context grows.</div>
+      <div class="cap t-ko"><b>레이어를 가로질러 압축, 희소하게 복원</b> — 하나의 공유 저랭크 기저가 윈도우 전체를 덮고, Selective Reconstruction은 쿼리와 관련된 토큰만 복원해 문맥이 길어져도 디코드 비용이 일정하게 유지된다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: align singular vectors, share one basis</span><span class="t-ko">아이디어: 특이벡터를 정렬하고 기저를 공유</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 분해 (prefill)</span>
+        <h3>Cross-Layer Factorization (CLF)</h3>
+        <p class="t-en">Group N layers into windows of size <span class="term">W</span>. Concatenate the W caches horizontally into one L×(W·d) matrix and run a single rank-<span class="term">r</span> SVD → a <strong>shared token basis A</strong> (L×r) plus W tiny <strong>reconstruction matrices B<sub>ℓ</sub></strong> (r×d). Storage drops from O(W·L·d) to O(L·r + W·r·d). A custom randomized SVD with shifted Cholesky-QR keeps it cheap online.</p>
+        <p class="t-ko">N개 레이어를 크기 <span class="term">W</span> 윈도우로 묶는다. W개 캐시를 가로로 이어 L×(W·d) 행렬로 만들고 단 한 번의 rank-<span class="term">r</span> SVD → <strong>공유 토큰 기저 A</strong>(L×r)와 작은 <strong>복원 행렬 B<sub>ℓ</sub></strong>(r×d) W개. 저장량은 O(W·L·d)에서 O(L·r + W·r·d)로 감소. shifted Cholesky-QR 기반 무작위 SVD로 온라인 비용을 낮춤.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 복원 (decode)</span>
+        <h3>Selective Reconstruction (SR)</h3>
+        <p class="t-en">Dense reconstruction X̂=A·B scales with L and becomes compute-bound. SR exploits attention sparsity: a landmark-guided chunk selector picks a small set of relevant token indices and reconstructs <strong>only those rows</strong> — A[S,:]·B. With |S|≪L, decode cost is constant in sequence length, enabling full on-GPU inference (xKV-SR).</p>
+        <p class="t-ko">밀집 복원 X̂=A·B는 L에 비례해 연산 병목이 된다. SR은 어텐션 희소성을 활용: landmark 기반 청크 선택기가 관련 토큰 인덱스 소수를 고르고 <strong>그 행만</strong> 복원 — A[S,:]·B. |S|≪L이므로 디코드 비용이 시퀀스 길이와 무관해져, 전부 GPU에서 추론(xKV-SR)이 가능해진다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Diagnose with CKA</span><span class="t-ko">CKA로 진단</span></b><span class="t-en">Token-wise cosine similarity across layers is low, but CKA between layer caches is high — proving the dominant singular vectors are aligned, so a shared basis is justified.</span><span class="t-ko">레이어 간 토큰별 코사인 유사도는 낮지만 캐시 간 CKA는 높다 — 지배적 특이벡터가 정렬돼 있음을 증명, 공유 기저를 정당화.</span></li>
+      <li><b><span class="t-en">Group & concatenate</span><span class="t-ko">묶고 연결</span></b><span class="t-en">Partition layers into windows of W=4; concatenate each window's KV caches horizontally during prefill.</span><span class="t-ko">레이어를 W=4 윈도우로 분할; prefill 중 각 윈도우의 KV 캐시를 가로로 연결.</span></li>
+      <li><b><span class="t-en">One SVD → A and B</span><span class="t-ko">한 번의 SVD → A와 B</span></b><span class="t-en">Run a rank-r randomized SVD on the concatenation to get the shared basis A and per-layer reconstruction matrices B (head-wise for GQA). Store these instead of full caches.</span><span class="t-ko">연결 행렬에 rank-r 무작위 SVD를 적용해 공유 기저 A와 레이어별 복원 행렬 B(GQA는 헤드별)를 얻고, 전체 캐시 대신 이것을 저장.</span></li>
+      <li><b><span class="t-en">Selective decode</span><span class="t-ko">선택적 디코드</span></b><span class="t-en">At each step, select query-relevant token chunks and reconstruct only those rows — constant-cost attention, up to 3.5× faster, full on-GPU.</span><span class="t-ko">매 스텝마다 쿼리 관련 토큰 청크를 골라 해당 행만 복원 — 상수 비용 어텐션, 최대 3.5× 가속, 전부 GPU 상.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>8× compression, near-baseline accuracy.</strong> And it composes — stack 4-bit quantization for 25.6× total, or 32× at 3-bit with moderate loss.</p><p class="t-ko"><strong>8× 압축에 거의 무손실.</strong> 게다가 결합 가능 — 4-bit 양자화를 얹어 총 25.6×, 3-bit면 적당한 손실로 32×.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>The right similarity metric matters.</strong> Token cosine says "no redundancy," CKA says "lots." Measuring subspaces instead of vectors flips the whole approach.</p><p class="t-ko"><strong>올바른 유사도 척도가 핵심.</strong> 토큰 코사인은 "중복 없음", CKA는 "많음"이라 말한다. 벡터 대신 부분공간을 재면 접근법이 통째로 뒤집힌다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Plug-and-play & general.</strong> No retraining; works on GQA and even MLA (DeepSeek), further compressing an already-latent cache by 3–3.5×.</p><p class="t-ko"><strong>Plug-and-play & 범용.</strong> 재학습 불필요; GQA는 물론 MLA(DeepSeek)에도 작동해 이미 잠재화된 캐시를 3–3.5× 추가 압축.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Robust in multi-turn.</strong> Unlike eviction (SnapKV/PyramidKV), which drops context after turn 1, xKV preserves long-term state across turns.</p><p class="t-ko"><strong>멀티턴에 강건.</strong> 첫 턴 이후 문맥을 잃는 eviction(SnapKV/PyramidKV)과 달리, xKV는 턴을 가로질러 장기 상태를 보존.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The flagship efficiency gains come from xKV-SR, which depends on the landmark-guided chunk selector picking the right tokens — a heuristic whose failure modes on adversarial or extremely diffuse-attention tasks aren't stress-tested. And plain dense xKV is compute-bound (attention speedup &lt;1.0×): the memory win is real, but the latency win only materializes once Selective Reconstruction and its selector are trusted.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표적 효율 향상은 xKV-SR에서 나오는데, 이는 landmark 기반 청크 선택기가 올바른 토큰을 고르는 데 의존한다 — 적대적이거나 어텐션이 극도로 분산된 작업에서의 실패 양상은 충분히 검증되지 않았다. 또 순수 밀집 xKV는 연산 병목(어텐션 가속 &lt;1.0×)으로, 메모리 이득은 확실하나 지연 이득은 Selective Reconstruction과 그 선택기를 신뢰할 수 있어야 비로소 실현된다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2503.18893">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2503.18893">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2503.18893">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2503.18893">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

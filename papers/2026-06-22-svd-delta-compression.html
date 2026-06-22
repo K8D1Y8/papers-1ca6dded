@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Principled SVD-based Delta Compression via Quantization Error Minimization</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Compression · SVD+Quant</span><span class="t-ko">🗜 Compression · SVD+Quant</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Principled SVD-based Delta Compression via Quantization Error Minimization<br>
+      <span class="glow t-en">— Stop guessing which singular vectors matter; let an ILP minimize the actual error</span>
+      <span class="glow t-ko">— '큰 특이값이 중요하다'는 추측을 버리고, 실제 오차를 ILP로 직접 최소화하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Boya Xiong</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 Shanghai Univ. of Finance &amp; Economics · Tsinghua · Fudan · SUSTech</span>
+      <span>🗓 2026.02.17</span>
+      <span>📄 <a href="https://arxiv.org/abs/2506.11087">arXiv:2506.11087</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Fine-tuning a base LLM produces a heavy <b>delta</b> (the weight difference) that is expensive to store and serve for every tenant. SVD-based delta compression helps, but prior SOTA <b>Delta-CoMe</b> just <em>assumes</em> larger singular values deserve more bits — a heuristic with no proof. This paper, <b>PRINMIX</b>, instead <span class="hl">writes the quantization error in closed form and solves a 0/1 Integer Linear Program for the optimal bit allocation</span>, plus a <b>Reconstruction Target Correction (RTC)</b> to fix the V-then-U error chain. At a 1/16 compression ratio it beats Delta-CoMe by <b>+22.3% on AIME2024 (7B)</b> and <b>+26.9% (14B)</b>, with <b>&gt;6×</b> memory/disk savings.</p>
+    <p class="t-ko">베이스 LLM을 파인튜닝하면 무거운 <b>delta</b>(가중치 차이)가 생기고, 테넌트마다 이를 저장·서빙하기엔 비용이 크다. SVD 기반 delta 압축이 돕지만, 기존 SOTA <b>Delta-CoMe</b>는 "큰 특이값에 더 많은 비트를 주면 된다"고 <em>가정</em>할 뿐 증명이 없다. 이 논문의 <b>PRINMIX</b>는 대신 <span class="hl">양자화 오차를 닫힌 형태로 유도하고, 최적 비트 배분을 0/1 정수선형계획(ILP)으로 풀며</span>, V→U 순차 양자화의 오차 사슬을 <b>Reconstruction Target Correction(RTC)</b>로 보정한다. 1/16 압축비에서 Delta-CoMe 대비 <b>AIME2024(7B) +22.3%</b>, <b>(14B) +26.9%</b>, 메모리·디스크 <b>&gt;6×</b> 절감.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The win isn't "use SVD" — it's replacing a folk heuristic with a provably-optimal bit budget.</p>
+    <p class="lead t-ko">핵심은 "SVD를 쓰자"가 아니라, 민간요법 같은 휴리스틱을 증명 가능한 최적 비트 예산으로 바꾼 것이다.</p>
+    <p class="t-en">In multi-tenant serving, many users fine-tune the <strong>same base model</strong>, so you can ship one base plus many compressed deltas. Existing SVD methods like Delta-CoMe allocate bit-widths by a hypothesis — "vectors with bigger singular values are more important" — that prior work has shown does <strong>not</strong> reliably track LLM performance. PRINMIX rejects that. It derives the quantization error exactly, exposes a <strong>singular-value-dominated scaling term</strong> that mathematically <em>requires</em> mixed precision, and then lets an optimizer (not intuition) pick which rows get which bits under a user-chosen budget. The payoff is largest exactly where it's hard: deltas with a large ‖ΔW‖ norm (e.g. reasoning, multimodal models), where heuristic baselines fall apart.</p>
+    <p class="t-ko">멀티테넌트 서빙에서는 많은 사용자가 <strong>동일한 베이스 모델</strong>을 파인튜닝하므로, 베이스 하나 + 압축된 delta 여러 개로 배포할 수 있다. Delta-CoMe 같은 기존 SVD 기법은 "특이값이 큰 벡터가 더 중요하다"는 가설로 비트폭을 배분하지만, 선행 연구는 이 가설이 LLM 성능을 <strong>안정적으로 반영하지 못함</strong>을 보였다. PRINMIX는 이를 거부한다. 양자화 오차를 정확히 유도해 <strong>특이값이 지배하는 스케일링 항</strong>을 드러내고, 이것이 혼합정밀도를 <em>수학적으로 요구</em>함을 보인 뒤, 직관이 아닌 최적화기로 사용자 지정 예산 하에서 행별 비트를 고른다. 이득은 어려운 곳, 즉 ‖ΔW‖ 노름이 큰 delta(추론·멀티모달 모델)에서 가장 크다 — 휴리스틱 baseline이 무너지는 지점이다.</p>
+    <figure class="fig">
+      <img src="fig/2506.11087/fig1.png" alt="PRINMIX overview: quantization scheme, difference term, scaling term, and total V error minimization">
+      <figcaption class="t-en"><b>Figure 1.</b> PRINMIX overview vs. single-precision quantization. The per-row quantization error of V splits into a "scaling" term (singular-value driven) and a pre-computed "difference" term; PRINMIX finds the bit-budget-constrained scheme that balances both to minimize total error.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 단일정밀도 양자화 대비 PRINMIX 개요. V의 행별 양자화 오차는 (특이값이 끄는) "scaling" 항과 미리 계산된 "difference" 항으로 분해되며, PRINMIX는 비트 예산 제약 하에서 두 항의 균형을 맞춰 총 오차를 최소화하는 비트 배분을 찾는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2506.11087</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+22.3%</div><div class="l"><span class="t-en">AIME2024 gain over Delta-CoMe<br>(7B: 30.0 → 36.7)</span><span class="t-ko">AIME2024 Delta-CoMe 대비 향상<br>(7B: 30.0 → 36.7)</span></div></div>
+      <div class="stat"><div class="n">+26.9%</div><div class="l"><span class="t-en">AIME2024 gain over Delta-CoMe<br>(14B: 24.5 → 31.1)</span><span class="t-ko">AIME2024 Delta-CoMe 대비 향상<br>(14B: 24.5 → 31.1)</span></div></div>
+      <div class="stat"><div class="n">&gt;6×</div><div class="l"><span class="t-en">GPU memory &amp; disk<br>storage savings</span><span class="t-ko">GPU 메모리·디스크<br>저장 절감</span></div></div>
+      <div class="stat"><div class="n">1/16</div><div class="l"><span class="t-en">Compression ratio α<br>(all main results)</span><span class="t-ko">압축비 α<br>(전 주요 결과)</span></div></div>
+      <div class="stat"><div class="n">+2.9 / +2.2</div><div class="l"><span class="t-en">Avg. gain over Delta-CoMe<br>(7B / 14B, abs. %)</span><span class="t-ko">Delta-CoMe 대비 평균 향상<br>(7B / 14B, 절대 %)</span></div></div>
+      <div class="stat"><div class="n">8</div><div class="l"><span class="t-en">Aligned LLMs · 4 task types<br>(reason/math/code/MM)</span><span class="t-ko">정렬 LLM 8종 · 4개 과제군<br>(추론/수학/코드/멀티모달)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — principled beats heuristic where deltas are big</span><span class="t-ko">결과 — delta가 클수록 원리 기반이 휴리스틱을 이긴다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 2–3 excerpt.</b> Accuracy at α = 1/16. PRINMIX vs. best baseline Delta-CoMe; Δ = PRINMIX − Delta-CoMe (absolute points). AVG is over all 8 task columns.</caption>
+        <caption class="t-ko"><b>Table 2–3 발췌.</b> α = 1/16 정확도. PRINMIX vs. 최고 baseline Delta-CoMe; Δ = PRINMIX − Delta-CoMe(절대 점수). AVG는 8개 과제 열 평균.</caption>
+        <thead><tr><th>Model · Benchmark</th><th>Delta-CoMe</th><th>PRINMIX</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>7B · AIME2024</td><td>30.0</td><td>36.7</td><td class="up">+6.7</td></tr>
+          <tr><td>7B · GQA (multimodal)</td><td>49.4</td><td>52.4</td><td class="up">+3.0</td></tr>
+          <tr><td>7B · Math500 (Math-Instruct)</td><td>74.8</td><td>77.7</td><td class="up">+2.9</td></tr>
+          <tr><td>7B · AVG (8 tasks)</td><td>71.9</td><td>74.0</td><td class="up">+2.1</td></tr>
+          <tr><td>14B · AIME2024</td><td>24.5</td><td>31.1</td><td class="up">+6.6</td></tr>
+          <tr><td>14B · Math500 (R1-Distill)</td><td>76.5</td><td>80.2</td><td class="up">+3.7</td></tr>
+          <tr><td>14B · AVG (8 tasks)</td><td>63.3</td><td>64.7</td><td class="up">+1.4</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">ΔW = U Σ Vᵀ</div>
+          <div class="sub"><span class="t-en">SVD of the delta</span><span class="t-ko">delta의 SVD</span></div>
+          <div class="latent"><span class="t-en">dense, expensive</span><span class="t-ko">밀집·고비용</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">ILP bit allocation</span><span class="t-ko">ILP 비트 배분</span></div>
+          <div class="sub"><span class="t-en">minimize derived error</span><span class="t-ko">유도된 오차 최소화</span></div>
+          <div class="latent"><span class="t-en">optimal under budget Ḡ_b</span><span class="t-ko">예산 Ḡ_b 하 최적</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Quantize V → RTC → U</span><span class="t-ko">V 양자화 → RTC → U</span></div>
+          <div class="sub"><span class="t-en">correct V-then-U bias</span><span class="t-ko">V→U 편향 보정</span></div>
+          <div class="latent"><span class="t-en">&gt;6× smaller, accuracy held</span><span class="t-ko">&gt;6× 축소, 정확도 유지</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>No singular-value heuristic anywhere</b> — the bit-width per row is whatever the integer program says minimizes the closed-form quantization error under the user's budget.</div>
+      <div class="cap t-ko"><b>특이값 휴리스틱은 어디에도 없다</b> — 행별 비트폭은, 사용자의 예산 하에서 닫힌형 양자화 오차를 최소화한다고 정수계획이 정한 값 그대로다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: turn bit allocation into math, not intuition</span><span class="t-ko">아이디어: 비트 배분을 직관이 아닌 수학으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 오차 유도 + ILP</span>
+        <h3>Error-minimizing bit budget</h3>
+        <p class="t-en">Derive the per-row quantization error of V as a <span class="term">scaling term</span> (driven by the singular value) plus a calibration-fixed <span class="term">difference term</span>. Cast bit allocation as a <span class="term">0/1 ILP</span> with a bit-budget constraint, yielding the provably optimal mixed-precision scheme — no "bigger singular value ⇒ more bits" assumption.</p>
+        <p class="t-ko">V의 행별 양자화 오차를 (특이값이 끄는) <span class="term">scaling 항</span> + 보정셋으로 고정된 <span class="term">difference 항</span>으로 유도. 비트 배분을 비트 예산 제약을 가진 <span class="term">0/1 ILP</span>로 정식화해 증명 가능한 최적 혼합정밀도를 얻는다 — "특이값 클수록 비트↑" 가정 없이.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 순차 오차 보정</span>
+        <h3>Reconstruction Target Correction</h3>
+        <p class="t-en">Quantization is sequential: quantize V first, then U. But quantizing U against the <em>original</em> V leaves a bias once V is already lossy. <span class="term">RTC</span> corrects U's reconstruction target to account for the already-quantized V̂, recovering ~<b>2.2%</b> avg accuracy (more on hard tasks).</p>
+        <p class="t-ko">양자화는 순차적이다: V를 먼저, 그다음 U. 그런데 U를 <em>원본</em> V 기준으로 양자화하면 V가 이미 손실된 뒤라 편향이 남는다. <span class="term">RTC</span>는 이미 양자화된 V̂를 반영하도록 U의 복원 타깃을 보정해 평균 ~<b>2.2%</b> 정확도를 회복한다(어려운 과제에서 더 큼).</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">SVD the delta</span><span class="t-ko">delta를 SVD</span></b><span class="t-en">Decompose ΔW = U Σ Vᵀ and work entirely in SVD space, following GPTQ-style reconstruction-error minimization.</span><span class="t-ko">ΔW = U Σ Vᵀ로 분해하고 SVD 공간에서 작업, GPTQ식 복원오차 최소화를 따른다.</span></li>
+      <li><b><span class="t-en">Pre-compute per-bit error</span><span class="t-ko">비트별 오차 사전계산</span></b><span class="t-en">For each candidate bit-width, simulate quantization of V and compute its loss with the singular values; the "difference" term is fixed via a calibration set.</span><span class="t-ko">후보 비트폭마다 V 양자화를 시뮬레이션하고 특이값으로 손실 계산; "difference" 항은 보정셋으로 고정.</span></li>
+      <li><b><span class="t-en">Solve the ILP</span><span class="t-ko">ILP 풀이</span></b><span class="t-en">Pick the per-row bit-widths that minimize total error under the budget Ḡ_b, with constraints capping the number of active bit-widths (f_max).</span><span class="t-ko">예산 Ḡ_b 하에서 총 오차를 최소화하는 행별 비트폭 선택, 활성 비트폭 수(f_max)를 제한하는 제약 포함.</span></li>
+      <li><b><span class="t-en">Quantize V, RTC, quantize U</span><span class="t-ko">V 양자화 → RTC → U 양자화</span></b><span class="t-en">Quantize V with the chosen scheme, run RTC to correct U's target against V̂, then quantize U → return V̂, Û. Solve time: 1.1h (7B) / 2.4h (14B) on one GPU.</span><span class="t-ko">선택된 스킴으로 V 양자화, RTC로 V̂ 기준 U 타깃 보정 후 U 양자화 → V̂, Û 반환. 풀이시간: 단일 GPU 1.1h(7B)/2.4h(14B).</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Optimization &gt; heuristic.</strong> Replacing "big singular value ⇒ more bits" with an ILP over the actual error buys the biggest gains exactly where it's hard (high ‖ΔW‖ reasoning/multimodal deltas).</p><p class="t-ko"><strong>최적화 &gt; 휴리스틱.</strong> "특이값↑⇒비트↑"를 실제 오차에 대한 ILP로 바꾸자, 가장 어려운 곳(‖ΔW‖이 큰 추론·멀티모달 delta)에서 최대 이득.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Mixed precision is necessary, provably.</strong> The derived scaling term shows uniform bit-widths can't be optimal — a rare case of theory dictating the design rather than rationalizing it.</p><p class="t-ko"><strong>혼합정밀도는 증명상 필연.</strong> 유도된 scaling 항은 균일 비트폭이 최적일 수 없음을 보인다 — 이론이 설계를 사후정당화가 아니라 규정한 드문 사례.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Sequential quantization has a free lunch.</strong> RTC fixes the V-then-U bias for ~2.2% avg, a cheap correction any V-then-U pipeline could borrow.</p><p class="t-ko"><strong>순차 양자화엔 공짜 점심이 있다.</strong> RTC는 V→U 편향을 잡아 평균 ~2.2%를 회복 — V→U 파이프라인 어디든 빌려쓸 수 있는 값싼 보정.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Multi-tenant ready.</strong> One base + many &gt;6×-compressed deltas at a flexible, user-set ratio — directly attacks the cost of serving many fine-tunes.</p><p class="t-ko"><strong>멀티테넌트 적합.</strong> 베이스 하나 + 사용자 지정 비율로 &gt;6× 압축된 delta 다수 — 다수 파인튜닝 서빙 비용을 직접 공략.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline +22.3%/+26.9% are <em>relative</em> gains on AIME2024 — a tiny 30-problem benchmark with huge run-to-run variance (std up to ±6.9), so +6.7/+6.6 absolute points sit barely outside the noise band. The all-task averages tell a soberer story: +2.9% (7B) and just +2.2% (14B), and on already-easy deltas (MBPP, HumanEval, MetaMath) PRINMIX ties or slightly trails Delta-CoMe. Whether the principled framework helps broadly, or mainly on a few high-norm reasoning deltas, is still open.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 헤드라인 +22.3%/+26.9%는 AIME2024에서의 <em>상대</em> 향상으로, 문제 30개짜리 소규모 벤치마크(실행 간 분산이 커서 std ±6.9까지)라 절대 +6.7/+6.6점은 잡음 폭을 간신히 벗어난다. 전 과제 평균은 더 차분하다: +2.9%(7B), 14B는 +2.2%에 그치고, 이미 쉬운 delta(MBPP·HumanEval·MetaMath)에선 Delta-CoMe와 동률이거나 약간 뒤진다. 원리 기반 프레임워크가 폭넓게 도움이 되는지, 아니면 주로 노름이 큰 몇몇 추론 delta에서만 효과적인지는 아직 열린 질문.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2506.11087">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2506.11087">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2506.11087">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2506.11087">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

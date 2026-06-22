@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · ManifoldKV: Training-Free KV Cache Compression via Euclidean Outlier Detection</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Compression · KV Outlier</span><span class="t-ko">🗜 Compression · KV Outlier</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>ManifoldKV: Training-Free KV Cache Compression via Euclidean Outlier Detection<br>
+      <span class="glow t-en">— Swap cosine for plain L2 distance: keep the tokens cosine throws away</span>
+      <span class="glow t-ko">— 코사인 대신 그냥 L2 거리로: 코사인이 버리던 토큰을 살린다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Debajyoti Datta</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 Hippocratic AI</span>
+      <span>🗓 2026.02.09</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.08343">arXiv:2602.08343</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Geometry-based KV eviction (e.g. KeyDiff) scores tokens by <b>cosine similarity</b> to the key centroid — but cosine is scale-invariant, so it throws away magnitude cues that mark salient tokens. ManifoldKV simply scores by <span class="hl">Euclidean (L2) distance to the centroid — a 3-line change</span> that captures both angular <i>and</i> radial deviation. It matches the best baseline overall (<b>95.7%</b> on RULER) but wins where cosine collapses: <b>+15.4 pts on 3-key NIAH</b> at 50% compression, and a <b>WindowedManifoldKV</b> variant recovers <b>+49 pts</b> at 64K context where global centroids dilute into meaninglessness.</p>
+    <p class="t-ko">기하 기반 KV eviction(예: KeyDiff)은 토큰을 키 centroid에 대한 <b>코사인 유사도</b>로 점수화한다 — 그러나 코사인은 크기(scale) 불변이라, 중요한 토큰을 구별하는 magnitude 단서를 버린다. ManifoldKV는 그냥 <span class="hl">centroid까지의 유클리드(L2) 거리로 점수화 — 3줄짜리 변경</span>으로 각도(angular)와 반경(radial) 편차를 모두 포착한다. 전체 성능은 최고 baseline과 동률(RULER <b>95.7%</b>)이지만 코사인이 무너지는 곳에서 이긴다: 50% 압축에서 <b>3-key NIAH +15.4점</b>, 그리고 global centroid가 무의미해지는 64K 문맥에서 <b>WindowedManifoldKV</b>가 <b>+49점</b>을 회복한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Cosine similarity normalizes away vector magnitude — and that discarded magnitude is exactly the signal that marks the tokens worth keeping.</p>
+    <p class="lead t-ko">코사인 유사도는 벡터의 크기(magnitude)를 정규화로 없애 버린다 — 그런데 그 버려진 크기야말로 살려둘 만한 토큰을 가리키는 신호다.</p>
+    <p class="t-en">The KV-cache grows linearly with context length (8.6 GB for Llama-3.1-8B at 64K), so eviction methods must answer one question: <strong>which tokens to keep?</strong> Recent geometric scorers retain "outlier" keys, but they measure outlier-ness with cosine distance to the centroid — which only sees <strong>angular</strong> deviation. A token that points the <em>same way</em> as the centroid but is 10× larger gets cosine score = 1 (maximum similarity) and is wrongly evicted. The authors find semantically important tokens (entities, numbers) carry unusual <strong>magnitude</strong> too. ManifoldKV's fix is almost embarrassingly simple — score by L2 distance instead of cosine — yet it cleanly recovers the two regimes where cosine fails: multi-key retrieval and very long contexts.</p>
+    <p class="t-ko">KV-cache는 문맥 길이에 선형으로 증가하므로(Llama-3.1-8B의 64K에서 8.6GB) eviction 방법은 단 하나의 질문에 답해야 한다: <strong>어떤 토큰을 남길까?</strong> 최근의 기하 scorer는 "outlier" 키를 남기지만, outlier 여부를 centroid에 대한 코사인 거리로 측정한다 — 이는 <strong>각도(angular)</strong> 편차만 본다. centroid와 <em>같은 방향</em>이지만 크기가 10배인 토큰은 코사인 점수 = 1(최대 유사도)을 받아 잘못 퇴출된다. 저자들은 의미적으로 중요한 토큰(개체명·숫자)이 특이한 <strong>크기</strong>도 함께 갖는다는 것을 발견했다. ManifoldKV의 해법은 거의 민망할 만큼 단순하다 — 코사인 대신 L2 거리로 점수화 — 그러나 코사인이 실패하는 두 영역(다중 키 검색, 초장문 문맥)을 깔끔하게 회복한다.</p>
+    <figure class="fig">
+      <img src="fig/2602.08343/fig1.png" alt="Performance across context lengths: ManifoldKV vs KeyDiff vs SnapKV, with +49 pt recovery at 64K">
+      <figcaption class="t-en"><b>Figure 2.</b> Accuracy across context lengths. ManifoldKV matches KeyDiff at 4K–32K; at 64K global ManifoldKV collapses to 35.2% (centroid dilution), but WindowedManifoldKV recovers <b>+49 pts</b> to 84.3%.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 문맥 길이별 정확도. ManifoldKV는 4K–32K에서 KeyDiff와 동률; 64K에서 global ManifoldKV는 35.2%로 붕괴(centroid dilution)하지만, WindowedManifoldKV가 <b>+49점</b>을 회복해 84.3%에 도달.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.08343</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">95.7%</div><div class="l"><span class="t-en">RULER acc @ 4K–16K<br>(20% compression, w/ AdaKV)</span><span class="t-ko">RULER 정확도 @ 4K–16K<br>(20% 압축, AdaKV 사용)</span></div></div>
+      <div class="stat"><div class="n">+15.4</div><div class="l"><span class="t-en">pts over KeyDiff on<br>3-key NIAH @ 50% comp.</span><span class="t-ko">3-key NIAH @ 50% 압축<br>KeyDiff 대비 우위(점)</span></div></div>
+      <div class="stat"><div class="n">+49</div><div class="l"><span class="t-en">pts recovery at 64K<br>(35.2% → 84.3%, windowed)</span><span class="t-ko">64K 회복(점)<br>(35.2% → 84.3%, windowed)</span></div></div>
+      <div class="stat"><div class="n">+11</div><div class="l"><span class="t-en">pts over attention-based<br>SnapKV (84.0%) on RULER</span><span class="t-ko">어텐션 기반 SnapKV(84.0%)<br>대비 우위(점) on RULER</span></div></div>
+      <div class="stat"><div class="n">~9D</div><div class="l"><span class="t-en">universal key manifold<br>(Two-NN: 8.2–8.9, all archs)</span><span class="t-ko">보편적 key manifold 차원<br>(Two-NN: 8.2–8.9, 전 모델)</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">lines of code · training-free<br>· &lt;0.5ms latency @ 64K</span><span class="t-ko">코드 3줄 · 학습 불필요<br>· 64K에서 &lt;0.5ms 지연</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — L2 wins exactly where cosine breaks</span><span class="t-ko">결과 — 코사인이 깨지는 바로 그곳에서 L2가 이긴다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 4, 5 &amp; 6 (Llama-3.1-8B).</b> RULER accuracy (%). ManifoldKV ties the best baseline overall but dominates on multi-key retrieval and 64K long context.</caption>
+        <caption class="t-ko"><b>Table 4, 5, 6 (Llama-3.1-8B).</b> RULER 정확도(%). ManifoldKV는 전체 성능은 최고 baseline과 동률이나, 다중 키 검색과 64K 장문에서 압도.</caption>
+        <thead><tr><th>Setting</th><th>ManifoldKV</th><th>KeyDiff</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>RULER overall (20%, AdaKV)</td><td>95.73</td><td>95.66</td><td class="up">+0.07</td></tr>
+          <tr><td>3-key NIAH (50% comp.)</td><td>92.4</td><td>77.0</td><td class="up">+15.4</td></tr>
+          <tr><td>2-key NIAH (50% comp.)</td><td>99.8</td><td>92.6</td><td class="up">+7.2</td></tr>
+          <tr><td>64K (Windowed-4K, 25%)</td><td>84.29</td><td>81.09</td><td class="up">+3.2</td></tr>
+          <tr><td>Distance metric (standalone)</td><td>92.7</td><td>52.8</td><td class="up">+39.9</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Cosine (KeyDiff)</span><span class="t-ko">코사인 (KeyDiff)</span></div>
+          <div class="sub"><span class="t-en">angle only</span><span class="t-ko">각도만 봄</span></div>
+          <div class="latent"><span class="t-en">k = 10μ → score 1 → EVICT ✗</span><span class="t-ko">k = 10μ → 점수 1 → 퇴출 ✗</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">L2 (ManifoldKV)</span><span class="t-ko">L2 (ManifoldKV)</span></div>
+          <div class="sub"><span class="t-en">s = ‖kᵢ − μ‖₂</span><span class="t-ko">s = ‖kᵢ − μ‖₂</span></div>
+          <div class="latent"><span class="t-en">angle + magnitude → KEEP ✓</span><span class="t-ko">각도 + 크기 → 유지 ✓</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">64K fix: Windowed</span><span class="t-ko">64K 보정: Windowed</span></div>
+          <div class="sub"><span class="t-en">local centroid per 4K window</span><span class="t-ko">4K 창마다 지역 centroid</span></div>
+          <div class="latent"><span class="t-en">35.2% → 84.3%</span><span class="t-ko">35.2% → 84.3%</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>One scorer swap.</b> Replace cosine with raw L2 distance to the key centroid; for 64K, compute the centroid locally per window to avoid "centroid dilution" — where averaging over many topics yields a meaningless grand mean.</div>
+      <div class="cap t-ko"><b>scorer 한 번 교체.</b> 코사인을 키 centroid까지의 순수 L2 거리로 바꾼다; 64K에서는 창(window)마다 지역적으로 centroid를 계산해 "centroid dilution"(여러 주제 평균이 무의미한 grand mean이 되는 현상)을 피한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea: magnitude is signal, not noise</span><span class="t-ko">아이디어: 크기(magnitude)는 잡음이 아니라 신호다</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① L2 &gt; cosine</span>
+        <h3>Magnitude-Aware Scoring</h3>
+        <p class="t-en">Expanding ‖kᵢ − μ‖² = rᵢ² + ‖μ‖² − 2rᵢ‖μ‖·cos(kᵢ,μ) shows L2 keeps the magnitude term rᵢ that cosine cancels. So <span class="term">radial outliers</span> (parallel to μ but extreme in length) are caught — cosine treats k=10μ and k=0.1μ as identical, L2 separates them 10×.</p>
+        <p class="t-ko">‖kᵢ − μ‖² = rᵢ² + ‖μ‖² − 2rᵢ‖μ‖·cos(kᵢ,μ)로 전개하면, 코사인이 상쇄하는 magnitude 항 rᵢ를 L2가 보존함을 알 수 있다. 그래서 <span class="term">radial outlier</span>(μ와 평행하나 길이가 극단적)가 잡힌다 — 코사인은 k=10μ와 k=0.1μ를 동일하게 보지만, L2는 10배 차이로 구분한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 64K 보정</span>
+        <h3>Centroid Dilution → Windowing</h3>
+        <p class="t-en">At 64K the global centroid averages over many topics, becoming a "center of mass" that means nothing — all tokens look equidistant and accuracy collapses to 35.2%. <span class="term">WindowedManifoldKV</span> computes a local centroid per 4K window, preserving discriminative power and recovering to 84.3%.</p>
+        <p class="t-ko">64K에서 global centroid는 여러 주제를 평균내어 아무 의미 없는 "center of mass"가 된다 — 모든 토큰이 등거리처럼 보여 정확도가 35.2%로 붕괴한다. <span class="term">WindowedManifoldKV</span>는 4K 창마다 지역 centroid를 계산해 변별력을 유지, 84.3%로 회복한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Compute the centroid</span><span class="t-ko">centroid 계산</span></b><span class="t-en">Average all key vectors in the cache: μ = (1/N)Σ kᵢ — O(Nd), one mean per head.</span><span class="t-ko">캐시 내 모든 키 벡터를 평균: μ = (1/N)Σ kᵢ — O(Nd), 헤드당 평균 1회.</span></li>
+      <li><b><span class="t-en">Score by L2 distance</span><span class="t-ko">L2 거리로 점수화</span></b><span class="t-en">sᵢ = ‖kᵢ − μ‖₂ for every token. Tokens far from the centroid (high score) are the geometric outliers to retain.</span><span class="t-ko">모든 토큰에 sᵢ = ‖kᵢ − μ‖₂. centroid에서 먼(점수 높은) 토큰이 남길 기하적 outlier.</span></li>
+      <li><b><span class="t-en">Top-K eviction</span><span class="t-ko">Top-K 퇴출</span></b><span class="t-en">Keep the M = ⌊(1−ρ)N⌋ highest-scoring tokens (e.g. 80% at 20% compression); evict the rest. O(N log N) sort.</span><span class="t-ko">점수 상위 M = ⌊(1−ρ)N⌋개 유지(예: 20% 압축 시 80%); 나머지 퇴출. O(N log N) 정렬.</span></li>
+      <li><b><span class="t-en">For 64K+: window the centroid</span><span class="t-ko">64K+에서는 centroid를 창 단위로</span></b><span class="t-en">Slide a 4K window; compute a local μ_w inside each and score against it, then select globally — restoring discriminative power lost to dilution.</span><span class="t-ko">4K 창을 슬라이딩; 각 창 안에서 지역 μ_w를 계산해 점수화 후 전역 선택 — dilution으로 잃은 변별력 복원.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>A 3-line, training-free drop-in.</strong> Swapping cosine for L2 needs no calibration, adds &lt;0.5ms at 64K, and slots straight into AdaKV — trivial to adopt.</p><p class="t-ko"><strong>코드 3줄, 학습 불필요한 drop-in.</strong> 코사인→L2 교체는 보정이 필요 없고 64K에서 &lt;0.5ms만 추가, AdaKV에 바로 끼운다 — 도입이 매우 쉽다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Magnitude carries semantics.</strong> The +40-pt jump from cosine to L2 in standalone mode says vector length — not just direction — flags entities and numbers worth keeping.</p><p class="t-ko"><strong>크기에 의미가 담겨 있다.</strong> standalone에서 코사인→L2의 +40점 도약은, 방향뿐 아니라 벡터 길이가 살릴 만한 개체·숫자를 가리킨다는 뜻.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Centroids dilute at scale.</strong> A global mean over 64K mixed tokens is meaningless; local windows are the simple cure — a useful lesson beyond KV caching.</p><p class="t-ko"><strong>centroid는 규모가 커지면 희석된다.</strong> 64K 혼합 토큰의 전역 평균은 무의미하다; 지역 창이 단순한 해법 — KV 캐싱을 넘어 유용한 교훈.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Universal ~9D manifold.</strong> Key vectors live on an 8–9D manifold across Llama/Qwen/Gemma/Ministral, explaining zero-shot cross-model transfer (±0.3%).</p><p class="t-ko"><strong>보편적 ~9D manifold.</strong> 키 벡터는 Llama/Qwen/Gemma/Ministral 전반에서 8–9D manifold에 존재 — 제로샷 교차모델 전이(±0.3%)를 설명.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> Where ManifoldKV's whole pitch should win — <em>overall</em> RULER — it merely ties KeyDiff (95.73% vs 95.66%, +0.07). All headline wins are narrow regimes (multi-key NIAH, 64K), and even the 64K "SOTA" leans on a heuristic 4K window the paper admits is just the empirically best knob, not a principled choice. Evaluation is RULER-only (synthetic NIAH), capped at 64K despite long-context being the headline, with no real downstream-task or throughput numbers — so it's unclear the +15/+49 gains survive outside needle-in-haystack.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> ManifoldKV의 핵심 주장이 이겨야 할 곳인 <em>전체</em> RULER에서는 KeyDiff와 사실상 동률에 그친다(95.73% vs 95.66%, +0.07). 모든 대표 승리는 좁은 영역(다중 키 NIAH, 64K)이며, 64K "SOTA"조차 논문 스스로 "경험적으로 가장 좋은 값"이라 인정하는 휴리스틱 4K 창에 기댄다. 평가가 RULER(합성 NIAH) 단독이고, 장문이 간판인데도 64K에서 멈추며, 실제 다운스트림 과제나 처리량 수치가 없다 — 따라서 +15/+49 이득이 needle-in-haystack 밖에서도 유지될지는 불확실하다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.08343">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.08343">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.08343">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.08343">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
