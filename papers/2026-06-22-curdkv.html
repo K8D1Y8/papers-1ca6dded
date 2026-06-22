@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Value-Guided KV Compression for LLMs via Approximated CUR Decomposition</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 KV Cache · CUR Decomposition</span><span class="t-ko">🗜 KV Cache · CUR Decomposition</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>CurDKV: Value-Guided KV Compression via Approximated CUR<br>
+      <span class="glow t-en">— Don't evict by attention scores; keep the tokens that preserve the output</span>
+      <span class="glow t-ko">— 어텐션 점수로 버리지 말고, '출력'을 보존하는 토큰만 남겨라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Ayan Sengupta</b> <span class="t-en">et al.</span><span class="t-ko">외 2인</span></span>
+      <span>🏛 IIT Delhi</span>
+      <span>🗓 2025.09.18</span>
+      <span>📄 <a href="https://arxiv.org/abs/2509.15038">arXiv:2509.15038</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Almost every KV-cache compressor evicts tokens by <b>query-key attention scores</b> — but the authors prove that approximating <span class="hl">QK⊤ does not preserve the actual output softmax(QK⊤)V</span>. CurDKV instead picks tokens via <b>CUR-decomposition leverage scores on both keys and values</b>, directly targeting output fidelity. Result: up to <b>+9.6% accuracy over SnapKV/ChunkKV</b> under aggressive 90% compression, while <b>cutting generation latency by up to 40%</b> — and it stays compatible with FlashAttention and GQA.</p>
+    <p class="t-ko">대부분의 KV-cache 압축기는 <b>쿼리-키 어텐션 점수</b>로 토큰을 버린다. 하지만 저자들은 <span class="hl">QK⊤를 근사해도 실제 출력 softmax(QK⊤)V는 보존되지 않음</span>을 증명한다. CurDKV는 대신 <b>키·값 모두에 대한 CUR 분해 leverage score</b>로 토큰을 선택해 출력 충실도를 직접 겨냥한다. 결과적으로 90% 공격적 압축에서 <b>SnapKV/ChunkKV 대비 최대 +9.6% 정확도</b>, <b>생성 지연 최대 40% 감소</b> — 게다가 FlashAttention·GQA와 호환된다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">High attention score ≠ important token. What you should preserve is the attention <em>output</em>, not the attention <em>weights</em>.</p>
+    <p class="lead t-ko">높은 어텐션 점수가 곧 중요한 토큰은 아니다. 보존해야 하는 것은 어텐션 <em>가중치</em>가 아니라 어텐션 <em>출력</em>이다.</p>
+    <p class="t-en">The KV cache grows linearly with sequence length — an 8B model generating 2M tokens can need <strong>256GB</strong> of cache. Heuristics like SnapKV and H2O rank tokens by query-key attention mass, but they ignore the <strong>value vectors</strong> that actually shape the output. The authors show theoretically (Lemma 3.1) that the output error is bounded mainly by <strong>∥V − V′∥</strong>, and empirically that attention intensity and eviction loss are <strong>not correlated</strong>. CurDKV reframes eviction as a <strong>low-rank reconstruction</strong> of softmax(QK⊤)V using CUR decomposition — selecting real tokens (rows/columns) that best reconstruct the output.</p>
+    <p class="t-ko">KV 캐시는 시퀀스 길이에 선형으로 커진다 — 8B 모델이 200만 토큰을 생성하면 캐시가 <strong>256GB</strong>까지 필요하다. SnapKV·H2O 같은 휴리스틱은 쿼리-키 어텐션 질량으로 토큰을 순위 매기지만, 출력을 실제로 좌우하는 <strong>value 벡터</strong>를 무시한다. 저자들은 이론적으로(Lemma 3.1) 출력 오차가 주로 <strong>∥V − V′∥</strong>로 상한된다는 것, 그리고 실험적으로 어텐션 강도와 eviction loss가 <strong>상관없음</strong>을 보인다. CurDKV는 eviction을 CUR 분해로 softmax(QK⊤)V를 <strong>저랭크 재구성</strong>하는 문제로 재정의하고, 출력을 가장 잘 복원하는 실제 토큰(행/열)을 선택한다.</p>
+    <figure class="fig">
+      <img src="fig/2509.15038/fig1.png" alt="Eviction loss vs. number of evicted tokens for reconstructing QK and softmax(QK)V">
+      <figcaption class="t-en"><b>Figure 2.</b> Eviction loss vs. number of evicted tokens when reconstructing (a) QK⊤ and (b) softmax(QK⊤)V. CurDKV (red) incurs the lowest loss — especially on the attention OUTPUT softmax(QK⊤)V, the quantity that actually drives predictions — beating Key-Norm, SnapKV, and H2O heuristics.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 제거 토큰 수에 따른 (a) QK⊤ 및 (b) softmax(QK⊤)V 재구성 손실. CurDKV(빨강)가 손실이 가장 작으며, 특히 예측을 실제로 좌우하는 어텐션 출력 softmax(QK⊤)V에서 Key-Norm·SnapKV·H2O 휴리스틱을 크게 앞선다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2509.15038</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+9.6%</div><div class="l"><span class="t-en">Max avg. score gain<br>over SnapKV/ChunkKV</span><span class="t-ko">SnapKV/ChunkKV 대비<br>평균 점수 최대 향상</span></div></div>
+      <div class="stat"><div class="n">−40%</div><div class="l"><span class="t-en">Generation latency<br>(128K ctx, 80% compress)</span><span class="t-ko">생성 지연<br>(128K 문맥, 80% 압축)</span></div></div>
+      <div class="stat"><div class="n">98.7%</div><div class="l"><span class="t-en">Ruler NIAH avg @30%<br>(SnapKV: 80.4%)</span><span class="t-ko">Ruler NIAH 평균 @30%<br>(SnapKV: 80.4%)</span></div></div>
+      <div class="stat"><div class="n">15.6→&lt;3 GB</div><div class="l"><span class="t-en">KV cache @80% compress<br>(128K-token context)</span><span class="t-ko">KV 캐시 @80% 압축<br>(128K 토큰 문맥)</span></div></div>
+      <div class="stat"><div class="n">24</div><div class="l"><span class="t-en">Tasks evaluated<br>(LongBench 16 + Ruler 8)</span><span class="t-ko">평가 태스크<br>(LongBench 16 + Ruler 8)</span></div></div>
+      <div class="stat"><div class="n">2</div><div class="l"><span class="t-en">Backbones<br>(LLaMA-3.1-8B, Mistral-7B)</span><span class="t-ko">백본<br>(LLaMA-3.1-8B, Mistral-7B)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — value-guided selection wins</span><span class="t-ko">결과 — 값 기반 선택이 이긴다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 excerpt.</b> LongBench average accuracy (%) on LLaMA-3.1-8B at 30% and 90% cache budget. CurDKV / AdaCurDKV vs. baselines. Δ = (best CUR − SnapKV) at that budget.</caption>
+        <caption class="t-ko"><b>Table 2 발췌.</b> LLaMA-3.1-8B의 LongBench 평균 정확도(%), 캐시 예산 30%·90%. CurDKV / AdaCurDKV vs. 베이스라인. Δ = (최고 CUR − SnapKV).</caption>
+        <thead><tr><th>Budget</th><th>SnapKV</th><th>ChunkKV</th><th>CurDKV</th><th>AdaCurDKV</th><th>Δ vs SnapKV</th></tr></thead>
+        <tbody>
+          <tr><td>30%</td><td>45.3</td><td>44.4</td><td>48.9</td><td>48.9</td><td class="up">+3.6</td></tr>
+          <tr><td>50%</td><td>44.3</td><td>42.6</td><td>48.3</td><td>47.9</td><td class="up">+4.0</td></tr>
+          <tr><td>70%</td><td>41.9</td><td>39.2</td><td>45.4</td><td>46.1</td><td class="up">+4.2</td></tr>
+          <tr><td>90%</td><td>33.7</td><td>30.8</td><td>35.7</td><td>35.1</td><td class="up">+2.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 4 excerpt.</b> Ruler needle-in-a-haystack average (%) on LLaMA-3.1-8B. CUR methods dominate, especially at extreme 90% compression.</caption>
+        <caption class="t-ko"><b>Table 4 발췌.</b> LLaMA-3.1-8B의 Ruler needle-in-a-haystack 평균(%). 극단적 90% 압축에서도 CUR 계열이 우세하다.</caption>
+        <thead><tr><th>Budget</th><th>Knorm</th><th>SnapKV</th><th>ChunkKV</th><th>CurDKV</th><th>AdaCurDKV</th></tr></thead>
+        <tbody>
+          <tr><td>30%</td><td>71.8</td><td>80.4</td><td>87.0</td><td class="up">98.7</td><td class="up">97.7</td></tr>
+          <tr><td>90%</td><td>13.9</td><td>22.0</td><td>32.8</td><td class="up">34.7</td><td class="up">39.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Project K, V</span><span class="t-ko">K, V 투영</span></div>
+          <div class="sub"><span class="t-en">random Gaussian → low-dim</span><span class="t-ko">랜덤 가우시안 → 저차원</span></div>
+          <div class="latent"><span class="t-en">cheap leverage proxy</span><span class="t-ko">저비용 leverage 근사</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">ℓ⁽ᴷ⁾ · ℓ⁽ⱽ⁾</span><span class="t-ko">ℓ⁽ᴷ⁾ · ℓ⁽ⱽ⁾</span></div>
+          <div class="sub"><span class="t-en">key × value leverage</span><span class="t-ko">키 × 값 leverage 곱</span></div>
+          <div class="latent"><span class="t-en">score every token</span><span class="t-ko">토큰별 점수화</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Top-k + sinks</span><span class="t-ko">Top-k + 싱크</span></div>
+          <div class="sub"><span class="t-en">keep K′, V′ rows</span><span class="t-ko">K′, V′ 행만 유지</span></div>
+          <div class="latent"><span class="t-en">output preserved</span><span class="t-ko">출력 보존</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Select, don't reweight</b> — CUR keeps <b>actual</b> key/value rows (interpretable tokens) chosen by leverage scores, so the compressed cache best reconstructs softmax(QK⊤)V. AdaCurDKV adds per-head budget allocation by leverage mass.</div>
+      <div class="cap t-ko"><b>재가중이 아니라 선택</b> — CUR는 leverage score로 고른 <b>실제</b> 키/값 행(해석 가능한 토큰)을 유지해, 압축 캐시가 softmax(QK⊤)V를 가장 잘 복원한다. AdaCurDKV는 leverage 질량 기반 헤드별 예산 배분을 추가한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: cast eviction as CUR low-rank reconstruction</span><span class="t-ko">아이디어: eviction을 CUR 저랭크 재구성으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 값 중심 leverage</span>
+        <h3>Value-guided leverage scores</h3>
+        <p class="t-en">Lemma 3.1 bounds the attention-output error mainly by <span class="term">∥V − V′∥</span>. So instead of attention heuristics, CurDKV scores each token by the product of its <span class="term">key and value leverage scores</span> (squared ℓ₂ norms of singular-vector rows) — the CUR notion of "how much this row defines the dominant subspace."</p>
+        <p class="t-ko">Lemma 3.1은 어텐션 출력 오차를 주로 <span class="term">∥V − V′∥</span>로 상한한다. 그래서 CurDKV는 어텐션 휴리스틱 대신 각 토큰의 <span class="term">키·값 leverage score 곱</span>(특이벡터 행의 ℓ₂ 제곱노름)으로 점수를 매긴다 — "이 행이 지배 부분공간을 얼마나 정의하는가"라는 CUR 개념.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 빠른 근사</span>
+        <h3>Random Gaussian projection</h3>
+        <p class="t-en">Exact SVD per layer/head is too costly, so K and V are first projected with a random Gaussian matrix (d×r) before computing leverage. This keeps relative token importance while cutting cost — and stays compatible with <span class="term">FlashAttention and GQA</span>. AdaCurDKV then distributes the budget across heads by leverage mass (min-retention safeguard α=0.20).</p>
+        <p class="t-ko">레이어/헤드마다 정확한 SVD는 너무 비싸므로, K·V를 먼저 랜덤 가우시안 행렬(d×r)로 투영한 뒤 leverage를 계산한다. 상대적 토큰 중요도는 유지하면서 비용을 줄이고, <span class="term">FlashAttention·GQA</span>와도 호환된다. AdaCurDKV는 leverage 질량으로 헤드별 예산을 배분한다(최소 유지 안전장치 α=0.20).</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Project per group</span><span class="t-ko">그룹별 투영</span></b><span class="t-en">For each GQA group, sample a random Gaussian matrix G (d×r, entries ~N(0,1/r)) and project Kᵢ→KᵢG, Vᵢ→VᵢG to approximate leverage cheaply.</span><span class="t-ko">각 GQA 그룹마다 랜덤 가우시안 행렬 G(d×r, 원소 ~N(0,1/r))를 뽑아 Kᵢ→KᵢG, Vᵢ→VᵢG로 투영해 leverage를 저비용으로 근사한다.</span></li>
+      <li><b><span class="t-en">Compute & combine leverage</span><span class="t-ko">leverage 계산·결합</span></b><span class="t-en">Take squared ℓ₂ norms of rows as key leverage ℓ⁽ᴷ⁾ and value leverage ℓ⁽ⱽ⁾, multiply them (ℓ⁽ᴷⱽ⁾ = ℓ⁽ᴷ⁾·ℓ⁽ⱽ⁾) to favor tokens important in both spaces, then normalize.</span><span class="t-ko">행의 ℓ₂ 제곱노름을 키 leverage ℓ⁽ᴷ⁾·값 leverage ℓ⁽ⱽ⁾로 삼고, 둘을 곱해(ℓ⁽ᴷⱽ⁾ = ℓ⁽ᴷ⁾·ℓ⁽ⱽ⁾) 두 공간 모두에서 중요한 토큰을 강조한 뒤 정규화한다.</span></li>
+      <li><b><span class="t-en">Select tokens</span><span class="t-ko">토큰 선택</span></b><span class="t-en">Preserve the first s=4 attention sinks, then take the top (k−s) tokens by combined leverage; their key/value rows form the compressed K′, V′.</span><span class="t-ko">앞쪽 s=4개 어텐션 싱크를 보존하고, 결합 leverage 상위 (k−s)개를 선택 — 해당 키/값 행이 압축된 K′, V′를 이룬다.</span></li>
+      <li><b><span class="t-en">(Optional) adapt budget</span><span class="t-ko">(선택) 예산 적응</span></b><span class="t-en">AdaCurDKV reallocates the per-layer budget across heads in proportion to their leverage-score mass, with a minimum retention fraction (α=0.20) per head — boosting head-sensitive tasks.</span><span class="t-ko">AdaCurDKV는 레이어 예산을 헤드별 leverage 질량에 비례해 재배분하되 헤드마다 최소 유지율(α=0.20)을 둔다 — 헤드 민감 태스크에서 향상.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Efficiency in practice</span><span class="t-ko">실전 효율</span></h2>
+    <p class="t-en">Cache memory shrinks roughly linearly with the compression ratio, and decoding speeds up because fewer cached tokens are read each step. The one cost is a modest prefill-time bump (≈10s → 14–15s at 128K) from computing leverage scores — but it plateaus past 40–60% compression.</p>
+    <p class="t-ko">캐시 메모리는 압축률에 거의 선형으로 감소하고, 매 스텝 읽는 캐시 토큰이 줄어 디코딩이 빨라진다. 유일한 비용은 leverage 계산에 따른 약간의 prefill 시간 증가(128K에서 약 10초 → 14~15초)인데, 40~60% 압축을 넘으면 더 이상 늘지 않는다.</p>
+    <figure class="fig">
+      <img src="fig/2509.15038/fig2.png" alt="Efficiency vs. compression ratio: cache size, prefilling time, generation time">
+      <figcaption class="t-en"><b>Figure 4.</b> Efficiency vs. compression ratio across context lengths (1K–128K): (a) KV cache size (GB), (b) prefilling time, (c) generation time. Cache memory shrinks roughly linearly with the compression ratio.</figcaption>
+      <figcaption class="t-ko"><b>Figure 4.</b> 문맥 길이(1K–128K)별 압축률에 따른 효율: (a) KV 캐시 크기(GB), (b) prefill 시간, (c) 생성 시간. 캐시 메모리는 압축률에 거의 선형으로 감소한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2509.15038</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Preserve the output, not the weights.</strong> Targeting softmax(QK⊤)V instead of QK⊤ yields up to +9.6% accuracy at aggressive compression — the gap widens exactly where it matters most.</p><p class="t-ko"><strong>가중치가 아니라 출력을 보존.</strong> QK⊤ 대신 softmax(QK⊤)V를 겨냥하니 공격적 압축에서 최대 +9.6% — 가장 중요한 영역에서 격차가 벌어진다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Value vectors were the missing signal.</strong> Ablations confirm value-centric and key×value leverage are far more robust than key-only at 90% compression.</p><p class="t-ko"><strong>value 벡터가 빠진 신호였다.</strong> 어블레이션에서 90% 압축 시 값 중심·키×값 leverage가 키-only보다 훨씬 견고함이 확인된다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Principled but deployable.</strong> Random Gaussian projection makes CUR cheap, and it stays FlashAttention/GQA-compatible — no custom kernel needed.</p><p class="t-ko"><strong>원리적이면서 배포 가능.</strong> 랜덤 가우시안 투영으로 CUR를 저렴하게 만들고 FlashAttention/GQA 호환 — 전용 커널 불필요.</p></div>
+      <div class="t"><span class="ic">⚡</span><p class="t-en"><strong>Real latency win.</strong> Up to 40% faster generation at 128K with near-linear memory savings — a genuine speed-accuracy trade for long contexts.</p><p class="t-ko"><strong>실질적 지연 개선.</strong> 128K에서 생성 최대 40% 가속 + 거의 선형 메모리 절감 — 긴 문맥용 진짜 속도-정확도 트레이드.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline "+9.6%" is a best-case gap; on Mistral-7B at 90% compression CurDKV (29.1) actually <em>trails</em> SnapKV (32.6) on LongBench and collapses on Ruler (7.8 vs ChunkKV 19.2), which the authors blame on sliding-window attention. Selection is also static at prefill — query-agnostic — so a token that looks low-leverage but is critical to the eventual question can still be irreversibly evicted.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 수치 "+9.6%"는 최선의 격차다. Mistral-7B 90% 압축에서는 CurDKV(29.1)가 LongBench에서 SnapKV(32.6)에 오히려 <em>뒤지고</em> Ruler에서는 붕괴한다(7.8 vs ChunkKV 19.2) — 저자들은 sliding-window 어텐션 탓으로 돌린다. 또한 선택이 prefill 시점에 고정(질문 비인지)이라, leverage는 낮아 보여도 결국 질문에 핵심인 토큰이 되돌릴 수 없게 제거될 수 있다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2509.15038">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2509.15038">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2509.15038">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2509.15038">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Requested · KV-Cache Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>요청 · KV-Cache 압축</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
