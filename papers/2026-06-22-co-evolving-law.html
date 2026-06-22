@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Co-Evolving Latent Action World Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · Latent Action</span><span class="t-ko">🌍 World Model · Latent Action</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Co-Evolving Latent Action World Models<br>
+      <span class="glow t-en">— Stop training the action model and the world model separately; let them co-evolve</span>
+      <span class="glow t-ko">— 행동모델과 월드모델을 따로 학습하지 말고, 함께 진화시켜라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Yucen Wang</b> <span class="t-en">et al.</span><span class="t-ko">외 5인</span></span>
+      <span>🏛 <span class="t-en">Nanjing University · Microsoft Research Asia</span><span class="t-ko">난징대 · Microsoft Research Asia</span></span>
+      <span>🗓 2025.10.30</span>
+      <span>📄 <a href="https://arxiv.org/abs/2510.26433">arXiv:2510.26433</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">To make a pretrained video generator controllable, prior work trains a <b>latent action model (LAM)</b> first, freezes it, then trains a <b>separate world model</b> on its fixed actions — redundant, and the actions can never improve. <b>CoLA-World</b> fuses the two: the world model itself <i>is</i> the dynamics predictor, and the action model and world model are trained <span class="hl">jointly so they co-evolve</span>. The catch is that naive joint training collapses the action codebook; a short <b>8K-step warm-up</b> (frozen world model) fixes it. Result: matches or beats the two-stage baseline on video prediction (LIBERO FVD <b>158.36 vs 167.77</b>) and nearly <b>triples</b> visual-planning success (<b>21.2% vs 7.7%</b>).</p>
+    <p class="t-ko">사전학습된 비디오 생성기를 제어 가능하게 만들려고, 기존 방식은 <b>잠재 행동 모델(LAM)</b>을 먼저 학습해 동결한 뒤, 그 고정된 행동으로 <b>별도의 월드모델</b>을 학습한다 — 중복이고, 행동은 더 이상 개선되지 못한다. <b>CoLA-World</b>는 둘을 합친다: 월드모델 자체가 동역학 예측기가 되고, 행동모델과 월드모델을 <span class="hl">함께 학습해 공진화</span>시킨다. 문제는 순진하게 합치면 행동 코드북이 붕괴한다는 것 — 짧은 <b>8K 스텝 warm-up</b>(월드모델 동결)으로 해결한다. 결과: 비디오 예측에서 2-stage 기준선과 동률~상회(LIBERO FVD <b>158.36 vs 167.77</b>), 시각적 계획 성공률은 거의 <b>3배</b>(<b>21.2% vs 7.7%</b>).</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">A frozen action vocabulary becomes the ceiling of the world model — so don't freeze it.</p>
+    <p class="lead t-ko">동결된 행동 어휘가 곧 월드모델의 천장이 된다 — 그러니 동결하지 마라.</p>
+    <p class="t-en">Video diffusion models hold rich physics priors, but to drive them you need <em>actions</em> — and action spaces differ wildly across robots, games and humans. Latent actions, inferred from video itself, give a universal control interface. The standard recipe trains a LAM (an inverse + forward dynamics model) on action-free video, freezes the inverse model to label latent actions, then trains a bigger world model on those labels. This wastes effort (both models predict the next frame) and <strong>locks the action space in place</strong> before the world model is even good. CoLA-World reframes the problem: let the powerful world model itself act as the forward dynamics model, so its gradients flow back and keep <strong>refining the actions</strong> as it learns. The world model becomes a tutor for the actions; the sharper actions become a better control interface — a virtuous cycle.</p>
+    <p class="t-ko">비디오 확산 모델은 풍부한 물리 사전지식을 갖지만, 이를 구동하려면 <em>행동</em>이 필요하다 — 그리고 행동 공간은 로봇·게임·사람마다 천차만별이다. 비디오 자체에서 추론한 잠재 행동은 보편적 제어 인터페이스를 준다. 표준 방식은 행동 없는 비디오로 LAM(역+순 동역학 모델)을 학습하고, 역모델을 동결해 잠재 행동을 라벨링한 뒤, 그 라벨로 더 큰 월드모델을 학습한다. 이는 노력이 중복되고(둘 다 다음 프레임을 예측), 월드모델이 좋아지기도 전에 <strong>행동 공간을 고정</strong>해버린다. CoLA-World는 문제를 재정의한다: 강력한 월드모델 자체를 순방향 동역학 모델로 쓰면, 그 그래디언트가 되돌아 흘러 학습이 진행될수록 <strong>행동을 계속 정련</strong>한다. 월드모델은 행동의 튜터가 되고, 날카로워진 행동은 더 나은 제어 인터페이스가 된다 — 선순환.</p>
+    <figure class="fig">
+      <img src="fig/2510.26433/fig1.png" alt="Two-stage paradigm vs CoLA-World joint training schematic">
+      <figcaption class="t-en"><b>Figure 1.</b> Left — the conventional two-stage paradigm: a LAM (inverse + forward dynamics) is trained first, then a separate world model is trained on the frozen latent actions (note the stop-gradient <code>sg</code> and the redundant forward dynamics model). Right — CoLA-World drops the forward dynamics model and co-evolves the LAM and world model in one joint training run.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 왼쪽 — 기존 2-stage 방식: LAM(역+순 동역학)을 먼저 학습한 뒤 동결된 잠재 행동으로 별도의 월드모델을 학습(stop-gradient <code>sg</code>와 중복되는 순방향 동역학 모델 주목). 오른쪽 — CoLA-World는 순방향 동역학 모델을 없애고 LAM과 월드모델을 한 번의 공동 학습에서 공진화시킨다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2510.26433</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">21.2%</div><div class="l"><span class="t-en">Visual planning success<br>(vs 7.7% two-stage, 12.2% AdaWorld)</span><span class="t-ko">시각적 계획 성공률<br>(2-stage 7.7%, AdaWorld 12.2% 대비)</span></div></div>
+      <div class="stat"><div class="n">158.36</div><div class="l"><span class="t-en">LIBERO FVD ↓ (OOD)<br>vs 167.77 two-stage</span><span class="t-ko">LIBERO FVD ↓ (분포 밖)<br>2-stage 167.77 대비</span></div></div>
+      <div class="stat"><div class="n">8K</div><div class="l"><span class="t-en">Warm-up steps that prevent<br>codebook collapse</span><span class="t-ko">코드북 붕괴를 막는<br>warm-up 스텝 수</span></div></div>
+      <div class="stat"><div class="n">169.70</div><div class="l"><span class="t-en">Real-action FVD ↓<br>vs 188.82 two-stage</span><span class="t-ko">실제 행동 FVD ↓<br>2-stage 188.82 대비</span></div></div>
+      <div class="stat"><div class="n">~1.2B</div><div class="l"><span class="t-en">World model params<br>(OpenSora v1.2 backbone)</span><span class="t-ko">월드모델 파라미터<br>(OpenSora v1.2 백본)</span></div></div>
+      <div class="stat"><div class="n">1024</div><div class="l"><span class="t-en">Latent actions<br>(2 tokens × 32-entry codebook)</span><span class="t-ko">잠재 행동 수<br>(2 토큰 × 32-엔트리 코드북)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — joint training beats two-stage at equal budget</span><span class="t-ko">결과 — 동일 예산에서 공동학습이 2-stage를 이긴다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 / 3 excerpt.</b> Video prediction (60K total steps) and RoboDesk VP² planning. CoLA-World = WARM8K + E2E52K (or +E2E30K for planning); two-stage = LAM30K + WM30K. Δ = CoLA-World − two-stage.</caption>
+        <caption class="t-ko"><b>Table 1 / 3 발췌.</b> 비디오 예측(총 60K 스텝)과 RoboDesk VP² 계획. CoLA-World = WARM8K + E2E52K(계획은 +E2E30K), 2-stage = LAM30K + WM30K. Δ = CoLA-World − 2-stage.</caption>
+        <thead><tr><th><span class="t-en">Metric</span><span class="t-ko">지표</span></th><th>CoLA-World</th><th>2-stage</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>LIBERO FVD ↓ (OOD)</td><td>158.36</td><td>167.77</td><td class="up">−9.41</td></tr>
+          <tr><td>AgiBot FVD ↓</td><td>174.93</td><td>185.63</td><td class="up">−10.70</td></tr>
+          <tr><td>OXE FVD ↓</td><td>278.90</td><td>291.30</td><td class="up">−12.40</td></tr>
+          <tr><td>EgoCentric FVD ↓</td><td>252.45</td><td>260.14</td><td class="up">−7.69</td></tr>
+          <tr><td>Real-action FVD ↓ (LIBERO)</td><td>169.70</td><td>188.82</td><td class="up">−19.12</td></tr>
+          <tr><td>VP² planning success ↑</td><td>21.20%</td><td>7.73%</td><td class="up">+13.47</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Warm-up</span><span class="t-ko">Warm-up</span></div>
+          <div class="sub"><span class="t-en">world model FROZEN</span><span class="t-ko">월드모델 동결</span></div>
+          <div class="latent"><span class="t-en">LAM aligns (8K steps)</span><span class="t-ko">LAM 정렬 (8K 스텝)</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Joint E2E</span><span class="t-ko">공동 E2E</span></div>
+          <div class="sub"><span class="t-en">unfreeze everything</span><span class="t-ko">전부 동결 해제</span></div>
+          <div class="latent"><span class="t-en">gradients flow both ways</span><span class="t-ko">그래디언트 양방향 흐름</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Co-evolution</span><span class="t-ko">공진화</span></div>
+          <div class="sub"><span class="t-en">WM tutors LAM · LAM steers WM</span><span class="t-ko">WM가 LAM 지도 · LAM가 WM 조종</span></div>
+          <div class="latent"><span class="t-en">better video + planning</span><span class="t-ko">더 나은 비디오 + 계획</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Why warm-up is non-negotiable</b> — a from-scratch action model paired directly with a strong pretrained world model gets ignored: the world model discards the noisy action signal and the codebook collapses to one code. Warm-up lets the action model catch up <em>first</em>, then both evolve together.</div>
+      <div class="cap t-ko"><b>warm-up이 필수인 이유</b> — 처음부터 학습하는 행동모델을 강력한 사전학습 월드모델에 바로 붙이면 무시당한다: 월드모델이 잡음 섞인 행동 신호를 버려 코드북이 하나의 코드로 붕괴한다. warm-up은 행동모델이 <em>먼저</em> 따라잡게 한 뒤, 둘이 함께 진화하게 한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: one model, two roles, co-evolving</span><span class="t-ko">아이디어: 한 모델이 두 역할, 공진화</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 통합</span>
+        <h3>World model IS the dynamics predictor</h3>
+        <p class="t-en">Drop the LAM's separate forward dynamics model entirely. Latent actions from the inverse dynamics model (12-layer ST-Transformer, VQ to 1024 codes) condition the pretrained OpenSora backbone via zero-initialized <span class="term">AdaLN action attention</span>. The flow-matching denoising loss now backpropagates straight through the actions — no stop-gradient.</p>
+        <p class="t-ko">LAM의 별도 순방향 동역학 모델을 완전히 제거. 역동역학 모델(12층 ST-Transformer, VQ로 1024 코드)이 만든 잠재 행동이 영-초기화된 <span class="term">AdaLN 행동 어텐션</span>을 통해 사전학습 OpenSora 백본을 조건화한다. flow-matching 디노이징 손실이 stop-gradient 없이 행동으로 곧장 역전파된다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 안정화</span>
+        <h3>Warm-up before the cycle</h3>
+        <p class="t-en">Naive joint training collapses the VQ codebook (utilization → 0, one code dominates) because a random action model can't keep pace with a pretrained world model. Fix: freeze the world model and train only the action/conditioning modules for <span class="term">8K steps</span>, aligning representations — then unfreeze and co-train. Codebook entropy stays healthy throughout.</p>
+        <p class="t-ko">순진한 공동학습은 VQ 코드북을 붕괴시킨다(이용률 → 0, 한 코드 독점) — 랜덤 행동모델이 사전학습 월드모델을 따라가지 못하기 때문. 해결: 월드모델을 동결하고 행동/조건화 모듈만 <span class="term">8K 스텝</span> 학습해 표현을 정렬 — 이후 동결 해제 후 공동학습. 코드북 엔트로피가 끝까지 건강하게 유지된다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Infer latent action</span><span class="t-ko">잠재 행동 추론</span></b><span class="t-en">The inverse dynamics model reads a frame pair (oₜ, oₜ₊₁) and predicts a latent action, vector-quantized into 2 tokens from a 32-entry codebook (1024 choices) to force compact, meaningful encodings.</span><span class="t-ko">역동역학 모델이 프레임 쌍(oₜ, oₜ₊₁)을 읽어 잠재 행동을 예측하고, 32-엔트리 코드북에서 2개 토큰(1024 선택지)으로 벡터 양자화 — 간결하고 의미 있는 인코딩을 강제.</span></li>
+      <li><b><span class="t-en">Warm-up (world model frozen)</span><span class="t-ko">warm-up (월드모델 동결)</span></b><span class="t-en">For 8K steps, backprop the flow-matching loss only through the action and conditioning modules so the from-scratch LAM aligns with the frozen, powerful OpenSora world model — preventing the codebook collapse seen in naive joint training.</span><span class="t-ko">8K 스텝 동안 flow-matching 손실을 행동·조건화 모듈로만 역전파해, 처음부터 학습하는 LAM이 동결된 강력한 OpenSora 월드모델에 정렬되게 한다 — 순진한 공동학습의 코드북 붕괴를 방지.</span></li>
+      <li><b><span class="t-en">Joint co-evolution</span><span class="t-ko">공동 공진화</span></b><span class="t-en">Unfreeze everything (inverse model, VQ, conditioning, OpenSora). Gradients now flow both ways: the improving world model gives richer signal to the LAM, and the sharper LAM gives the world model a more precise control interface.</span><span class="t-ko">전부(역모델, VQ, 조건화, OpenSora) 동결 해제. 그래디언트가 양방향으로 흐른다: 개선되는 월드모델이 LAM에 더 풍부한 신호를 주고, 날카로워진 LAM이 월드모델에 더 정밀한 제어 인터페이스를 준다.</span></li>
+      <li><b><span class="t-en">Adapt to real actions, then plan</span><span class="t-ko">실제 행동에 적응 후 계획</span></b><span class="t-en">A small adapter maps real robot actions into the latent space; CoLA-World's robust codebook resists collapse here where the two-stage method does not. Then run sampling-based MPC for visual planning on RoboDesk VP².</span><span class="t-ko">작은 어댑터가 실제 로봇 행동을 잠재 공간으로 매핑 — CoLA-World의 견고한 코드북은 2-stage가 붕괴하는 이 상황에서도 버틴다. 이후 RoboDesk VP²에서 샘플링 기반 MPC로 시각적 계획 수행.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>First successful joint LAM + pretrained-video-WM training.</strong> Killing the two-stage split removes redundant next-frame prediction and the frozen-action bottleneck, all at equal or smaller compute budget.</p><p class="t-ko"><strong>LAM과 사전학습 비디오 월드모델의 첫 성공적 공동학습.</strong> 2-stage 분리를 없애 중복된 다음 프레임 예측과 고정 행동 병목을 제거 — 동일하거나 더 적은 연산 예산으로.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Stability is the real contribution.</strong> The conceptual idea (use the WM as the FDM) failed before because of collapse; the 8K warm-up is the small, decisive trick that makes co-evolution work at all.</p><p class="t-ko"><strong>안정화가 진짜 기여.</strong> 개념(WM을 FDM으로 쓰기)은 붕괴 때문에 과거에 실패했다 — 8K warm-up이 공진화를 비로소 가능케 하는 작지만 결정적인 트릭.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Co-evolution pays off downstream.</strong> Nearly 3× planning success and a robust codebook under real-action adaptation — the jointly learned actions transfer better than frozen ones.</p><p class="t-ko"><strong>공진화는 다운스트림에서 보상받는다.</strong> 계획 성공률 약 3배, 실제 행동 적응에서도 견고한 코드북 — 공동학습된 행동이 동결된 행동보다 잘 전이된다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Backbone-agnostic.</strong> The paradigm holds when swapping OpenSora for Wan2.1 and improves with bigger world models and more data — promising signs for scaling.</p><p class="t-ko"><strong>백본 비의존적.</strong> OpenSora를 Wan2.1로 바꿔도 패러다임이 유지되고, 더 큰 월드모델·더 많은 데이터에서 개선 — 스케일링 가능성의 청신호.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The video-prediction gains over the two-stage baseline are modest (FVD deltas of ~3–7%, PSNR/SSIM essentially tied); the dramatic numbers live in planning (21.2% vs 7.7%) and codebook robustness, which depend on the adapter setup and only 5 RoboDesk seeds. Whether the headline planning gap reflects genuinely better actions or sensitivity of the MPC/adapter pipeline — and whether warm-up step count must be re-tuned per backbone/dataset — remains under-explored.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 2-stage 대비 비디오 예측 이득은 완만하다(FVD 차이 ~3–7%, PSNR/SSIM은 사실상 동률) — 극적인 숫자는 계획(21.2% vs 7.7%)과 코드북 견고성에 있고, 이는 어댑터 구성과 RoboDesk 5개 시드에만 의존한다. 대표 계획 격차가 정말로 더 나은 행동 때문인지, 아니면 MPC/어댑터 파이프라인의 민감성 때문인지 — 그리고 warm-up 스텝 수를 백본·데이터셋마다 재조정해야 하는지 — 는 충분히 규명되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2510.26433">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2510.26433">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2510.26433">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2510.26433">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Shared / Multi-Agent World Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

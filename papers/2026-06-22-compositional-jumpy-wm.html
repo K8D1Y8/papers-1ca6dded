@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Compositional Planning with Jumpy World Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · Jumpy Planning</span><span class="t-ko">🌍 World Model · Jumpy Planning</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Compositional Planning with Jumpy World Models<br>
+      <span class="glow t-en">— Don't plan one step at a time: chain whole policies and jump across the horizon</span>
+      <span class="glow t-ko">— 한 스텝씩 굴리지 말고, 정책을 통째로 이어 붙여 지평선을 '점프'하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Jesse Farebrother</b> <span class="t-en">et al.</span><span class="t-ko">외 5인</span></span>
+      <span>🏛 FAIR at Meta · Mila · McGill</span>
+      <span>🗓 2026.02.22</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.19634">arXiv:2602.19634</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Foundation policies are great at short skills but choke on long-horizon tasks. This paper plans <b>over whole pre-trained policies as if they were temporally extended actions</b>, using <span class="hl">"jumpy world models" (Geometric Horizon Models) that predict where a policy will land many steps later</span> instead of one step at a time. Chaining these predictions estimates the value of any policy sequence at <b>zero shot, no task-specific training</b> — delivering a <b>200% average relative gain over primitive-action planning</b> on long-horizon tasks and <b>67% success on cube-4 vs 9% (SHARSA) and 0% (HIQL)</b>.</p>
+    <p class="t-ko">파운데이션 정책은 짧은 스킬엔 강하지만 장기 과제에선 막힌다. 이 논문은 <b>사전학습된 정책 전체를 '시간적으로 확장된 행동'처럼 두고</b> 그 위에서 계획한다. 핵심은 <span class="hl">한 스텝이 아니라 여러 스텝 뒤 정책이 도달할 분포를 예측하는 "점프형(jumpy) 월드모델"(Geometric Horizon Model)</span>이다. 이 예측을 이어 붙이면 임의의 정책 시퀀스 가치를 <b>제로샷·과제별 학습 없이</b> 추정할 수 있어, 장기 과제에서 <b>원시행동 계획 대비 평균 200% 상대 향상</b>, <b>cube-4에서 67% 성공(SHARSA 9% · HIQL 0%)</b>을 달성한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The hard part of long-horizon planning isn't the policy — it's predicting many steps ahead without errors compounding.</p>
+    <p class="lead t-ko">장기 계획의 진짜 어려움은 정책이 아니라, 오차가 누적되지 않게 '여러 스텝 앞'을 내다보는 일이다.</p>
+    <p class="t-en">Classic model-based planning rolls out a one-step world model action by action — over a long horizon, tiny prediction errors snowball and the plan walks through walls. Hierarchical RL fixes this with task-specific high-level controllers, but each new task needs new training. This paper takes a <strong>different route: keep the pre-trained policies as building blocks and plan directly over sequences of them</strong>. Because each policy is followed for a stretch of time, the planner reasons at a coarse, "jumpy" timescale — fewer, longer hops instead of hundreds of fragile primitive steps. Crucially this is <strong>zero-shot</strong>: no fine-tuning, no extra environment interaction.</p>
+    <p class="t-ko">고전적 모델기반 계획은 1스텝 월드모델을 행동 단위로 굴린다 — 장기 지평선에선 미세 오차가 눈덩이처럼 불어나 계획이 '벽을 통과'한다. 계층적 RL은 과제별 상위 컨트롤러로 이를 해결하지만 새 과제마다 재학습이 필요하다. 이 논문은 <strong>다른 길을 택한다: 사전학습 정책을 빌딩블록으로 두고, 그 시퀀스 위에서 직접 계획</strong>한다. 각 정책을 일정 시간 동안 따르므로, 플래너는 거칠고 '점프하는' 시간 척도에서 추론한다 — 수백 개의 깨지기 쉬운 원시 스텝 대신 더 적고 긴 도약으로. 핵심은 <strong>제로샷</strong>이라는 점: 미세조정도, 추가 환경 상호작용도 없다.</p>
+    <figure class="fig">
+      <img src="fig/2602.19634/fig1.png" alt="Antmaze success: Zero Shot vs CompPlan across base policies and maze sizes">
+      <figcaption class="t-en"><b>Figure (antmaze results).</b> Zero-shot base policy (blue) vs Compositional Planning (pink) across five base policies on antmaze-medium / large / giant. CompPlan lifts every policy, and the gap widens as the maze grows — e.g. weak GC-1S / GC-BC policies become strongly competitive on antmaze-large.</figcaption>
+      <figcaption class="t-ko"><b>그림 (antmaze 결과).</b> 다섯 가지 베이스 정책에 대한 제로샷 성능(파랑) vs Compositional Planning(분홍) — antmaze-medium / large / giant. CompPlan은 모든 정책을 끌어올리며, 미로가 커질수록 격차가 벌어진다 — 예: 약한 GC-1S / GC-BC 정책이 antmaze-large에서 강력해진다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.19634</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+200%</div><div class="l"><span class="t-en">Avg. relative gain over<br>primitive-action planning (long-horizon)</span><span class="t-ko">원시행동 계획 대비<br>평균 상대 향상 (장기 과제)</span></div></div>
+      <div class="stat"><div class="n">+201%</div><div class="l"><span class="t-en">CompPlan vs ActionPlan<br>(long-horizon, avg.)</span><span class="t-ko">CompPlan vs ActionPlan<br>(장기, 평균)</span></div></div>
+      <div class="stat"><div class="n">+89%</div><div class="l"><span class="t-en">CompPlan vs GPI<br>(best-single-policy baseline)</span><span class="t-ko">CompPlan vs GPI<br>(최선의 단일정책 베이스라인)</span></div></div>
+      <div class="stat"><div class="n">67 / 9 / 0</div><div class="l"><span class="t-en">cube-4 success %<br>CompPlan · SHARSA · HIQL</span><span class="t-ko">cube-4 성공률(%)<br>CompPlan · SHARSA · HIQL</span></div></div>
+      <div class="stat"><div class="n">−28%</div><div class="l"><span class="t-en">EMD reduction from TD-HC<br>(GC-1S, antmaze-giant)</span><span class="t-ko">TD-HC의 EMD 감소<br>(GC-1S, antmaze-giant)</span></div></div>
+      <div class="stat"><div class="n">5</div><div class="l"><span class="t-en">Base policy types tested<br>(GC-TD3·GC-1S·CRL·GC-BC·HFBC)</span><span class="t-ko">테스트한 베이스 정책 유형<br>(GC-TD3·GC-1S·CRL·GC-BC·HFBC)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — composing policies beats hierarchies</span><span class="t-ko">결과 — 정책 조합이 계층을 이긴다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 excerpt.</b> Success rate vs state-of-the-art hierarchical baselines on OGBench (HFBC base policy). CompPlan needs <b>no task-specific training</b>; gaps are largest on the hardest task.</caption>
+        <caption class="t-ko"><b>Table 2 발췌.</b> OGBench에서 최신 계층적 베이스라인 대비 성공률(HFBC 베이스 정책). CompPlan은 <b>과제별 학습이 불필요</b>하며, 가장 어려운 과제에서 격차가 가장 크다.</caption>
+        <thead><tr><th>Domain</th><th>HIQL</th><th>SHARSA</th><th>CompPlan</th></tr></thead>
+        <tbody>
+          <tr><td>antmaze-medium</td><td>0.96</td><td>0.91</td><td>0.94</td></tr>
+          <tr><td>antmaze-large</td><td>0.84</td><td>0.90</td><td class="up">0.92</td></tr>
+          <tr><td>cube-3</td><td>0.01</td><td>0.01</td><td class="up">0.92</td></tr>
+          <tr><td>cube-4</td><td>0.00</td><td>0.09</td><td class="up">0.67</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">π<sub>z1</sub></div>
+          <div class="sub"><span class="t-en">run for a geometric duration</span><span class="t-ko">기하분포 시간 동안 실행</span></div>
+          <div class="latent"><span class="t-en">GHM jumps to S₁</span><span class="t-ko">GHM이 S₁로 점프</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role">π<sub>z2</sub> · π<sub>z3</sub> …</div>
+          <div class="sub"><span class="t-en">chain switching policies</span><span class="t-ko">전환 정책 연쇄</span></div>
+          <div class="latent"><span class="t-en">jump to S₂, S₃ …</span><span class="t-ko">S₂, S₃로 점프…</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">Q<sub>ν</sub></div>
+          <div class="sub"><span class="t-en">weighted reward at sampled states</span><span class="t-ko">샘플 상태의 가중 보상</span></div>
+          <div class="latent"><span class="t-en">pick best sequence, replan</span><span class="t-ko">최적 시퀀스 선택·재계획</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Plan over policies, not actions.</b> Each policy is a temporally-extended action; a jumpy world model samples where it lands, and chaining those samples gives an unbiased Monte-Carlo value of the whole sequence. Execute the first action, then replan.</div>
+      <div class="cap t-ko"><b>행동이 아니라 정책 위에서 계획.</b> 각 정책은 시간적으로 확장된 행동이고, 점프형 월드모델이 그 도착 지점을 샘플링한다. 이 샘플을 이어 붙이면 시퀀스 전체의 무편향 몬테카를로 가치가 나온다. 첫 행동만 실행하고 다시 계획한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: predict the jump, then add consistency</span><span class="t-ko">아이디어: '점프'를 예측하고, 일관성을 더하다</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① jumpy world model</span>
+        <h3>Geometric Horizon Models (GHM)</h3>
+        <p class="t-en">Instead of next-state prediction, a GHM is a generative model of the <span class="term">successor measure</span> — the discounted distribution over states a policy will visit, sampled at a geometric halting time. Implemented as a flow / ODE over continuous states, it lets you draw "where will π end up" in one shot, for any policy z and any discount γ (timescale).</p>
+        <p class="t-ko">다음 상태가 아니라, GHM은 <span class="term">successor measure</span>의 생성모델이다 — 정책이 방문할 상태의 할인 분포를, 기하분포 정지시각에서 샘플링. 연속 상태 위 flow/ODE로 구현해, 임의의 정책 z와 임의의 할인 γ(시간척도)에 대해 "π가 결국 어디에 도달하나"를 한 번에 뽑는다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② multi-timescale consistency</span>
+        <h3>TD Horizon Consistency (TD-HC)</h3>
+        <p class="t-en">Long-horizon GHMs accumulate bootstrapping error. TD-HC generalizes TD-Flow with a <strong>consistency loss across timescales</strong>: the measure at a long γ must agree with a short-β jump followed by the γ-measure. Applied to a small fraction of the batch, it cuts compounding error — e.g. <span class="term">28% lower EMD</span> and far fewer "through-the-wall" samples.</p>
+        <p class="t-ko">장기 GHM은 부트스트랩 오차가 쌓인다. TD-HC는 TD-Flow를 <strong>시간척도 간 일관성 손실</strong>로 일반화한다: 긴 γ의 measure는, 짧은 β로 점프한 뒤의 γ-measure와 일치해야 한다. 배치의 일부에만 적용해 누적 오차를 줄인다 — 예: <span class="term">EMD 28% 감소</span>, '벽 통과' 샘플 대폭 감소.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Train jumpy world models off-policy</span><span class="t-ko">점프형 월드모델 오프폴리시 학습</span></b><span class="t-en">Learn GHMs for the pre-trained policies across a continuous range of discount factors with the TD-HC loss (U-Net + FiLM, 3M steps), so one model predicts any policy at any timescale.</span><span class="t-ko">사전학습 정책들에 대해 연속적인 할인계수 범위에서 TD-HC 손실로 GHM 학습(U-Net+FiLM, 3M 스텝) — 하나의 모델이 임의 정책·임의 시간척도를 예측.</span></li>
+      <li><b><span class="t-en">Build Geometric Switching Policies</span><span class="t-ko">기하적 전환 정책 구성</span></b><span class="t-en">Form a sequence ν = π_z1 → π_z2 → … where each policy runs for a geometric duration before switching, ending in an absorbing policy.</span><span class="t-ko">시퀀스 ν = π_z1 → π_z2 → … 를 구성 — 각 정책을 기하분포 시간 동안 실행 후 전환, 마지막은 흡수(absorbing) 정책.</span></li>
+      <li><b><span class="t-en">Estimate value by chained sampling</span><span class="t-ko">연쇄 샘플링으로 가치 추정</span></b><span class="t-en">Sequentially sample S₁∼GHM(z1), S₂∼GHM(z2 | S₁), … and combine rewards with analytic weights — an unbiased single-sample Q-estimate of the whole sequence (Lemma 1).</span><span class="t-ko">순차적으로 S₁∼GHM(z1), S₂∼GHM(z2 | S₁), … 를 샘플링하고 보상을 해석적 가중치로 결합 — 시퀀스 전체의 무편향 단일샘플 Q 추정(Lemma 1).</span></li>
+      <li><b><span class="t-en">Random-shoot, pick, replan</span><span class="t-ko">랜덤 슈팅·선택·재계획</span></b><span class="t-en">Propose subgoal sequences from the GHMs themselves, score them, execute the first action + first policy, then replan. Special-casing α recovers MPC, GPI and GGPI.</span><span class="t-ko">GHM 자체로 서브골 시퀀스를 제안·평가하고, 첫 행동+첫 정책을 실행한 뒤 재계획. α를 특수화하면 MPC·GPI·GGPI가 특수 사례로 회수된다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Skills become composable primitives.</strong> Weak zero-shot policies (CRL, GC-1S) can become highly effective once orchestrated — utility isn't visible from solo performance.</p><p class="t-ko"><strong>스킬이 조합 가능한 기본단위가 된다.</strong> 제로샷이 약한 정책(CRL, GC-1S)도 함께 엮이면 강해진다 — 단독 성능만으론 효용이 안 보인다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Plan jumpy, not step-by-step.</strong> Predicting "where a policy ends up" sidesteps the compounding error that kills primitive-action rollouts over long horizons.</p><p class="t-ko"><strong>스텝별이 아니라 점프로 계획.</strong> "정책이 결국 도달하는 곳"을 예측하면, 장기 지평선에서 원시행동 롤아웃을 망치는 누적 오차를 우회한다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>One framework, many planners.</strong> CompPlan unifies MPC / GPI / GGPI as special cases of varying switching rates — a clean lens on temporal abstraction.</p><p class="t-ko"><strong>하나의 틀, 여러 플래너.</strong> CompPlan은 전환율을 달리한 MPC/GPI/GGPI를 특수 사례로 통합 — 시간추상화를 보는 깔끔한 렌즈.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Zero-shot, no retraining.</strong> New long-horizon tasks are solved at planning time from frozen policies + GHMs — no fine-tuning, no new environment interaction.</p><p class="t-ko"><strong>제로샷·재학습 없음.</strong> 새 장기 과제를 동결된 정책+GHM으로 계획 시점에 해결 — 미세조정도 새 상호작용도 없다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The flagship TD-HC objective improves GHM accuracy at extreme horizons (&gt;200 steps) but lifts actual OGBench planning success by only ~5%, since the planner mostly queries 50–100-step horizons where plain TD-Flow already suffices — so the headline gains come from <i>compositional planning</i>, not from the new consistency loss. Add the cost of random-shooting + per-step replanning + ODE sampling, and the practical compute/latency budget versus a trained hierarchy is left largely unquantified.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 간판 격인 TD-HC는 극단적 지평선(&gt;200스텝)에서 GHM 정확도를 높이지만, 실제 OGBench 계획 성공률은 약 5%만 끌어올린다 — 플래너가 주로 50~100스텝 지평선을 질의하고 거기선 기본 TD-Flow로 충분하기 때문. 즉 핵심 이득은 새 일관성 손실이 아니라 <i>조합적 계획</i>에서 온다. 게다가 랜덤 슈팅+매 스텝 재계획+ODE 샘플링 비용을 더하면, 학습된 계층 대비 실제 연산·지연 예산은 대부분 정량화되지 않은 채 남는다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.19634">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.19634">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.19634">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.19634">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Shared / Multi-Agent World Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Olaf-World: Orienting Latent Actions for Video World Modeling</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · Latent Action</span><span class="t-ko">🌍 World Model · Latent Action</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Olaf-World: Orienting Latent Actions for Video World Modeling<br>
+      <span class="glow t-en">— Don't just reconstruct: anchor latent actions to their visible effect</span>
+      <span class="glow t-ko">— 복원만 하지 말고, 잠재 행동을 '눈에 보이는 효과'에 정렬하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Yuxin Jiang</b> <span class="t-en">et al. (Yuchao Gu, Ivor W. Tsang, Mike Zheng Shou)</span><span class="t-ko">외 3인 (Yuchao Gu, Ivor W. Tsang, Mike Zheng Shou)</span></span>
+      <span>🏛 Show Lab, NUS · A*STAR (CFAR &amp; IHPC)</span>
+      <span>🗓 2026.02 (v2 2026.05.26)</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.10104">arXiv:2602.10104</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Latent actions learned only by within-clip reconstruction don't transfer: the <b>same action ("Forward") maps to different latent directions in different scenes</b>. Olaf-World fixes this with <span class="hl">Seq∆-REPA</span> — it aligns the integrated latent action to the <b>temporal feature difference</b> ("effect direction") from a <b>frozen V-JEPA2 encoder</b>, giving actions a shared coordinate system. The result: cross-domain linear-probe Macro-F1 jumps to <b>0.83 vs 0.48</b> for the prior SOTA, plus zero-shot action transfer and 1-minute adaptation on a SkyReels-V2 backbone.</p>
+    <p class="t-ko">클립 내부 복원만으로 배운 잠재 행동은 전이되지 않는다 — <b>같은 행동("Forward")이 장면마다 다른 잠재 방향</b>에 매핑되기 때문이다. Olaf-World는 <span class="hl">Seq∆-REPA</span>로 이를 해결한다. <b>고정된 V-JEPA2 인코더</b>가 만든 <b>시간적 특징 차이</b>("효과 방향")에 통합 잠재 행동을 정렬해, 행동에 공유 좌표계를 부여한다. 결과적으로 교차 도메인 선형 프로브 Macro-F1이 기존 SOTA의 <b>0.48 대비 0.83</b>으로 뛰고, SkyReels-V2 백본 위에서 제로샷 행동 전이와 1분 적응이 가능해진다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Action-controllable world models are bottlenecked by action labels — and the labels-free shortcut (latent actions) silently breaks across scenes.</p>
+    <p class="lead t-ko">행동 제어형 월드 모델의 병목은 행동 라벨 — 그런데 라벨 없는 우회로(잠재 행동)는 장면이 바뀌면 조용히 무너진다.</p>
+    <p class="t-en">Video generative models hold rich priors about dynamics, but turning them into controllable simulators normally needs frame-aligned action labels that are costly and domain-tied. Latent action learning discovers a control space from unlabeled video — yet because training is isolated to each clip, the latent space is identified only up to a <strong>clip-specific basis</strong>. There is no shared coordinate system, so identical action semantics need not land in the same region of latent space. Olaf-World's insight is simple but sharp: <strong>actions are unobserved, but their semantic effects are observable</strong> in the video itself, so the effect can serve as a global anchor that ties action meaning across contexts.</p>
+    <p class="t-ko">비디오 생성 모델은 동역학에 대한 풍부한 사전지식을 갖지만, 이를 제어 가능한 시뮬레이터로 바꾸려면 보통 프레임 정렬된 행동 라벨이 필요하고 이는 비싸고 도메인에 묶인다. 잠재 행동 학습은 라벨 없는 비디오에서 제어 공간을 발견하지만, 학습이 클립마다 고립되어 있어 잠재 공간은 <strong>클립별 기저(basis)</strong>까지만 식별된다. 공유 좌표계가 없으니 같은 행동 의미가 잠재 공간의 같은 영역에 떨어진다는 보장이 없다. Olaf-World의 통찰은 단순하지만 날카롭다 — <strong>행동은 관측 불가능해도 그 의미적 효과는 비디오 안에서 관측 가능</strong>하므로, 효과가 맥락 간 행동 의미를 묶는 전역 앵커가 될 수 있다.</p>
+    <figure class="fig">
+      <img src="fig/2602.10104/fig1.png" alt="Olaf-World teaser: zero-shot action transfer, 1-minute data-efficient adaptation, generalization to novel scenes, and the two-stage pipeline">
+      <figcaption class="t-en"><b>Figure 1.</b> Olaf-World, pretrained with transferable latent actions via Seq∆-REPA, enables (A) context-invariant zero-shot action transfer, (B) efficient adaptation to new action spaces with ~1 minute of labeled data, and (C) better generalization to novel scenes. Stage 1 = latent-action pretrain (unlabeled); Stage 2 = action-space fine-tune (few labels).</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> Seq∆-REPA로 전이 가능한 잠재 행동을 사전학습한 Olaf-World — (A) 맥락 불변 제로샷 행동 전이, (B) 약 1분 분량 라벨로 새 행동 공간에 효율 적응, (C) 새로운 장면으로의 일반화 개선. Stage 1 = 잠재 행동 사전학습(무라벨), Stage 2 = 행동 공간 미세조정(소량 라벨).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.10104</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.83</div><div class="l"><span class="t-en">Cross-domain probe Macro-F1<br>(3rd→3rd; AdaWorld 0.48)</span><span class="t-ko">교차 도메인 프로브 Macro-F1<br>(3rd→3rd; AdaWorld 0.48)</span></div></div>
+      <div class="stat"><div class="n">0.62</div><div class="l"><span class="t-en">Hardest transfer probe<br>(1st→3rd; AdaWorld 0.48)</span><span class="t-ko">최난도 전이 프로브<br>(1st→3rd; AdaWorld 0.48)</span></div></div>
+      <div class="stat"><div class="n">~1 min</div><div class="l"><span class="t-en">Labeled video needed to<br>adapt to a new control interface</span><span class="t-ko">새 제어 인터페이스 적응에<br>필요한 라벨 비디오</span></div></div>
+      <div class="stat"><div class="n">0.0461</div><div class="l"><span class="t-en">Zero-shot RPE-trans, 3RD-P<br>(AdaWorld 0.0723 · lower=better)</span><span class="t-ko">제로샷 RPE-trans, 3RD-P<br>(AdaWorld 0.0723 · 낮을수록 좋음)</span></div></div>
+      <div class="stat"><div class="n">1.3B</div><div class="l"><span class="t-en">DiT backbone params<br>(SkyReels-V2)</span><span class="t-ko">DiT 백본 파라미터<br>(SkyReels-V2)</span></div></div>
+      <div class="stat"><div class="n">8</div><div class="l"><span class="t-en">Atomic actions probed<br>(MIND 1ST-P / 3RD-P)</span><span class="t-ko">프로빙한 원자적 행동<br>(MIND 1ST-P / 3RD-P)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — transfer holds when the camera flips</span><span class="t-ko">결과 — 시점이 바뀌어도 전이가 유지된다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 + Table 2 excerpt.</b> Top: cross-domain linear-probe Macro-F1 (↑). Bottom: action accuracy via RPE (↓) at adaptation budgets. Gray-equivalent columns are cross-domain (source→target).</caption>
+        <caption class="t-ko"><b>Table 1 + Table 2 발췌.</b> 위: 교차 도메인 선형 프로브 Macro-F1(↑). 아래: 적응 예산별 RPE 행동 정확도(↓). 회색 상당 열은 교차 도메인(소스→타깃).</caption>
+        <thead><tr><th>Metric / Setting</th><th>AdaWorld</th><th>Ours</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>Probe Macro-F1, 1st→1st ↑</td><td>0.6004</td><td>0.8138</td><td class="up">+0.213</td></tr>
+          <tr><td>Probe Macro-F1, 3rd→3rd ↑</td><td>0.4827</td><td>0.8256</td><td class="up">+0.343</td></tr>
+          <tr><td>Probe Macro-F1, 1st→3rd ↑</td><td>0.4820</td><td>0.6250</td><td class="up">+0.143</td></tr>
+          <tr><td>RPE-trans, 3RD-P, 0 videos ↓</td><td>0.0723</td><td>0.0461</td><td class="up">−0.026</td></tr>
+          <tr><td>RPE-trans, 3RD-P, 1 video ↓</td><td>0.0525</td><td>0.0348</td><td class="up">−0.018</td></tr>
+          <tr><td>RPE-rot, 3RD-P, 1 video ↓</td><td>0.4659</td><td>0.3861</td><td class="up">−0.080</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Clip (any context)</span><span class="t-ko">클립 (임의 맥락)</span></div>
+          <div class="sub"><span class="t-en">x₀ … x_K, no labels</span><span class="t-ko">x₀ … x_K, 라벨 없음</span></div>
+          <div class="latent"><span class="t-en">"Forward"</span><span class="t-ko">"Forward"</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Two readings</span><span class="t-ko">두 가지 읽기</span></div>
+          <div class="sub"><span class="t-en">LAM latent z̄ vs. frozen V-JEPA2 ∆y</span><span class="t-ko">LAM 잠재 z̄ vs. 고정 V-JEPA2 ∆y</span></div>
+          <div class="latent"><span class="t-en">align by cosine (Seq∆-REPA)</span><span class="t-ko">코사인 정렬 (Seq∆-REPA)</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Shared action space</span><span class="t-ko">공유 행동 공간</span></div>
+          <div class="sub"><span class="t-en">same action → same direction</span><span class="t-ko">같은 행동 → 같은 방향</span></div>
+          <div class="latent"><span class="t-en">transfers across scenes</span><span class="t-ko">장면 간 전이</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Anchor to the effect.</b> The latent action is forced to point in the same direction as the observable semantic change ∆y, so "Forward" means the same thing whether it's first-person or third-person.</div>
+      <div class="cap t-ko"><b>효과에 앵커링.</b> 잠재 행동이 관측 가능한 의미 변화 ∆y와 같은 방향을 향하도록 강제 — 1인칭이든 3인칭이든 "Forward"가 같은 의미를 갖게 된다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: align control to its visible effect</span><span class="t-ko">아이디어: 제어를 보이는 효과에 정렬</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 효과 방향</span>
+        <h3>Effect direction ∆y</h3>
+        <p class="t-en">A frozen, self-supervised <span class="term">V-JEPA2</span> encoder maps each frame to a semantic descriptor. The clip's <strong>effect direction</strong> is the averaged temporal difference τ* = mean(s_{i+1} − s_i). Differencing suppresses static appearance and emphasizes <em>change</em>, so the reference stays stable across viewpoint and style shifts.</p>
+        <p class="t-ko">고정된 자기지도 <span class="term">V-JEPA2</span> 인코더가 각 프레임을 의미 기술자로 매핑한다. 클립의 <strong>효과 방향</strong>은 시간 차이의 평균 τ* = mean(s_{i+1} − s_i). 차분은 정적 외형을 억제하고 <em>변화</em>를 강조하므로, 시점·스타일이 바뀌어도 기준이 안정적이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 정렬 손실</span>
+        <h3>Seq∆-REPA</h3>
+        <p class="t-en">The LAM (a β-VAE inverse/forward model) infers per-step latents, averages them into z̄, and a small MLP head projects it to u. The loss <span class="term">1 − cos(u, τ*)</span> is added to the VAE objective (weight λ). This control-to-effect alignment gives a global reference — fixing both shortcut learning and cross-context non-identifiability.</p>
+        <p class="t-ko">LAM(β-VAE 역/순 모델)이 단계별 잠재를 추론해 z̄로 평균내고, 작은 MLP 헤드가 u로 투영한다. VAE 목적함수에 손실 <span class="term">1 − cos(u, τ*)</span>를 (가중치 λ로) 더한다. 이 제어→효과 정렬이 전역 기준을 제공해, 지름길 학습과 교차 맥락 비식별성을 모두 해결한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Learn aligned latent actions</span><span class="t-ko">정렬된 잠재 행동 학습</span></b><span class="t-en">Train the LAM with L_VAE + λ·L_Seq∆-REPA so per-clip latents share a coordinate system anchored to V-JEPA2 effect directions, then freeze it.</span><span class="t-ko">LAM을 L_VAE + λ·L_Seq∆-REPA로 학습해, 클립별 잠재가 V-JEPA2 효과 방향에 앵커된 공유 좌표계를 갖게 한 뒤 고정한다.</span></li>
+      <li><b><span class="t-en">Pretrain the world model</span><span class="t-ko">월드 모델 사전학습</span></b><span class="t-en">Extract latent actions z_t from large-scale passive video (MiraData) and inject them into a SkyReels-V2-1.3B DiT via AdaLN-Zero on the timestep embedding; train with flow matching.</span><span class="t-ko">대규모 수동 비디오(MiraData)에서 잠재 행동 z_t를 추출해 SkyReels-V2-1.3B DiT의 timestep 임베딩에 AdaLN-Zero로 주입하고, flow matching으로 학습한다.</span></li>
+      <li><b><span class="t-en">Adapt to a real interface</span><span class="t-ko">실제 인터페이스에 적응</span></b><span class="t-en">For a target control set, train a lightweight action adapter (initialized from class-wise z prototypes) plus LoRA on the DiT, using as little as ~1 minute of labeled video.</span><span class="t-ko">타깃 제어 집합에 대해 클래스별 z 프로토타입으로 초기화한 경량 action adapter와 DiT의 LoRA만, 약 1분 분량 라벨 비디오로 학습한다.</span></li>
+      <li><b><span class="t-en">Transfer &amp; generalize</span><span class="t-ko">전이·일반화</span></b><span class="t-en">Action sequences extracted in one context reproduce the same motion in unseen scenes/styles (lowest RPE even OOD), while AdaWorld shows wash-out, agent drop-out, and trajectory drift.</span><span class="t-ko">한 맥락에서 추출한 행동 시퀀스가 보지 못한 장면·스타일에서도 같은 움직임을 재현(OOD에서도 최저 RPE)하는 반면, AdaWorld는 워시아웃·객체 소실·궤적 표류를 보인다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Effect &gt; reconstruction.</strong> Anchoring to observable semantic change is what makes latent actions transfer — nearly doubling cross-domain probe F1 (0.48 → 0.83) over the prior SOTA.</p><p class="t-ko"><strong>복원보다 효과.</strong> 관측 가능한 의미 변화에 앵커링하는 것이 잠재 행동 전이의 열쇠 — 교차 도메인 프로브 F1을 기존 SOTA 대비 거의 두 배(0.48 → 0.83).</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Non-identifiability, named and fixed.</strong> The paper formalizes <em>why</em> per-clip reconstruction can't yield transferable control, then gives a one-loss remedy.</p><p class="t-ko"><strong>비식별성을 명명하고 해결.</strong> 클립별 복원이 전이 가능한 제어를 못 만드는 <em>이유</em>를 형식화하고, 손실 하나로 처방한다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Labels almost optional.</strong> A frozen LAM + LoRA adapts a generic video DiT to a real joystick/keyboard interface from ~1 minute of labeled data.</p><p class="t-ko"><strong>라벨은 거의 선택사항.</strong> 고정 LAM + LoRA로, 범용 비디오 DiT를 약 1분 라벨만으로 실제 조이스틱/키보드 인터페이스에 적응시킨다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Plug-in to any LAM.</strong> Seq∆-REPA is just an auxiliary alignment term — it rides on top of standard β-VAE latent-action training.</p><p class="t-ko"><strong>어떤 LAM에도 부착.</strong> Seq∆-REPA는 보조 정렬 항일 뿐 — 표준 β-VAE 잠재 행동 학습 위에 그대로 얹힌다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> All gains lean on a single frozen encoder (V-JEPA2) defining "effect," and evaluation centers on two MIND splits (1ST-P / 3RD-P) with 8 atomic actions on a 1.3B backbone. The effect direction is only as good as V-JEPA2's semantics — for fine-grained, compositional, or non-visual controls (force, intent, off-screen consequences), a single averaged ∆y may be too coarse, and it's unclear how the "shared coordinate system" holds when the action vocabulary or embodiment is much larger.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 모든 이득이 "효과"를 정의하는 단일 고정 인코더(V-JEPA2)에 기대고 있고, 평가는 1.3B 백본에서 8개 원자적 행동을 가진 두 MIND 분할(1ST-P / 3RD-P)에 집중돼 있다. 효과 방향의 품질은 V-JEPA2 의미의 품질을 넘지 못한다 — 미세하거나 조합적이거나 비시각적인 제어(힘, 의도, 화면 밖 결과)에는 평균화된 단일 ∆y가 너무 거칠 수 있고, 행동 어휘나 임바디먼트가 훨씬 커질 때 "공유 좌표계"가 유지되는지는 불분명하다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.10104">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.10104">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.10104">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.10104">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · 공유/멀티에이전트 월드 모델</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · DiLA: Disentangled Latent Action World Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · Disentangled LA</span><span class="t-ko">🌍 World Model · Disentangled LA</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>DiLA: Disentangled Latent Action World Models<br><span class="glow t-en">— Split video into "structure" and "content" so latent actions stay abstract <em>and</em> the frames stay sharp</span><span class="glow t-ko">— 영상을 '구조'와 '내용'으로 쪼개, 잠재 행동은 추상적으로 <em>그리고</em> 화면은 선명하게</span></h1>
+    <div class="meta">
+      <span>👥 <b>Tianqiu Zhang</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 Peking University</span>
+      <span>🗓 2026.05.15</span>
+      <span>📄 <a href="https://arxiv.org/abs/2605.15725">arXiv:2605.15725</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Latent Action Models (LAMs) learn control signals from unlabeled video, but face a <b>"LAM Trade-off"</b>: strong bottlenecks make actions abstract yet wreck video quality, while weak ones improve frames but entangle actions with appearance. DiLA breaks this by <span class="hl">routing every video into two pathways — a <b>structure</b> path (IDM+FDM, the dynamics) and a <b>content</b> path (a Mamba memory, the appearance).</span> The latent-action bottleneck itself <em>drives</em> the disentanglement. Result: on RT-1 it pushes SSIM to <b>0.774</b> / LPIPS to <b>0.206</b> and nearly <b>doubles</b> visual-planning success (aggregate <b>41.44</b> vs AdaWorld 21.54) on VP².</p>
+    <p class="t-ko">잠재 행동 모델(LAM)은 라벨 없는 영상에서 제어 신호를 배우지만 <b>"LAM 트레이드오프"</b>에 갇힌다 — 병목을 세게 걸면 행동은 추상적이지만 영상 품질이 무너지고, 약하게 걸면 화면은 좋아지나 행동이 외형과 뒤엉킨다. DiLA는 <span class="hl">모든 영상을 두 경로로 흘려 이를 깬다 — <b>구조</b> 경로(IDM+FDM, 동역학)와 <b>내용</b> 경로(Mamba 메모리, 외형).</span> 잠재 행동의 병목 자체가 분리(disentanglement)를 <em>유도</em>한다. 결과: RT-1에서 SSIM <b>0.774</b> / LPIPS <b>0.206</b>, VP² 시각 계획 성공률을 거의 <b>2배</b>(집계 <b>41.44</b> vs AdaWorld 21.54)로.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Abstract actions and sharp video have long been a zero-sum fight. DiLA argues they were never enemies — they just needed separate channels.</p>
+    <p class="lead t-ko">추상적 행동과 선명한 영상은 오랫동안 제로섬 싸움이었다. DiLA는 둘이 애초에 적이 아니었고, 단지 채널을 나눠주면 된다고 말한다.</p>
+    <p class="t-en">World models that learn actions from raw video are how we escape the scarcity of action-labeled robot data. But the standard recipe forces a choice: a VQ or variational bottleneck makes latent actions clean and transferable, yet it distorts the latent manifold and degrades generation; loosen it and the "action" starts smuggling in textures and colors instead of pure motion. Prior work mostly picked abstraction and threw away the generator, training a separate diffusion model in a second stage. DiLA reframes the problem as <strong>disentanglement</strong>: if appearance has its own pathway, the predictive bottleneck no longer has to compromise — it can keep <em>only</em> dynamics in the action, because everything else has somewhere else to live.</p>
+    <p class="t-ko">영상에서 행동을 배우는 월드 모델은, 비싼 행동 라벨 데이터의 희소성에서 벗어나는 길이다. 그러나 표준 레시피는 선택을 강요한다 — VQ/변분 병목은 잠재 행동을 깔끔하고 전이 가능하게 만들지만 잠재 매니폴드를 왜곡해 생성 품질을 떨어뜨리고, 병목을 풀면 '행동'이 순수한 움직임 대신 질감·색을 몰래 담기 시작한다. 기존 연구는 대개 추상화를 택하고 생성기를 버린 뒤 2단계로 별도 디퓨전을 학습했다. DiLA는 이를 <strong>분리(disentanglement)</strong> 문제로 재정의한다 — 외형이 전용 경로를 가지면, 예측 병목은 더 이상 타협할 필요가 없다. 나머지가 머물 곳이 따로 있으니 행동에는 <em>오직</em> 동역학만 남길 수 있다.</p>
+    <figure class="fig">
+      <img src="fig/2605.15725/fig1.png" alt="DiLA architecture: DINOv2 + ST-Transformer feeding structure and content pathways into a fusion decoder">
+      <figcaption class="t-en"><b>Figure 2.</b> DiLA architecture. DINOv2 features pass through a spatial-temporal Transformer, then split: the <b>structure pathway</b> (IDM extracts latent actions from temporal differences, FDM predicts the next structure) and the <b>content pathway</b> (a Mamba memory accumulates appearance). A Fusion Decoder recombines them, with the frozen RAE/DINOv2 decoder visualizing the output.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> DiLA 구조. DINOv2 특징이 시공간 Transformer를 거친 뒤 분기 — <b>구조 경로</b>(IDM이 시간 차분에서 잠재 행동을 추출, FDM이 다음 구조를 예측)와 <b>내용 경로</b>(Mamba 메모리가 외형을 누적). Fusion Decoder가 둘을 재결합하고, 동결된 RAE/DINOv2 디코더가 출력을 시각화한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2605.15725</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.774</div><div class="l"><span class="t-en">RT-1 SSIM ↑<br>(AdaWorld 0.634)</span><span class="t-ko">RT-1 SSIM ↑<br>(AdaWorld 0.634)</span></div></div>
+      <div class="stat"><div class="n">0.206</div><div class="l"><span class="t-en">RT-1 LPIPS ↓<br>(best baseline 0.284)</span><span class="t-ko">RT-1 LPIPS ↓<br>(최고 베이스라인 0.284)</span></div></div>
+      <div class="stat"><div class="n">41.44</div><div class="l"><span class="t-en">VP² aggregate success<br>(AdaWorld 21.54)</span><span class="t-ko">VP² 집계 성공도<br>(AdaWorld 21.54)</span></div></div>
+      <div class="stat"><div class="n">0.009</div><div class="l"><span class="t-en">Push-T probing MSE ↓<br>(discrete z: 0.023)</span><span class="t-ko">Push-T 프로빙 MSE ↓<br>(이산 z: 0.023)</span></div></div>
+      <div class="stat"><div class="n">256</div><div class="l"><span class="t-en">Latent action dim<br>(continuous d_z)</span><span class="t-ko">잠재 행동 차원<br>(연속 d_z)</span></div></div>
+      <div class="stat"><div class="n">30k+1k</div><div class="l"><span class="t-en">Teacher-forcing + rollout<br>iters · batch 32 · 16-frame</span><span class="t-ko">티처포싱 + 롤아웃<br>반복 · 배치 32 · 16프레임</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — disentangling lifts both axes</span><span class="t-ko">결과 — 분리가 두 축을 동시에 끌어올린다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 + 4 excerpt.</b> Video generation (16-frame autoregressive rollout) and VP² visual-planning success rate. DiLA leads on both fidelity and downstream control.</caption>
+        <caption class="t-ko"><b>Table 1 + 4 발췌.</b> 영상 생성(16프레임 자기회귀 롤아웃)과 VP² 시각 계획 성공률. DiLA가 충실도와 다운스트림 제어 양쪽에서 선두.</caption>
+        <thead><tr><th>Metric / Benchmark</th><th>AdaWorld</th><th>DiLA</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>SSv2 SSIM ↑</td><td>0.674</td><td>0.660</td><td>−0.014</td></tr>
+          <tr><td>SSv2 LPIPS ↓</td><td>0.521</td><td>0.356</td><td class="up">−0.165</td></tr>
+          <tr><td>RT-1 SSIM ↑</td><td>0.634</td><td>0.774</td><td class="up">+0.140</td></tr>
+          <tr><td>RT-1 LPIPS ↓</td><td>0.429</td><td>0.206</td><td class="up">−0.223</td></tr>
+          <tr><td>VP² success rate ↑</td><td>63.50%</td><td>68.00%</td><td class="up">+4.50</td></tr>
+          <tr><td>VP² "Open Slide" ↑</td><td>29.17%</td><td>78.33%</td><td class="up">+49.16</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">Video → DINOv2</div>
+          <div class="sub"><span class="t-en">ST-Transformer features</span><span class="t-ko">시공간 Transformer 특징</span></div>
+          <div class="latent"><span class="t-en">split into 2 paths</span><span class="t-ko">두 경로로 분기</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Structure · IDM+FDM</span><span class="t-ko">구조 · IDM+FDM</span></div>
+          <div class="sub"><span class="t-en">latent action from Δstructure</span><span class="t-ko">Δ구조에서 잠재 행동</span></div>
+          <div class="latent"><span class="t-en">pure dynamics, d_z=256</span><span class="t-ko">순수 동역학, d_z=256</span></div>
+        </div>
+        <div class="flow">+</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Content · Mamba</span><span class="t-ko">내용 · Mamba</span></div>
+          <div class="sub"><span class="t-en">appearance memory</span><span class="t-ko">외형 메모리</span></div>
+          <div class="latent"><span class="t-en">texture, occlusions</span><span class="t-ko">질감 · 가림 영역</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">Fusion Decoder</div>
+          <div class="sub"><span class="t-en">structure as query, content as KV</span><span class="t-ko">구조=쿼리, 내용=KV</span></div>
+          <div class="latent"><span class="t-en">sharp frame + abstract action</span><span class="t-ko">선명한 프레임 + 추상 행동</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Two channels, one bottleneck.</b> Because content has its own home (Mamba), the action bottleneck can keep <b>only</b> motion — abstraction and fidelity stop competing.</div>
+      <div class="cap t-ko"><b>두 채널, 하나의 병목.</b> 내용이 머물 집(Mamba)이 따로 있으니, 행동 병목은 <b>오직</b> 움직임만 남길 수 있다 — 추상화와 충실도가 더는 경쟁하지 않는다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: the bottleneck is the disentangler</span><span class="t-ko">아이디어: 병목이 곧 분리기</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 구조 경로</span>
+        <h3>IDM + FDM on Δstructure</h3>
+        <p class="t-en">An <span class="term">Inverse Dynamics Model</span> reads latent actions from <strong>temporal differences</strong> of structure embeddings (Δs) — the differencing itself is the bottleneck, so actions capture only salient motion. A lightweight <span class="term">Forward Dynamics Model</span> then predicts the next structure as a residual update conditioned on the action via AdaLN-zero.</p>
+        <p class="t-ko"><span class="term">역동역학 모델(IDM)</span>이 구조 임베딩의 <strong>시간 차분(Δs)</strong>에서 잠재 행동을 읽는다 — 차분 자체가 병목이라 행동은 두드러진 움직임만 담는다. 이어 가벼운 <span class="term">순방향 동역학 모델(FDM)</span>이 AdaLN-zero로 행동을 조건 삼아 다음 구조를 잔차 업데이트로 예측한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 내용 경로</span>
+        <h3>Mamba appearance memory</h3>
+        <p class="t-en">A separate content encoder feeds a <span class="term">Mamba</span> state-space memory that accumulates static appearance over time — colors, textures, occluded backgrounds. The Fusion Decoder then uses the predicted structure as <strong>queries</strong> and content memory + the initial frame as keys/values, reintroducing high-frequency detail lost to compression.</p>
+        <p class="t-ko">별도의 내용 인코더가 <span class="term">Mamba</span> 상태공간 메모리에 정적 외형(색·질감·가려진 배경)을 시간에 따라 누적한다. Fusion Decoder는 예측된 구조를 <strong>쿼리</strong>로, 내용 메모리 + 초기 프레임을 키/밸류로 써, 압축으로 잃은 고주파 디테일을 되살린다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Encode &amp; split</span><span class="t-ko">인코딩 &amp; 분기</span></b><span class="t-en">Frozen DINOv2 + a spatial-temporal Transformer (causal temporal attention, RoPE) turn frames into tokens, then a structure encoder and a content encoder fork the representation.</span><span class="t-ko">동결 DINOv2 + 시공간 Transformer(인과 시간 어텐션·RoPE)가 프레임을 토큰화하고, 구조 인코더와 내용 인코더가 표현을 분기한다.</span></li>
+      <li><b><span class="t-en">Infer latent actions</span><span class="t-ko">잠재 행동 추론</span></b><span class="t-en">The IDM (3D conv blocks) reads d_z=256 continuous actions from temporal structure differences; the FDM predicts the next structure as s + FDM(s, z).</span><span class="t-ko">IDM(3D conv 블록)이 시간 구조 차분에서 d_z=256 연속 행동을 읽고, FDM이 다음 구조를 s + FDM(s, z)로 예측한다.</span></li>
+      <li><b><span class="t-en">Carry content forward</span><span class="t-ko">내용 이월</span></b><span class="t-en">Mamba updates an appearance memory each step; the Fusion Decoder cross-attends predicted structure to content + the first frame to emit the next visual embedding.</span><span class="t-ko">Mamba가 매 스텝 외형 메모리를 갱신하고, Fusion Decoder가 예측 구조를 내용 + 첫 프레임에 교차어텐션해 다음 시각 임베딩을 낸다.</span></li>
+      <li><b><span class="t-en">Train, then roll out</span><span class="t-ko">학습 후 롤아웃</span></b><span class="t-en">30k teacher-forcing + 1k latent-rollout iters (batch 32, 16-frame clips) over SSv2/RT-1/RECON/LoopNav, with four losses incl. a group-symmetry term forcing reversed transitions to flip the action vector.</span><span class="t-ko">SSv2/RT-1/RECON/LoopNav에서 30k 티처포싱 + 1k 잠재 롤아웃(배치 32·16프레임), 역전이가 행동 벡터를 뒤집게 하는 군 대칭 항을 포함한 4개 손실로 학습.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Abstraction and fidelity can coexist.</strong> One single-stage model gets clean transferable actions <em>and</em> top video quality — no discarded generator, no second-stage diffusion.</p><p class="t-ko"><strong>추상화와 충실도는 공존 가능.</strong> 단일 단계 모델 하나가 깔끔한 전이 행동 <em>그리고</em> 최상의 영상 품질을 동시에 — 생성기를 버리거나 2단계 디퓨전을 붙일 필요 없음.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Disentanglement is the lever.</strong> Ablating either path collapses it: without IDM+FDM the structure leaks texture; without content the LAM Trade-off returns despite <em>more</em> parameters.</p><p class="t-ko"><strong>분리가 곧 지렛대.</strong> 어느 경로를 빼도 무너진다 — IDM+FDM 없으면 구조가 질감을 새고, 내용 경로 없으면 <em>더 많은</em> 파라미터에도 LAM 트레이드오프가 재발한다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Continuous beats discrete here.</strong> Swapping in VQ or a Gaussian prior worsens generation and probing MSE — rigid priors distort the action manifold.</p><p class="t-ko"><strong>여기선 연속이 이산을 이긴다.</strong> VQ나 가우시안 prior로 바꾸면 생성·프로빙 MSE가 악화 — 경직된 prior가 행동 매니폴드를 왜곡한다.</p></div>
+      <div class="t"><span class="ic">🦾</span><p class="t-en"><strong>It actually plans.</strong> As an MPC dynamics model (MPPI) on VP², DiLA roughly doubles aggregate success over AdaWorld — abstract actions that transfer human→robot, sim→real.</p><p class="t-ko"><strong>실제로 계획한다.</strong> VP²에서 MPC 동역학 모델(MPPI)로 쓰면 집계 성공도가 AdaWorld의 약 2배 — 사람→로봇, 시뮬→현실로 전이되는 추상 행동.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline gains lean on a few large wins (e.g. "Open Slide" 29→78%) while the <em>aggregate</em> VP² success rate moves only 63.5→68.0%, and SSv2 SSIM actually dips below AdaWorld (0.660 vs 0.674). The disentanglement is "implicit" — there's no quantitative leakage metric, so how cleanly structure and content truly separate rests largely on qualitative rebinding demos rather than a hard, reproducible number.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 화려한 향상은 몇몇 큰 승리("Open Slide" 29→78%)에 기대는 면이 있고, 정작 <em>집계</em> VP² 성공률은 63.5→68.0%로 소폭이며 SSv2 SSIM은 AdaWorld 아래로 떨어진다(0.660 vs 0.674). 분리는 '암묵적'이라 정량적 누출 지표가 없어, 구조·내용이 얼마나 깨끗이 나뉘는지는 단단한 재현 가능 수치보다 정성적 rebinding 데모에 크게 의존한다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2605.15725">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2605.15725">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2605.15725">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2605.15725">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Shared / Multi-Agent World Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Parallel Stochastic Gradient-Based Planning for World Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · Parallel Planning</span><span class="t-ko">🌍 World Model · Parallel Planning</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Parallel Stochastic Gradient-Based Planning for World Models<br>
+      <span class="glow t-en">— Don't roll out serially: lift states, add noise, and cut the brittle gradients</span>
+      <span class="glow t-ko">— 직렬 롤아웃은 그만: 상태를 펼치고, 노이즈를 넣고, 깨지기 쉬운 그래디언트는 잘라라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Michael Psenka</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 UC Berkeley · Meta FAIR</span>
+      <span>🗓 2026.02</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.00475">arXiv:2602.00475</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Planning through a learned visual world model is hard: serial rollouts make gradients explode over long horizons, and state-input gradients are <b>brittle and adversarial</b>. <span class="hl">GRASP</span> (Gradient RelAxed Stochastic Planner) lifts the per-step states into <b>independent optimization variables</b> (so all world-model calls run in <b>parallel</b>), injects <b>Langevin noise</b> into states to escape local minima, and <b>cuts the gradient through state inputs</b> while keeping a dense per-step goal signal. On Push-T at horizon <b>H=80</b> it hits <b>10.4%</b> success vs CEM's <b>2.8%</b>, GD's <b>6.4%</b>, and LatCo's <b>0.0%</b>.</p>
+    <p class="t-ko">학습된 시각 월드모델로 계획을 세우는 건 어렵다: 직렬 롤아웃은 긴 호라이즌에서 그래디언트를 폭발시키고, 상태 입력에 대한 그래디언트는 <b>깨지기 쉽고 적대적</b>이다. <span class="hl">GRASP</span>(Gradient RelAxed Stochastic Planner)는 각 스텝의 상태를 <b>독립 최적화 변수</b>로 펼쳐(모든 월드모델 호출을 <b>병렬</b>로) 두고, 상태에 <b>Langevin 노이즈</b>를 주입해 지역 최소값을 탈출하며, <b>상태 입력 그래디언트는 잘라내고</b> 스텝마다 dense goal 신호를 유지한다. Push-T 호라이즌 <b>H=80</b>에서 성공률 <b>10.4%</b> — CEM <b>2.8%</b>, GD <b>6.4%</b>, LatCo <b>0.0%</b>를 앞선다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">A world model is only as useful as the planner that queries it — and gradient planners keep breaking on long horizons.</p>
+    <p class="lead t-ko">월드모델은 그것에 질의하는 플래너만큼만 쓸모 있다 — 그런데 그래디언트 플래너는 긴 호라이즌에서 계속 깨진다.</p>
+    <p class="t-en">Two planning families dominate. <strong>Zero-order</strong> methods (CEM, MPPI) are robust but degrade badly as the horizon and action dimension grow, because they roll out trajectories serially and explore by brute force. <strong>Gradient-based</strong> methods exploit the differentiability of deep world models for efficiency, but they get trapped in jagged local minima and suffer "backprop-through-time" instability. Worse, in vision latent spaces the gradient w.r.t. <em>state inputs</em> is brittle: the optimizer finds tiny adversarial perturbations that fake a low loss with unphysical transitions. GRASP reframes the problem so the world model can be evaluated in parallel and the dangerous gradient paths are simply removed.</p>
+    <p class="t-ko">두 계열이 지배적이다. <strong>Zero-order</strong>(CEM, MPPI)는 견고하지만 호라이즌과 행동 차원이 커지면 급격히 무너진다 — 궤적을 직렬로 롤아웃하고 무차별 탐색에 의존하기 때문이다. <strong>Gradient-based</strong>는 깊은 월드모델의 미분 가능성을 활용해 효율적이지만, 울퉁불퉁한 지역 최소값에 갇히고 "BPTT" 불안정성에 시달린다. 더 나쁘게는, 시각 잠재 공간에서 <em>상태 입력</em>에 대한 그래디언트가 깨지기 쉽다: 옵티마이저가 미세한 적대적 섭동으로 비물리적 전이를 만들어 손실을 가짜로 낮춘다. GRASP는 월드모델을 병렬 평가할 수 있도록 문제를 재정의하고, 위험한 그래디언트 경로를 아예 제거한다.</p>
+    <figure class="fig">
+      <img src="fig/2602.00475/fig1.png" alt="Loss landscape comparison: GD vs GRASP smoothing">
+      <figcaption class="t-en"><b>Figure 1.</b> (a) Similarity of loss across optimization time; (b) the serial-rollout (GD) loss landscape is sharp and jagged; (c) GRASP's lifted, noised landscape is far smoother — easier to optimize without getting trapped.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> (a) 최적화 시간에 따른 손실 유사도; (b) 직렬 롤아웃(GD)의 손실 지형은 날카롭고 울퉁불퉁; (c) GRASP의 펼침·노이즈 지형은 훨씬 매끈해 — 갇히지 않고 최적화하기 쉽다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.00475</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">10.4%</div><div class="l"><span class="t-en">GRASP success @ Push-T H=80<br>(CEM 2.8% · GD 6.4% · LatCo 0%)</span><span class="t-ko">GRASP 성공률 @ Push-T H=80<br>(CEM 2.8% · GD 6.4% · LatCo 0%)</span></div></div>
+      <div class="stat"><div class="n">43.4%</div><div class="l"><span class="t-en">GRASP success @ Push-T H=50<br>(best baseline GD 37.6%)</span><span class="t-ko">GRASP 성공률 @ Push-T H=50<br>(최고 베이스라인 GD 37.6%)</span></div></div>
+      <div class="stat"><div class="n">15.2s</div><div class="l"><span class="t-en">Median success time @ H=50<br>(GD 76.3s · CEM 96.2s)</span><span class="t-ko">중앙 성공 시간 @ H=50<br>(GD 76.3s · CEM 96.2s)</span></div></div>
+      <div class="stat"><div class="n">O(1)</div><div class="l"><span class="t-en">Grad-Lipschitz vs horizon T<br>(shooting grows exp. in T)</span><span class="t-ko">호라이즌 T 무관 그래디언트 Lipschitz<br>(shooting은 T에 지수 증가)</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">Core tricks: lift · noise · grad-cut<br>+ periodic full-rollout sync</span><span class="t-ko">핵심 3요소: 펼침·노이즈·grad-cut<br>+ 주기적 full-rollout 동기화</span></div></div>
+      <div class="stat"><div class="n">H=10→80</div><div class="l"><span class="t-en">Horizons tested on learned<br>visual dynamics</span><span class="t-ko">학습된 시각 dynamics에서<br>테스트한 호라이즌</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — GRASP scales where baselines collapse</span><span class="t-ko">결과 — 베이스라인이 무너지는 곳에서 GRASP는 확장된다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Push-T success rate (%) on learned visual dynamics. GRASP leads at every horizon, with the gap widening as H grows.</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> 학습된 시각 dynamics 상의 Push-T 성공률(%). GRASP가 모든 호라이즌에서 선두이며 H가 커질수록 격차가 벌어진다.</caption>
+        <thead><tr><th>Push-T</th><th>CEM</th><th>GD</th><th>LatCo</th><th>GRASP</th></tr></thead>
+        <tbody>
+          <tr><td>H=50 (success)</td><td>30.2</td><td>37.6</td><td>4.2</td><td class="up">43.4</td></tr>
+          <tr><td>H=80 (success)</td><td>2.8</td><td>6.4</td><td>0.0</td><td class="up">10.4</td></tr>
+          <tr><td>H=50 (median time, s)</td><td>96.2</td><td>76.3</td><td>1114.7</td><td class="up">15.2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Serial rollout</span><span class="t-ko">직렬 롤아웃</span></div>
+          <div class="sub"><span class="t-en">s₁=F(s₀,a₀)→s₂=F(s₁,a₁)…</span><span class="t-ko">s₁=F(s₀,a₀)→s₂=F(s₁,a₁)…</span></div>
+          <div class="latent"><span class="t-en">grad explodes over T</span><span class="t-ko">T 따라 그래디언트 폭발</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Lift + noise + grad-cut</span><span class="t-ko">펼침 + 노이즈 + grad-cut</span></div>
+          <div class="sub"><span class="t-en">states s₁…s_T become free vars</span><span class="t-ko">상태 s₁…s_T를 자유변수로</span></div>
+          <div class="latent"><span class="t-en">all F(s_t,a_t) in parallel</span><span class="t-ko">모든 F(s_t,a_t) 병렬</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Sync refine</span><span class="t-ko">동기화 정밀화</span></div>
+          <div class="sub"><span class="t-en">few full-rollout GD steps</span><span class="t-ko">소수의 full-rollout GD</span></div>
+          <div class="latent"><span class="t-en">precise convergence</span><span class="t-ko">정밀한 수렴</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Decouple time, then re-couple periodically</b> — explore on the smooth lifted landscape, then snap to a true plan with occasional full-rollout gradient descent.</div>
+      <div class="cap t-ko"><b>시간을 분리했다가 주기적으로 다시 결합</b> — 매끈한 펼침 지형에서 탐색하고, 가끔 full-rollout 그래디언트 강하로 진짜 계획에 맞춘다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: a stochastic, lifted optimal controller</span><span class="t-ko">아이디어: 확률적·펼침형 최적 제어기</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 펼침 + 노이즈</span>
+        <h3>Virtual states + Langevin</h3>
+        <p class="t-en">Instead of optimizing only actions through a serial rollout, treat the per-step states <span class="term">s₁…s_T</span> as independent variables and penalize a <span class="term">dynamics-consistency loss</span> ‖s<sub>t+1</sub>−F(s<sub>t</sub>,a<sub>t</sub>)‖². This lets every world-model call run in parallel, and isotropic Gaussian noise on the states (Langevin-style) lets the planner hop between basins instead of getting stuck behind a wall.</p>
+        <p class="t-ko">직렬 롤아웃으로 행동만 최적화하는 대신, 각 스텝 상태 <span class="term">s₁…s_T</span>를 독립 변수로 두고 <span class="term">dynamics-consistency 손실</span> ‖s<sub>t+1</sub>−F(s<sub>t</sub>,a<sub>t</sub>)‖²를 부과한다. 덕분에 모든 월드모델 호출이 병렬로 돌고, 상태에 등방성 가우시안 노이즈(Langevin식)를 더해 벽 뒤에 갇히지 않고 분지 사이를 건너뛴다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② grad-cut + dense goal</span>
+        <h3>Cut state gradients, shape the goal</h3>
+        <p class="t-en">Vision world models have brittle <span class="term">∇<sub>s</sub>F</span>, so GRASP applies <span class="term">stop-gradient</span> on state inputs — gradients flow only to actions and target states. To keep a global signal, it adds a <strong>dense goal loss</strong> ‖F(s̄<sub>t</sub>,a<sub>t</sub>)−g‖² at <em>every</em> step, drifting each one-step prediction toward the goal.</p>
+        <p class="t-ko">시각 월드모델의 <span class="term">∇<sub>s</sub>F</span>는 깨지기 쉬워서, GRASP는 상태 입력에 <span class="term">stop-gradient</span>를 적용한다 — 그래디언트는 행동과 타깃 상태로만 흐른다. 전역 신호 유지를 위해 매 스텝마다 <strong>dense goal 손실</strong> ‖F(s̄<sub>t</sub>,a<sub>t</sub>)−g‖²를 더해, 각 1-스텝 예측을 목표 쪽으로 끌어당긴다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Lift into (s, a)</span><span class="t-ko">(s, a)로 펼치기</span></b><span class="t-en">Add virtual states s₁…s_T as optimization variables and rewrite planning as a dynamics-consistency + goal loss — making all T world-model evaluations parallel (a "collocation" view).</span><span class="t-ko">가상 상태 s₁…s_T를 최적화 변수로 추가하고, 계획을 dynamics-consistency + goal 손실로 재작성해 T개의 월드모델 평가를 모두 병렬화(collocation 관점)한다.</span></li>
+      <li><b><span class="t-en">Inject Langevin noise</span><span class="t-ko">Langevin 노이즈 주입</span></b><span class="t-en">Add Gaussian noise to the state iterates each step so the optimizer explores the lifted space and escapes unphysical local minima (e.g., a path straight through a wall).</span><span class="t-ko">매 스텝 상태 반복값에 가우시안 노이즈를 더해 펼쳐진 공간을 탐색하고 비물리적 지역 최소값(예: 벽을 관통하는 경로)을 탈출한다.</span></li>
+      <li><b><span class="t-en">Grad-cut + dense goal</span><span class="t-ko">grad-cut + dense goal</span></b><span class="t-en">Stop-gradient through state inputs of F so the brittle ∇ₛF can't be exploited; add a per-step ‖F(s̄ₜ,aₜ)−g‖² goal term so every action still gets a clean, task-aligned gradient.</span><span class="t-ko">F의 상태 입력에 stop-gradient를 걸어 깨지기 쉬운 ∇ₛF가 악용되지 않게 하고, 스텝마다 ‖F(s̄ₜ,aₜ)−g‖² goal 항을 더해 모든 행동이 깔끔한 과제 정렬 그래디언트를 받게 한다.</span></li>
+      <li><b><span class="t-en">Periodic full-rollout sync</span><span class="t-ko">주기적 full-rollout 동기화</span></b><span class="t-en">Every K_sync iterations, run a few J_sync steps of standard backprop-through-the-rollout GD on the original serial objective to sharpen and re-anchor the plan to true dynamics.</span><span class="t-ko">K_sync 반복마다 원래 직렬 목적함수에 대해 J_sync번의 표준 BPTT GD를 돌려, 계획을 날카롭게 다듬고 진짜 dynamics에 다시 고정한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Long horizons stop collapsing.</strong> At Push-T H=80, GRASP keeps 10.4% success while every baseline drops to single digits or zero — and it's ~5× faster to a successful plan at H=50.</p><p class="t-ko"><strong>긴 호라이즌이 무너지지 않는다.</strong> Push-T H=80에서 GRASP는 10.4% 성공을 유지하는 반면 모든 베이스라인은 한 자릿수 또는 0으로 추락 — H=50에선 성공까지 약 5배 빠르다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>The state gradient is the enemy.</strong> The key insight is that ∇ₛF in vision world models is adversarial, not informative — so cutting it (not refining it) is what makes gradient planning robust.</p><p class="t-ko"><strong>상태 그래디언트가 적이다.</strong> 핵심 통찰은 시각 월드모델의 ∇ₛF가 정보가 아니라 적대적이라는 것 — 그래서 다듬는 게 아니라 잘라내는 것이 그래디언트 계획을 견고하게 만든다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Classical control, modernized.</strong> Lifting states is collocation/multiple-shooting; the theory shows lifted grad-Lipschitz is O(1) in T while serial shooting grows exponentially.</p><p class="t-ko"><strong>고전 제어의 현대화.</strong> 상태 펼침은 collocation/multiple-shooting이며, 이론적으로 펼침의 grad-Lipschitz는 T에 대해 O(1)인 반면 직렬 shooting은 지수적으로 커진다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>A hybrid, not a purist.</strong> The periodic full-rollout sync admits gradient relaxation alone isn't enough — exploration on the smooth landscape plus occasional exact refinement is the winning combo.</p><p class="t-ko"><strong>순수주의가 아닌 하이브리드.</strong> 주기적 full-rollout 동기화는 그래디언트 완화만으로는 부족함을 인정한다 — 매끈한 지형 탐색 + 가끔의 정밀 정제가 승리 조합이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline horizons still leave GRASP at only ~10% success on Push-T H=80 — better than baselines, but far from solving the task. Evaluation is on a handful of D4RL/DM-control maze-and-push environments with learned visual dynamics; whether grad-cut + Langevin transfers to richer, contact-heavy manipulation or to non-goal-reaching objectives is untested, and the theory is proven only for linear systems.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 호라이즌에서도 GRASP는 Push-T H=80에서 ~10% 성공에 머문다 — 베이스라인보다는 낫지만 과제를 푸는 수준과는 거리가 멀다. 평가는 학습된 시각 dynamics를 쓰는 소수의 D4RL/DM-control 미로·밀기 환경에 한정되며, grad-cut + Langevin이 접촉이 많은 복잡한 매니퓰레이션이나 goal-reaching이 아닌 목적함수로 전이될지는 미검증, 이론도 선형 시스템에서만 증명됐다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.00475">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.00475">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.00475">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.00475">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Shared / Multi-Agent World Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
