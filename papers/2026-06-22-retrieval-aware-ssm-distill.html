@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Retrieval-Aware Distillation for Transformer-SSM Hybrids</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · Transformer-SSM</span><span class="t-ko">⚡ Efficient Seq · Transformer-SSM</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Retrieval-Aware Distillation for Transformer-SSM Hybrids<br><span class="glow t-en">— Keep the ~2% of heads that actually retrieve; make the rest recurrent</span><span class="glow t-ko">— 진짜로 '검색'하는 ~2% 헤드만 남기고, 나머지는 순환(SSM)으로</span></h1>
+    <div class="meta">
+      <span>👥 <b>Aviv Bick</b>, Eric P. Xing, <b>Albert Gu</b></span>
+      <span>🏛 Carnegie Mellon University</span>
+      <span>🗓 2026.02.11</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.11374">arXiv:2602.11374</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Pure SSMs (Mamba) are cheap but lose to Transformers on in-context <b>retrieval</b>. Prior work showed retrieval lives in a tiny set of <b>"Gather-and-Aggregate" (G&amp;A)</b> attention heads. This paper turns that into a recipe: <span class="hl">ablate each teacher head, keep only the top retrieval-critical ones as attention, and distill everything else into recurrent SSM heads.</span> Keeping just <b>~10 of 512 heads (~2%)</b> recovers <b>&gt;95%</b> of the teacher's retrieval score — at roughly <b>5–6× less memory</b> than heuristic hybrids.</p>
+    <p class="t-ko">순수 SSM(Mamba)은 저렴하지만 문맥 내 <b>검색(retrieval)</b>에서 트랜스포머에 밀린다. 선행 연구는 검색 능력이 극소수의 <b>"Gather-and-Aggregate(G&amp;A)"</b> 어텐션 헤드에 집중돼 있음을 밝혔다. 이 논문은 이를 레시피로 만든다: <span class="hl">교사 모델의 헤드를 하나씩 제거해 보고, 검색에 결정적인 상위 헤드만 어텐션으로 남기고 나머지는 모두 순환(SSM) 헤드로 증류한다.</span> <b>512개 중 단 ~10개(~2%)</b>만 남겨도 교사의 검색 점수 <b>95% 이상</b>을 회복하며, 휴리스틱 하이브리드 대비 메모리는 <b>약 5~6배</b> 적다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Hybrid design should be decided by function, not by a fixed layer ratio.</p>
+    <p class="lead t-ko">하이브리드 설계는 고정된 레이어 비율이 아니라 '기능'으로 결정돼야 한다.</p>
+    <p class="t-en">Existing Transformer-SSM hybrids (Jamba, Zamba, Hymba) sprinkle attention by <strong>heuristics</strong> — every N-th layer, a fixed 25–50% ratio — and end up paying for far more attention than they need. The key insight here, from the authors' own prior work, is that in-context retrieval is <strong>not spread across all heads</strong>: it is concentrated in a handful of <strong>Gather-and-Aggregate (G&amp;A)</strong> heads. So instead of guessing where to place attention, the method <strong>measures</strong> which heads matter for retrieval and keeps only those. Everything else becomes a cheap recurrent (SSM) head with constant memory.</p>
+    <p class="t-ko">기존 트랜스포머-SSM 하이브리드(Jamba, Zamba, Hymba)는 <strong>휴리스틱</strong>으로 어텐션을 배치한다 — N번째 레이어마다, 혹은 25~50% 고정 비율 — 그래서 필요 이상으로 많은 어텐션 비용을 치른다. 이 논문의 핵심 통찰(저자들의 선행 연구)은 문맥 내 검색이 <strong>모든 헤드에 퍼져 있지 않다</strong>는 것 — 소수의 <strong>Gather-and-Aggregate(G&amp;A)</strong> 헤드에 집중돼 있다. 따라서 어텐션 위치를 추측하는 대신, 어떤 헤드가 검색에 중요한지 <strong>측정</strong>해 그것만 남긴다. 나머지는 메모리가 일정한 저렴한 순환(SSM) 헤드로 바뀐다.</p>
+    <figure class="fig">
+      <img src="fig/2602.11374/x1.png" alt="Retrieval-Aware Attention Placement During Distillation">
+      <figcaption class="t-en"><b>Figure 1.</b> Retrieval-aware attention placement — (1) ablate each teacher head and measure the accuracy drop on a synthetic KV-retrieval probe to get a retrieval-importance score; (2) keep heads above a threshold, replace the rest with recurrent heads; (3) distill into a hybrid student.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 검색 인식 어텐션 배치 — (1) 교사 모델의 각 헤드를 제거하고 합성 KV-검색 프로브에서의 정확도 하락으로 검색-중요도 점수를 구한다; (2) 임계값 이상의 헤드만 남기고 나머지는 순환 헤드로 교체; (3) 하이브리드 학생 모델로 증류한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.11374</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">~2%</div><div class="l"><span class="t-en">Attention heads kept<br>(~10 of 512)</span><span class="t-ko">유지한 어텐션 헤드<br>(512개 중 ~10개)</span></div></div>
+      <div class="stat"><div class="n">&gt;95%</div><div class="l"><span class="t-en">Teacher retrieval score<br>recovered</span><span class="t-ko">교사 검색 점수<br>회복률</span></div></div>
+      <div class="stat"><div class="n">5–6×</div><div class="l"><span class="t-en">More memory-efficient<br>vs heuristic hybrids</span><span class="t-ko">휴리스틱 하이브리드 대비<br>메모리 효율</span></div></div>
+      <div class="stat"><div class="n">8×</div><div class="l"><span class="t-en">SSM state shrink<br>(d_state 64→8)</span><span class="t-ko">SSM 상태 축소<br>(d_state 64→8)</span></div></div>
+      <div class="stat"><div class="n">&gt;10×</div><div class="l"><span class="t-en">Fewer attn heads vs<br>prior distill baselines</span><span class="t-ko">선행 증류 베이스라인 대비<br>어텐션 헤드 절감</span></div></div>
+      <div class="stat"><div class="n">11 / 20</div><div class="l"><span class="t-en">Kept heads still G&amp;A<br>(vs 5 / 492 SSM heads)</span><span class="t-ko">남긴 헤드 중 G&amp;A<br>(SSM은 492개 중 5개)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — few heads, leaner state, kept performance</span><span class="t-ko">결과 — 적은 헤드 · 작은 상태 · 유지된 성능</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 4 excerpt.</b> Shrinking the SSM state (d_state) in the retrieval-aware hybrid — once attention handles retrieval, an 8× smaller state barely moves accuracy. Δ = (d_state 8 − d_state 64), directional.</caption>
+        <caption class="t-ko"><b>Table 4 발췌.</b> 검색 인식 하이브리드에서 SSM 상태(d_state) 축소 — 어텐션이 검색을 맡으면 상태를 8배 줄여도 정확도는 거의 변하지 않는다. Δ = (d_state 8 − d_state 64), 방향성.</caption>
+        <thead><tr><th>Setting</th><th>d_state 64</th><th>d_state 8</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>Knowledge-focused</td><td>baseline</td><td>≈ baseline</td><td class="up">~0</td></tr>
+          <tr><td>Retrieval-heavy</td><td>baseline</td><td>≈ baseline</td><td class="up">~0</td></tr>
+          <tr><td>KV-cache memory</td><td>1.0×</td><td>↓</td><td class="up">smaller</td></tr>
+          <tr><td>SSM state memory</td><td>1.0×</td><td>0.125×</td><td class="up">−8×</td></tr>
+          <tr><td>Heads kept (attn)</td><td>~10</td><td>~10</td><td>=</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="font-size:.86rem;opacity:.72;margin-top:8px">Numbers reflect the paper's reported trends (Tables 1–4): the 8× state reduction yields "minimal degradation," and the full hybrid recovers &gt;95% retrieval coverage while being 5–6× more memory-efficient than heuristic placement.</p>
+    <p class="t-ko" style="font-size:.86rem;opacity:.72;margin-top:8px">수치는 논문이 보고한 경향(Table 1–4)을 반영 — 8배 상태 축소는 "미미한 성능 저하"에 그치고, 전체 하이브리드는 검색 커버리지 95%+를 회복하면서 휴리스틱 배치 대비 메모리 5~6배 효율.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Teacher Transformer</span><span class="t-ko">교사 트랜스포머</span></div>
+          <div class="sub"><span class="t-en">all heads, full KV-cache</span><span class="t-ko">모든 헤드, full KV-cache</span></div>
+          <div class="latent"><span class="t-en">retrieval = strong, costly</span><span class="t-ko">검색 강함, 비쌈</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Ablate &amp; rank</span><span class="t-ko">제거 &amp; 순위화</span></div>
+          <div class="sub"><span class="t-en">KV-probe → keep top-k G&amp;A</span><span class="t-ko">KV-프로브 → 상위 G&amp;A 유지</span></div>
+          <div class="latent"><span class="t-en">rest → recurrent (SSM)</span><span class="t-ko">나머지 → 순환(SSM)</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Hybrid student</span><span class="t-ko">하이브리드 학생</span></div>
+          <div class="sub"><span class="t-en">~2% attn + lean SSM</span><span class="t-ko">~2% 어텐션 + 경량 SSM</span></div>
+          <div class="latent"><span class="t-en">&gt;95% retrieval, 5–6× lighter</span><span class="t-ko">검색 95%+, 5~6배 경량</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Measure, don't guess</b> — let the teacher's own retrieval behavior decide which heads survive as attention; distill the rest into constant-memory recurrence.</div>
+      <div class="cap t-ko"><b>추측 말고 측정</b> — 어떤 헤드가 어텐션으로 살아남을지를 교사의 검색 행동이 직접 결정하게 하고, 나머지는 일정-메모리 순환으로 증류한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: a retrieval-guided step before distillation</span><span class="t-ko">아이디어: 증류 전에 '검색-안내' 단계를 끼운다</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 헤드 진단</span>
+        <h3>Ablate to find G&amp;A heads</h3>
+        <p class="t-en">On a synthetic <span class="term">KV-retrieval probe</span>, zero out each teacher head one at a time and record the accuracy drop. A large drop = a retrieval-critical <span class="term">Gather-and-Aggregate</span> head. This produces a ranked list — placement becomes empirical, not a fixed pattern.</p>
+        <p class="t-ko">합성 <span class="term">KV-검색 프로브</span>에서 교사 헤드를 하나씩 0으로 만들고 정확도 하락을 기록한다. 큰 하락 = 검색에 결정적인 <span class="term">Gather-and-Aggregate</span> 헤드. 이렇게 순위 목록이 나오고, 배치는 고정 패턴이 아닌 '실측'이 된다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 구조화 증류</span>
+        <h3>Keep top-k, recur the rest (MOHAWK)</h3>
+        <p class="t-en">Retain the top-k heads with their original Q/K/V; replace all others with <span class="term">DiscreteMamba2</span> heads. A parameter-free <span class="term">Adapter</span> matches attention-output stats to SSM outputs, then distill (MOHAWK, skipping matrix-orientation since heads are copied verbatim).</p>
+        <p class="t-ko">상위 k개 헤드는 원래 Q/K/V 그대로 유지하고, 나머지는 모두 <span class="term">DiscreteMamba2</span> 헤드로 교체. 파라미터 없는 <span class="term">Adapter</span>가 어텐션 출력 통계를 SSM 출력에 맞춘 뒤 증류(MOHAWK, 헤드를 그대로 복사하므로 matrix-orientation 단계 생략).</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Score every head</span><span class="t-ko">모든 헤드 점수화</span></b><span class="t-en">Run the teacher (Llama-3.2-1B / Qwen2.5-1.5B) on a synthetic KV-retrieval task, ablating each attention head individually and measuring the accuracy drop → a retrieval-importance ranking.</span><span class="t-ko">교사 모델(Llama-3.2-1B / Qwen2.5-1.5B)을 합성 KV-검색 과제에 돌리며 어텐션 헤드를 하나씩 제거해 정확도 하락을 측정 → 검색-중요도 순위.</span></li>
+      <li><b><span class="t-en">Build a heterogeneous student</span><span class="t-ko">이질 구조 학생 구성</span></b><span class="t-en">Keep only the top-k heads (≈10–20) as attention; replace the rest with DiscreteMamba2 heads whose state dim matches the original head dim. Layers become pure-SSM or attention+SSM parallel.</span><span class="t-ko">상위 k개(≈10~20)만 어텐션으로 유지하고, 나머지는 원래 헤드 차원과 일치하는 DiscreteMamba2 헤드로 교체. 레이어는 순수 SSM이거나 어텐션+SSM 병렬이 된다.</span></li>
+      <li><b><span class="t-en">Align with a parameter-free Adapter</span><span class="t-ko">무파라미터 Adapter로 정렬</span></b><span class="t-en">Within each block, normalize the kept attention-head outputs to the mean/variance of the SSM outputs before concatenation → removes distribution mismatch with zero extra parameters.</span><span class="t-ko">각 블록에서 남긴 어텐션 헤드 출력을 SSM 출력의 평균/분산에 맞춰 정규화한 뒤 결합 → 추가 파라미터 없이 분포 불일치 제거.</span></li>
+      <li><b><span class="t-en">Distill, then shrink the state</span><span class="t-ko">증류 후 상태 축소</span></b><span class="t-en">Hidden-state alignment + end-to-end logit distillation (Fineweb-edu, Finemath). With attention now handling retrieval, cut the SSM d_state 8× (64→8) for big memory savings at near-zero accuracy cost.</span><span class="t-ko">은닉상태 정렬 + 종단간 로짓 증류(Fineweb-edu, Finemath). 어텐션이 검색을 맡으므로 SSM d_state를 8배(64→8) 줄여, 정확도 손실 거의 없이 큰 메모리 절감.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🎯</span><p class="t-en"><strong>Function over heuristics.</strong> Attention placement is decided by measured retrieval importance, not a fixed every-N-th-layer rule — and that needs &gt;10× fewer heads.</p><p class="t-ko"><strong>휴리스틱보다 기능.</strong> 어텐션 배치를 'N번째 레이어' 규칙이 아니라 측정된 검색 중요도로 결정 — 헤드는 10배 이상 적게 든다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Big SSM states are a crutch.</strong> Once attention does retrieval, an 8× smaller recurrent state barely hurts — suggesting large states mainly compensated for missing retrieval.</p><p class="t-ko"><strong>큰 SSM 상태는 보조 장치였다.</strong> 어텐션이 검색을 맡으면 순환 상태를 8배 줄여도 거의 손해 없음 — 큰 상태는 주로 부족한 검색을 메우던 것이었음을 시사.</p></div>
+      <div class="t"><span class="ic">💾</span><p class="t-en"><strong>Real memory wins.</strong> Tiny KV-cache (few heads) + lean SSM state = 5–6× more memory-efficient than heuristic hybrids, with higher prefill/decode throughput.</p><p class="t-ko"><strong>실제 메모리 이득.</strong> 작은 KV-cache(소수 헤드) + 경량 SSM 상태 = 휴리스틱 하이브리드 대비 5~6배 메모리 효율, prefill/decode 처리량도 향상.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Retrieval stays localized.</strong> Post-distillation ablation: 11/20 kept heads remain G&amp;A-critical vs only 5/492 SSM heads — the offload genuinely works.</p><p class="t-ko"><strong>검색은 국소화된 채 유지.</strong> 증류 후 제거 실험: 남긴 헤드 20개 중 11개가 여전히 G&amp;A 핵심 vs SSM 492개 중 5개 — 오프로드가 실제로 작동.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> All evidence comes from &lt;3B-parameter models (Llama-3.2-1B, Qwen2.5-1.5B) and a <em>single synthetic KV-retrieval probe</em> for head selection. Whether "just ~10 heads" still suffices at 7B–70B scale is untested, and the probe may miss multi-hop or associative retrieval — so the ~2% figure could be an artifact of small models plus an easy probe rather than a universal law.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 모든 근거가 30억 파라미터 미만 모델(Llama-3.2-1B, Qwen2.5-1.5B)과 헤드 선택을 위한 <em>단일 합성 KV-검색 프로브</em>에서 나온다. "단 ~10개 헤드"가 7B~70B 규모에서도 충분한지는 미검증이고, 프로브가 멀티홉·연상 검색을 놓칠 수 있다 — 따라서 ~2%라는 수치는 보편 법칙이라기보다 소형 모델 + 쉬운 프로브의 산물일 가능성이 있다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.11374">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.11374">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.11374">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.11374">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · ICML 2026 (Poster) · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 · ICML 2026 (Poster) · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

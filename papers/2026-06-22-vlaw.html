@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · VLAW: Iterative Co-Improvement of Vision-Language-Action Policy and World Model</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · VLA</span><span class="t-ko">🌍 World Model · VLA</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>VLAW: Iterative Co-Improvement of Vision-Language-Action Policy and World Model<br><span class="glow t-en">— The robot rehearses inside its own imagined world, then both get better</span><span class="glow t-ko">— 로봇이 스스로 상상한 세계 안에서 연습하고, 정책과 세계 모델이 함께 좋아진다</span></h1>
+    <div class="meta">
+      <span>👥 <b>Yanjiang Guo</b> <span class="t-en">et al.</span><span class="t-ko">외 다수</span> · <span class="t-en">Chelsea Finn</span><span class="t-ko">Chelsea Finn</span></span>
+      <span>🏛 Stanford University</span>
+      <span>🗓 2026.02.12</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.12063">arXiv:2602.12063</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Real-world robot data is expensive; learned world models are cheap but too optimistic to be useful. VLAW uses a <b>small budget of real rollouts (including failures)</b> to ground an action-conditioned <b>video-generation world model</b>, then runs the VLA policy <span class="hl">inside that imagined world to generate massive synthetic rollouts</span>, auto-labeled by a vision-language reward model. Training on the filtered successes <b>iteratively co-improves both</b> the policy and the world model — <b>+39.2% absolute success</b> (0.46 → 0.868) on five contact-rich real-robot tasks.</p>
+    <p class="t-ko">실제 로봇 데이터는 비싸고, 학습된 세계 모델은 값싸지만 지나치게 낙관적이라 쓸모가 적다. VLAW는 <b>실패를 포함한 소량의 실제 롤아웃</b>으로 행동 조건부 <b>비디오 생성 세계 모델</b>을 현실에 정합시키고, VLA 정책을 <span class="hl">그 상상 세계 안에서 돌려 대규모 합성 롤아웃을 생성</span>한 뒤 비전-언어 보상 모델로 자동 라벨링한다. 걸러낸 성공 궤적으로 학습하면 정책과 세계 모델이 <b>반복적으로 함께 개선</b> — 접촉이 많은 실로봇 5개 과제에서 <b>성공률 +39.2%p</b>(0.46 → 0.868).</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The bottleneck of online VLA learning is not the algorithm — it's the cost of touching the real world.</p>
+    <p class="lead t-ko">온라인 VLA 학습의 병목은 알고리즘이 아니라, 실제 세계를 만지는 비용이다.</p>
+    <p class="t-en">VLA models like <strong>π0.5</strong> improve dramatically with online interaction, but collecting real-robot rollouts is slow, costly, and labor-intensive. Learned world models promise cheap synthetic data — yet they are trained mostly on <em>successful</em> demos, so they hallucinate optimistic outcomes and blur the contact-rich details that decide a task. VLAW's insight is to spend the scarce real-world budget not on policy data directly, but on <strong>grounding the world model with failures</strong>, then harvest unlimited synthetic experience from the corrected model. The result reframes scalable robot learning as a <strong>co-improvement loop</strong> rather than a one-shot sim-to-real transfer.</p>
+    <p class="t-ko">π0.5 같은 VLA 모델은 온라인 상호작용으로 크게 향상되지만, 실로봇 롤아웃 수집은 느리고 비싸며 노동집약적이다. 학습된 세계 모델은 값싼 합성 데이터를 약속하지만, 대부분 <em>성공</em> 시연으로 학습되어 결과를 낙관적으로 환각하고 과제를 가르는 접촉 디테일을 흐릿하게 뭉갠다. VLAW의 통찰은 희소한 실세계 예산을 정책 데이터에 직접 쓰지 않고 <strong>실패로 세계 모델을 정합</strong>시키는 데 쓰고, 교정된 모델에서 무제한의 합성 경험을 거두는 것이다. 그 결과 확장 가능한 로봇 학습을 일회성 sim-to-real 전이가 아니라 <strong>상호 개선 루프</strong>로 재정의한다.</p>
+    <figure class="fig">
+      <img src="fig/2602.12063/x1.png" alt="VLAW 개요: VLA 정책이 세계 모델 안에서 병렬 롤아웃을 생성해 성공 궤적만 골라 재학습">
+      <figcaption class="t-en"><b>Figure 1.</b> VLAW overview — a limited set of real rollouts grounds a world model, then the VLA policy generates large-scale parallel rollouts <em>inside</em> the model; only success trajectories (green ✓) are kept to post-train the VLA.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> VLAW 개요 — 소량의 실제 롤아웃으로 세계 모델을 정합한 뒤, VLA 정책이 모델 <em>내부</em>에서 대규모 병렬 롤아웃을 생성하고, 성공 궤적(초록 ✓)만 남겨 VLA를 후학습한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.12063</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+39.2%p</div><div class="l"><span class="t-en">Absolute success gain<br>(0.46 → 0.868, 2 iters)</span><span class="t-ko">절대 성공률 향상<br>(0.46 → 0.868, 2회 반복)</span></div></div>
+      <div class="stat"><div class="n">+11.6%p</div><div class="l"><span class="t-en">From synthetic data alone<br>(vs. Filtered BC-2)</span><span class="t-ko">합성 데이터 단독 기여<br>(Filtered BC-2 대비)</span></div></div>
+      <div class="stat"><div class="n">64.12</div><div class="l"><span class="t-en">FVD after grounding<br>(↓ from 225.13 pretrained)</span><span class="t-ko">정합 후 FVD<br>(사전학습 225.13 → 하락)</span></div></div>
+      <div class="stat"><div class="n">50 / 500</div><div class="l"><span class="t-en">Real vs. synthetic rollouts<br>per task · per round</span><span class="t-ko">실제 vs. 합성 롤아웃<br>과제·라운드당</span></div></div>
+      <div class="stat"><div class="n">5</div><div class="l"><span class="t-en">Contact-rich tasks<br>(stack, book, erase, scoop, draw)</span><span class="t-ko">접촉 많은 과제<br>(쌓기·책·지우기·뜨기·그리기)</span></div></div>
+      <div class="stat"><div class="n">0.8</div><div class="l"><span class="t-en">Reward threshold p(yes)<br>for filtering successes</span><span class="t-ko">성공 필터 임계값 p(yes)<br>비전-언어 보상</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — iterating beats one-shot, world model beats no world model</span><span class="t-ko">결과 — 반복이 일회성을, 세계 모델이 무-모델을 이긴다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 excerpt.</b> Mean real-robot success rate across 5 tasks. Δ = (method − base π0.5, 0.46).</caption>
+        <caption class="t-ko"><b>Table 2 발췌.</b> 5개 과제 평균 실로봇 성공률. Δ = (해당 방법 − 기준 π0.5, 0.46).</caption>
+        <thead><tr><th>Method</th><th>Success</th><th>Δ vs base</th></tr></thead>
+        <tbody>
+          <tr><td>Base π0.5</td><td>0.460</td><td>—</td></tr>
+          <tr><td>DSRL</td><td>0.560</td><td class="up">+0.100</td></tr>
+          <tr><td>Filtered BC-1</td><td>0.640</td><td class="up">+0.180</td></tr>
+          <tr><td>VLAW (Ours-1)</td><td>0.744</td><td class="up">+0.284</td></tr>
+          <tr><td>Filtered BC-2</td><td>0.752</td><td class="up">+0.292</td></tr>
+          <tr><td>VLAW (Ours-2)</td><td>0.868</td><td class="up">+0.408</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Real rollouts</span><span class="t-ko">실제 롤아웃</span></div>
+          <div class="sub"><span class="t-en">50 / task · with failures</span><span class="t-ko">과제당 50 · 실패 포함</span></div>
+          <div class="latent"><span class="t-en">ground the model</span><span class="t-ko">모델을 현실에 정합</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">World model imagines</span><span class="t-ko">세계 모델이 상상</span></div>
+          <div class="sub"><span class="t-en">policy rolls out inside</span><span class="t-ko">정책이 내부에서 롤아웃</span></div>
+          <div class="latent"><span class="t-en">500 synth + VLM filter</span><span class="t-ko">합성 500 + VLM 필터</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Better VLA</span><span class="t-ko">더 나은 VLA</span></div>
+          <div class="sub"><span class="t-en">flow-matching on successes</span><span class="t-ko">성공 궤적으로 flow-matching</span></div>
+          <div class="latent"><span class="t-en">explores → repeat loop</span><span class="t-ko">탐색 → 루프 반복</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>A closed loop, not a pipeline</b> — a better policy explores new states, which gives the world model fresh data to model more accurately, which yields better synthetic experience, which yields a better policy.</div>
+      <div class="cap t-ko"><b>파이프라인이 아닌 닫힌 루프</b> — 더 나은 정책은 새로운 상태를 탐색하고, 그 데이터로 세계 모델이 더 정확해지며, 더 좋은 합성 경험을 낳아 다시 더 나은 정책으로 이어진다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: spend real data on fidelity, not on the policy</span><span class="t-ko">아이디어: 실데이터를 정책이 아닌 '충실도'에 쓴다</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 정합</span>
+        <h3>Ground the world model with failures</h3>
+        <p class="t-en">Fine-tune the pretrained video world model (<span class="term">Ctrl-World</span>) on a small set of online rollouts that include <strong>failure cases</strong>, co-trained with the original DROID data to avoid overfitting. This kills the "over-optimism" bias and sharpens contact-rich predictions — FVD drops from 225 to 64.</p>
+        <p class="t-ko">사전학습된 비디오 세계 모델(<span class="term">Ctrl-World</span>)을 <strong>실패 사례를 포함한</strong> 소량의 온라인 롤아웃으로 미세조정하되, 과적합 방지를 위해 원본 DROID 데이터와 공동학습한다. 이로써 '과낙관' 편향이 사라지고 접촉 예측이 선명해진다 — FVD가 225 → 64로 하락.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 증폭</span>
+        <h3>Imagine, filter, repeat (AWR-style)</h3>
+        <p class="t-en">Run the policy in closed loop inside the model to make <span class="term">500 synthetic rollouts/task</span>; a fine-tuned VLM reward (<span class="term">Qwen3-VL-4B</span>, p&gt;0.8) keeps only successes. Post-train π0.5 with flow-matching on real+synthetic successes — an advantage-weighted update for likelihood-free policies.</p>
+        <p class="t-ko">정책을 모델 안에서 닫힌 루프로 돌려 <span class="term">과제당 합성 롤아웃 500개</span>를 만들고, 미세조정한 VLM 보상(<span class="term">Qwen3-VL-4B</span>, p&gt;0.8)으로 성공만 남긴다. 실제+합성 성공으로 π0.5를 flow-matching 후학습 — 우도가 없는 정책을 위한 advantage-weighted 갱신.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Collect real rollouts</span><span class="t-ko">실제 롤아웃 수집</span></b><span class="t-en">Deploy the current π0.5 on the real robot for a fixed budget (50/task), sparsely labeling each trajectory as success or failure — deliberately capturing the failures demos lack.</span><span class="t-ko">현재 π0.5를 실로봇에 배치해 고정 예산(과제당 50)을 수집하고, 각 궤적을 성공/실패로 희소 라벨링 — 시연에 없는 실패를 의도적으로 포착한다.</span></li>
+      <li><b><span class="t-en">Post-train world + reward model</span><span class="t-ko">세계·보상 모델 후학습</span></b><span class="t-en">Fine-tune the video world model on these rollouts (co-trained with DROID) and, in iteration 1, fine-tune the VLM reward model on the success labels.</span><span class="t-ko">이 롤아웃으로 비디오 세계 모델을 미세조정(DROID와 공동학습)하고, 1회차에 성공 라벨로 VLM 보상 모델을 미세조정한다.</span></li>
+      <li><b><span class="t-en">Generate & filter synthetic data</span><span class="t-ko">합성 데이터 생성·필터</span></b><span class="t-en">Roll the policy out inside the grounded world model (500/task), then keep only trajectories the reward model scores above threshold — large-scale, auto-annotated successes.</span><span class="t-ko">정합된 세계 모델 안에서 정책을 롤아웃(과제당 500)하고, 보상 모델 점수가 임계값을 넘는 궤적만 남긴다 — 대규모 자동 라벨 성공 데이터.</span></li>
+      <li><b><span class="t-en">Post-train the policy, then iterate</span><span class="t-ko">정책 후학습 후 반복</span></b><span class="t-en">Fine-tune π0.5 via flow-matching on real+synthetic successes, then loop back to step 1. Two rounds lift mean success 0.46 → 0.744 → 0.868.</span><span class="t-ko">실제+합성 성공으로 π0.5를 flow-matching 미세조정한 뒤 1단계로 되돌아간다. 2회 반복으로 평균 성공률 0.46 → 0.744 → 0.868.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Failures are the asset.</strong> Feeding failed rollouts is what removes the world model's optimism — the synthetic data is only useful because the model can now predict things going wrong.</p><p class="t-ko"><strong>실패가 자산이다.</strong> 실패 롤아웃을 먹이는 것이 세계 모델의 낙관을 제거한다 — 모델이 '일이 잘못되는 것'을 예측할 수 있어야 합성 데이터가 쓸모를 갖는다.</p></div>
+      <div class="t"><span class="ic">🔁</span><p class="t-en"><strong>Co-improvement compounds.</strong> Round 2 beats round 1 because the better policy gives the world model better data — the loop is the contribution, not any single component.</p><p class="t-ko"><strong>상호 개선은 복리로 쌓인다.</strong> 2회차가 1회차를 능가하는 건 더 나은 정책이 세계 모델에 더 좋은 데이터를 주기 때문 — 핵심은 단일 부품이 아니라 루프 자체다.</p></div>
+      <div class="t"><span class="ic">🧮</span><p class="t-en"><strong>RL without likelihoods.</strong> Filtered flow-matching acts as advantage-weighted regression, giving expressive VLA policies a stable post-training path where standard RL stalls.</p><p class="t-ko"><strong>우도 없는 RL.</strong> 필터링된 flow-matching은 advantage-weighted regression처럼 작동해, 표준 RL이 막히는 표현력 높은 VLA 정책에 안정적 후학습 경로를 준다.</p></div>
+      <div class="t"><span class="ic">💸</span><p class="t-en"><strong>Cheap where it counts.</strong> 50 real rollouts buy 500 synthetic ones per task — real-world budget is spent on fidelity, then amplified 10× in imagination.</p><p class="t-ko"><strong>중요한 곳만 값싸게.</strong> 실제 50개가 과제당 합성 500개를 사들인다 — 실세계 예산은 충실도에 쓰고 상상 안에서 10배로 증폭한다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The whole loop hinges on the reward model and world model being trustworthy, yet both are validated on the <em>same five tasks</em> they were tuned on. "Beating Filtered BC" could partly be the VLM reward laundering its own biases into the policy, and there is no test that the world model's synthetic successes correspond to <em>real</em> successes outside these contact-rich categories. With only 5 tasks, 2 iterations, and a single π0.5 backbone, whether co-improvement keeps compounding — or saturates / drifts as the policy explores off-distribution — remains unproven.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 루프 전체가 보상 모델과 세계 모델의 신뢰성에 달려 있는데, 둘 다 자신이 튜닝된 <em>동일한 5개 과제</em>에서만 검증된다. "Filtered BC를 능가"한다는 것은 VLM 보상이 자신의 편향을 정책에 세탁해 넣은 결과일 수 있으며, 세계 모델의 합성 성공이 이 접촉 과제군 밖에서 <em>실제</em> 성공과 일치하는지에 대한 검증은 없다. 과제 5개·반복 2회·단일 π0.5 백본만으로는, 정책이 분포 밖을 탐색할 때 상호 개선이 계속 복리로 쌓일지 아니면 포화·표류할지는 입증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.12063">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.12063">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.12063">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.12063">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · ICML 2026 (Poster) · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 · ICML 2026 (Poster) · Shared / Multi-Agent World Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

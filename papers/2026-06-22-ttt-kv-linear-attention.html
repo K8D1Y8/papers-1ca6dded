@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Test-Time Training with KV Binding Is Secretly Linear Attention</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · Linear Attention</span><span class="t-ko">⚡ Efficient Seq · Linear Attention</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Test-Time Training with KV Binding Is Secretly Linear Attention<br><span class="glow t-en">— TTT isn't memorizing keys; it's a learned linear-attention operator in disguise</span><span class="glow t-ko">— TTT는 키를 외우는 게 아니라, 변장한 '학습된 선형 어텐션'이다</span></h1>
+    <div class="meta">
+      <span>👥 <b>Junchen Liu</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 NVIDIA</span>
+      <span>🗓 2026.02.24</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.21204">arXiv:2602.21204</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Test-Time Training with KV binding (TTT-KVB) is usually sold as <b>"test-time memorization"</b> — an inner loop that learns a key→value map and queries it at inference. This paper shows that story is <span class="hl">empirically wrong and mathematically unnecessary</span>: a broad class of TTT-KVB (deep inner MLPs, momentum, weight-norm) provably reduces to <b>a learned linear attention operator</b>. That reframing kills the paradoxes (gradient <em>ascent</em> works fine!) and lets them strip TTT down to plain linear attention with <b>up to 4.0× higher TTT-layer throughput</b> and a <b>1.19× end-to-end training speedup</b> at near-zero quality cost.</p>
+    <p class="t-ko">KV 바인딩 기반 Test-Time Training(TTT-KVB)은 보통 <b>"테스트 시점 암기"</b>로 설명된다 — 내부 루프가 key→value 사상을 학습하고 추론 때 그것을 질의한다는 것이다. 이 논문은 그 설명이 <span class="hl">경험적으로 틀렸고 수학적으로도 불필요</span>함을 보인다. 깊은 내부 MLP·모멘텀·weight-norm을 포함한 폭넓은 TTT-KVB가 <b>학습된 선형 어텐션 연산자</b>로 환원됨을 증명한다. 이 재해석은 역설들(그래디언트 <em>상승</em>도 잘 작동!)을 해소하고, TTT를 평범한 선형 어텐션으로 깎아내려 <b>TTT 레이어 처리량 최대 4.0배</b>·<b>학습 종단간 1.19배 가속</b>을 거의 무손실로 달성하게 한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The dominant intuition behind TTT — "better inner-loop fitting = stronger memory = better task" — is simply false.</p>
+    <p class="lead t-ko">TTT를 떠받치는 지배적 직관 — "내부 루프를 더 잘 맞출수록 더 강한 기억, 더 좋은 성능" — 은 그냥 틀렸다.</p>
+    <p class="t-en">TTT-KVB has graduated from an adaptation trick into an architectural primitive — a sub-quadratic rival to softmax attention. But the memorization story has quietly driven a lot of complexity: deep inner MLPs, fancy optimizers, normalization, all justified as improving "memorization fidelity." The authors surface four behaviors that <strong>contradict memorization</strong>: queries and keys live in different distributions, swapping queries for keys barely changes anything, more inner-loop steps lower the inner loss yet <em>hurt</em> the task, and replacing gradient descent with <strong>gradient ascent works just as well</strong>. They then prove why: a TTT layer with a linear final inner-layer is, exactly, <strong>a learned linear attention operator</strong> — so the inner loop isn't storing memories, it's parameterizing a history-dependent mixing of Q, K, V.</p>
+    <p class="t-ko">TTT-KVB는 적응 기법을 넘어 아키텍처 기본 단위 — softmax 어텐션의 준이차(sub-quadratic) 대안 — 으로 격상되었다. 그러나 암기 서사는 조용히 많은 복잡성을 정당화해왔다. 깊은 내부 MLP, 화려한 옵티마이저, 정규화 모두 "암기 충실도" 향상이라는 명목으로. 저자들은 암기설과 <strong>모순되는 네 가지 현상</strong>을 드러낸다. query와 key가 서로 다른 분포에 있고, query를 key로 바꿔도 성능이 거의 변하지 않으며, 내부 루프 스텝을 늘리면 내부 손실은 줄지만 과제 성능은 <em>나빠지고</em>, 경사하강을 <strong>경사상승으로 바꿔도 똑같이 잘 작동</strong>한다. 이어 그 이유를 증명한다. 마지막 내부 층이 선형인 TTT 레이어는 정확히 <strong>학습된 선형 어텐션 연산자</strong>이며, 따라서 내부 루프는 기억을 저장하는 게 아니라 Q·K·V의 이력 의존적 혼합을 매개변수화할 뿐이다.</p>
+    <figure class="fig">
+      <img src="fig/2602.21204/x1.png" alt="Inner-loop iterations vs inner loss vs task performance (PSNR/perplexity)">
+      <figcaption class="t-en"><b>Figure 1.</b> The core paradox. As inner-loop iterations rise (x-axis), the <b>inner loss keeps dropping</b> (orange) — i.e. "memorization" improves — yet task quality <b>gets worse</b>: PSNR falls (left, NVS) and perplexity rises (right, LLM). Better fitting ≠ better task.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 핵심 역설. 내부 루프 반복(가로축)이 늘수록 <b>내부 손실은 계속 감소</b>(주황) — 즉 "암기"는 좋아짐 — 하지만 과제 품질은 <b>나빠진다</b>. PSNR은 하락(좌, NVS)하고 perplexity는 상승(우, LLM)한다. 더 잘 맞추는 것 ≠ 더 좋은 성능.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.21204</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">4.0×</div><div class="l"><span class="t-en">TTT-layer inference<br>throughput (parallel form)</span><span class="t-ko">TTT 레이어 추론<br>처리량 (병렬화)</span></div></div>
+      <div class="stat"><div class="n">1.19×</div><div class="l"><span class="t-en">End-to-end<br>training speedup</span><span class="t-ko">학습 종단간<br>가속</span></div></div>
+      <div class="stat"><div class="n">+0.37</div><div class="l"><span class="t-en">PPL cost of full reduction<br>to linear attn (16.43→16.80)</span><span class="t-ko">선형 어텐션 완전 환원의<br>PPL 손실 (16.43→16.80)</span></div></div>
+      <div class="stat"><div class="n">−0.21 dB</div><div class="l"><span class="t-en">PSNR cost of full reduction<br>(NVS, 25.94→25.73)</span><span class="t-ko">완전 환원의 PSNR 손실<br>(NVS, 25.94→25.73)</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">Tasks unified<br>(LLM · NVS · ViT cls)</span><span class="t-ko">통합한 과제<br>(LLM · NVS · ViT 분류)</span></div></div>
+      <div class="stat"><div class="n">6</div><div class="l"><span class="t-en">Reduction steps<br>TTT → linear attn</span><span class="t-ko">환원 단계<br>TTT → 선형 어텐션</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — stripping TTT down barely hurts</span><span class="t-ko">결과 — TTT를 깎아내도 거의 손해 없다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> The reduction trajectory across three tasks. Variant 1 = update last inner-layer only; Variant 6 = plain linear attention. Δ = (variant − baseline). ↑ better for PSNR/Acc, ↓ better for PPL.</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> 세 과제에 걸친 환원 궤적. Variant 1 = 마지막 내부 층만 갱신; Variant 6 = 평범한 선형 어텐션. Δ = (변형 − 기준). PSNR·Acc는 ↑, PPL은 ↓이 좋음.</caption>
+        <thead><tr><th>Config</th><th>LLM PPL ↓</th><th>NVS PSNR ↑</th><th>ViT Acc ↑</th></tr></thead>
+        <tbody>
+          <tr><td>Baseline (full TTT)</td><td>16.43</td><td>25.94</td><td>79.34</td></tr>
+          <tr><td>Variant 1 (last-layer)</td><td>15.93</td><td>25.97</td><td>79.63</td></tr>
+          <tr><td>Variant 6 (linear attn)</td><td>16.80</td><td>25.73</td><td>79.54</td></tr>
+          <tr><td>Δ V1 − Base</td><td class="up">−0.50</td><td class="up">+0.03</td><td class="up">+0.29</td></tr>
+          <tr><td>Δ V6 − Base</td><td class="down">+0.37</td><td class="down">−0.21</td><td class="up">+0.20</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="margin-top:10px">Throughput tells the other half: the recurrent baseline runs the TTT layer at <b>4.30M tok/s</b>; the fully reduced parallel form hits <b>124.6M tok/s</b>, and the practical parallel variant delivers the headline <b>4.0×</b> layer speedup.</p>
+    <p class="t-ko" style="margin-top:10px">나머지 절반은 처리량이 말해준다. 순환(recurrent) 기준은 TTT 레이어를 <b>430만 tok/s</b>로 돌리지만, 완전 환원된 병렬 형태는 <b>1억2460만 tok/s</b>에 이르고, 실용 병렬 변형은 대표 수치인 <b>4.0배</b> 레이어 가속을 낸다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">TTT-KVB layer</span><span class="t-ko">TTT-KVB 레이어</span></div>
+          <div class="sub"><span class="t-en">inner loop fits K→V</span><span class="t-ko">내부 루프가 K→V 학습</span></div>
+          <div class="latent"><span class="t-en">"memorization" story</span><span class="t-ko">"암기" 서사</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Unroll inner loop</span><span class="t-ko">내부 루프 전개</span></div>
+          <div class="sub"><span class="t-en">linear final layer ⇒ algebra</span><span class="t-ko">선형 마지막 층 ⇒ 대수</span></div>
+          <div class="latent"><span class="t-en">= learned linear attention</span><span class="t-ko">= 학습된 선형 어텐션</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Plain linear attn</span><span class="t-ko">평범한 선형 어텐션</span></div>
+          <div class="sub"><span class="t-en">parallel, associative scan</span><span class="t-ko">병렬·결합적 스캔</span></div>
+          <div class="latent"><span class="t-en">4.0× faster, ~same quality</span><span class="t-ko">4.0배 빠름, 거의 동일 품질</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>The inner loop isn't memory.</b> Unrolling the gradient updates of a linear-final-layer TTT collapses, exactly, into a history-dependent linear mixing of Q/K/V — so all the optimizer machinery can be folded away into a standard, parallelizable operator.</div>
+      <div class="cap t-ko"><b>내부 루프는 기억이 아니다.</b> 선형 마지막 층 TTT의 그래디언트 갱신을 전개하면 정확히 Q·K·V의 이력 의존적 선형 혼합으로 붕괴한다 — 그래서 옵티마이저 장치를 모두 접어 표준·병렬화 가능한 연산자로 만들 수 있다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: the inner loop parameterizes attention, not memory</span><span class="t-ko">아이디어: 내부 루프는 기억이 아니라 어텐션을 매개변수화한다</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 모순 드러내기</span>
+        <h3><span class="t-en">Four anti-memorization tests</span><span class="t-ko">암기설 반증 4종</span></h3>
+        <p class="t-en"><span class="term">Q≠K distribution</span> (t-SNE shows Q is out-of-distribution for the key-fitted function), <span class="term">Q→K swap</span> barely moves performance, <span class="term">more inner steps</span> lower inner loss but raise perplexity, and <span class="term">gradient ascent</span> (re-trained) matches descent. None of these survive the "retrieve from a learned KV map" story.</p>
+        <p class="t-ko"><span class="term">Q≠K 분포</span>(t-SNE에서 Q는 key-적합 함수 입장에서 분포 밖), <span class="term">Q→K 치환</span>해도 성능 거의 불변, <span class="term">내부 스텝 증가</span>는 내부 손실은 낮추지만 perplexity는 올림, <span class="term">경사상승</span>(재학습)도 하강과 동등. 어느 것도 "학습된 KV 맵에서 검색" 서사로 설명되지 않는다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 증명</span>
+        <h3><span class="t-en">Unroll → linear attention</span><span class="t-ko">전개 → 선형 어텐션</span></h3>
+        <p class="t-en">Theorems 5.1–5.3: one GD step, then a full sequence of steps, then GD <strong>with momentum</strong>, each unroll into a linear attention operator — momentum is absorbed into an effective value vector. The inner-loop MLP becomes a learnable kernel; the "memory" is just the attention state.</p>
+        <p class="t-ko">정리 5.1–5.3: 한 번의 GD, 이어 전체 스텝 시퀀스, 그리고 <strong>모멘텀이 있는</strong> GD까지 각각 선형 어텐션 연산자로 전개된다 — 모멘텀은 유효 value 벡터에 흡수된다. 내부 루프 MLP는 학습 가능한 커널이 되고, "기억"은 그저 어텐션 상태일 뿐이다.</p>
+      </div>
+    </div>
+    <figure class="fig">
+      <img src="fig/2602.21204/x3.png" alt="Perplexity vs sequence position for baseline and six reduction variants">
+      <figcaption class="t-en"><b>Figure (ablation).</b> Perplexity vs. sequence position for the baseline and all six reduction variants. The progressively simplified TTT layers — down to plain linear attention — track the full model closely across the whole context.</figcaption>
+      <figcaption class="t-ko"><b>그림 (절제 실험).</b> 시퀀스 위치별 perplexity — 기준과 여섯 환원 변형 전체. 점진적으로 단순화된 TTT 레이어들은, 평범한 선형 어텐션까지도, 전 구간에서 풀 모델을 바짝 따라간다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.21204</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Break the memorization story</span><span class="t-ko">암기 서사 깨기</span></b><span class="t-en">Run the four diagnostics (Q/K distribution gap, Q→K swap, inner-step sweep, gradient ascent) on LaCT and ViTTT to show retrieval-from-memory cannot explain TTT's behavior.</span><span class="t-ko">LaCT·ViTTT에 네 가지 진단(Q/K 분포 차, Q→K 치환, 내부 스텝 스윕, 경사상승)을 돌려 "기억에서의 검색"으로는 TTT 동작을 설명할 수 없음을 보인다.</span></li>
+      <li><b><span class="t-en">Unroll the inner loop</span><span class="t-ko">내부 루프 전개</span></b><span class="t-en">For any TTT with a linear, bias-free final inner layer, analytically unroll the GD (with momentum) updates and show the output equals a linear attention operator (Theorems 5.1–5.3).</span><span class="t-ko">선형·무편향 마지막 내부 층을 가진 모든 TTT에 대해 (모멘텀 포함) GD 갱신을 해석적으로 전개하여 출력이 선형 어텐션 연산자와 같음을 보인다(정리 5.1–5.3).</span></li>
+      <li><b><span class="t-en">Reduce, step by step</span><span class="t-ko">단계별 환원</span></b><span class="t-en">Apply a 6-step trajectory: update only the last layer → drop weight-norm → single linear layer → drop per-token LR → drop momentum → drop gradient orthogonalization, ending at standard linear attention.</span><span class="t-ko">6단계 궤적 적용: 마지막 층만 갱신 → weight-norm 제거 → 단일 선형 층 → 토큰별 학습률 제거 → 모멘텀 제거 → 그래디언트 직교화 제거, 표준 선형 어텐션에 도달.</span></li>
+      <li><b><span class="t-en">Parallelize what reduces</span><span class="t-ko">환원되는 것은 병렬화</span></b><span class="t-en">When weight-norm is gone and only the final layer updates, the operator is associative → a parallel prefix-scan implementation gives up to 4.0× layer throughput and 1.19× end-to-end training speedup.</span><span class="t-ko">weight-norm이 없고 마지막 층만 갱신하면 연산자가 결합적 → 병렬 prefix-scan 구현이 레이어 처리량 최대 4.0배, 학습 종단간 1.19배 가속을 준다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🔍</span><p class="t-en"><strong>The label was wrong.</strong> "Test-time memorization" is a misleading frame; TTT-KVB is a learned linear attention operator with extra representational capacity.</p><p class="t-ko"><strong>이름표가 틀렸다.</strong> "테스트 시점 암기"는 오해를 부르는 틀이고, TTT-KVB는 표현력이 더해진 학습된 선형 어텐션 연산자다.</p></div>
+      <div class="t"><span class="ic">⚡</span><p class="t-en"><strong>Free speed.</strong> The right frame exposes associativity, so you get a parallel scan — 4.0× TTT-layer throughput at ~unchanged quality.</p><p class="t-ko"><strong>공짜 속도.</strong> 올바른 틀이 결합성을 드러내 병렬 스캔이 가능해진다 — 품질 거의 그대로 TTT 레이어 처리량 4.0배.</p></div>
+      <div class="t"><span class="ic">🧹</span><p class="t-en"><strong>Most complexity is optional.</strong> Deep inner MLPs, momentum, weight-norm — six reductions cost ≤0.37 PPL / 0.21 dB, sometimes <em>improving</em> accuracy.</p><p class="t-ko"><strong>복잡성 대부분은 선택사항.</strong> 깊은 내부 MLP·모멘텀·weight-norm — 여섯 환원의 비용은 ≤0.37 PPL / 0.21 dB이고, 때로는 정확도를 <em>높인다</em>.</p></div>
+      <div class="t"><span class="ic">🧭</span><p class="t-en"><strong>Unifies the field.</strong> TTT, fast-weights and sub-quadratic linear attention turn out to be the same operator — insight should transfer freely between them.</p><p class="t-ko"><strong>분야를 통합한다.</strong> TTT·fast-weights·준이차 선형 어텐션이 같은 연산자로 드러나 — 통찰이 서로 자유롭게 이전될 수 있다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The equivalence is proven only for a <b>linear, bias-free final inner layer</b>; TTT variants with nonlinear final layers, dynamic kernels, or weight-norm provably break the associativity and stay outside the parallel/linear-attention story — so "TTT is linear attention" is a claim about a (large but bounded) sub-class, not all of TTT. Evaluation also leans on two backbones (LaCT, ViTTT) at moderate scale; whether the marginal gains of removed components (e.g. deeper MLPs for NVS) really vanish at frontier scale, or whether "ascent works too" reflects a genuine equivalence vs. an over-parameterized model absorbing the change, remains open.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이 등가성은 <b>선형·무편향 마지막 내부 층</b>에 대해서만 증명된다. 비선형 마지막 층, 동적 커널, weight-norm을 가진 변형은 결합성을 깨뜨려 병렬·선형 어텐션 서사 밖에 남는다 — 즉 "TTT는 선형 어텐션"은 (크지만 한정된) 하위 부류에 대한 주장이지 모든 TTT에 대한 것이 아니다. 평가도 두 백본(LaCT·ViTTT)·중간 규모에 기댄다. 제거된 구성요소의 한계 이득(예: NVS의 더 깊은 MLP)이 최전선 규모에서도 정말 사라지는지, "상승도 작동"이 진짜 등가성인지 아니면 과매개변수 모델이 변화를 흡수한 것인지는 열린 문제다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.21204">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.21204">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.21204">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.21204">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · ICML 2026 (Poster) · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 · ICML 2026 (Poster) · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

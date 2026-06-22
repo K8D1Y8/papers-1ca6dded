@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Swift-SVD: Theoretical Optimality Meets Practical Efficiency in Low-Rank LLM Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Low-Rank · SVD Compression</span><span class="t-ko">🗜 Low-Rank · SVD Compression</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Swift-SVD<br><span class="glow t-en">— Optimal SVD compression in one eigen-decomposition, 3–70× faster</span><span class="glow t-ko">— 단 한 번의 고유분해로 끝내는 최적 SVD 압축, 3~70배 빠르게</span></h1>
+    <div class="meta">
+      <span>👥 <b>Ruoling Qi</b> <span class="t-en">et al.</span><span class="t-ko">외 8인</span></span>
+      <span>🏛 TeleAI (China Telecom)</span>
+      <span>🗓 2026.04.02</span>
+      <span>📄 <a href="https://arxiv.org/abs/2604.01609">arXiv:2604.01609</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Existing SVD compressors for LLMs face a dilemma: simple ones are <b>suboptimal</b>, while activation-aware ones are <b>theoretically optimal but slow and numerically fragile</b> (repeated SVDs, Cholesky). Swift-SVD gives a <span class="hl">closed-form spectral solution</span> — incrementally aggregate the output-activation covariance, then run a <b>single eigen-decomposition</b> — yielding the optimal rank-k weight for <em>every</em> ratio at once. Add <b>dynamic per-layer rank allocation</b>, and it beats five SOTA baselines on accuracy while compressing <b>3.2–76.9× faster</b>.</p>
+    <p class="t-ko">기존 LLM용 SVD 압축은 딜레마에 빠져 있다. 단순한 방법은 <b>최적이 아니고</b>, 활성값(activation)을 고려하는 방법은 <b>이론적으로 최적이지만 느리고 수치적으로 불안정</b>하다(반복 SVD, Cholesky). Swift-SVD는 <span class="hl">닫힌 형태의 스펙트럼 해</span>를 제시한다 — 출력 활성값의 공분산을 점진적으로 누적한 뒤 <b>단 한 번의 고유분해</b>를 수행해, <em>모든</em> 압축비에 대한 최적 rank-k 가중치를 한 번에 얻는다. 여기에 <b>레이어별 동적 rank 배분</b>을 더해, 5개 SOTA 기준선을 정확도에서 능가하면서도 <b>3.2~76.9배 빠르게</b> 압축한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The bottleneck of low-rank compression is not "can it be optimal" but "can it be optimal <em>and</em> cheap <em>and</em> stable — all at once."</p>
+    <p class="lead t-ko">저랭크 압축의 병목은 "최적일 수 있는가"가 아니라 "최적이면서 <em>동시에</em> 싸고 <em>동시에</em> 안정적일 수 있는가"다.</p>
+    <p class="t-en">LLM deployment is squeezed by two memory costs: static weights and the growing KV cache. Low-rank compression is appealing — it keeps dense operators, stays hardware-friendly, and is orthogonal to quantization/pruning. But the field is stuck on a trade-off: methods that ignore activations are fast yet inaccurate, while activation-aware methods (SVD-LLM, Dobi-SVD) reach the theoretical optimum only via repeated SVDs or Cholesky factorization that <strong>break on non-positive-definite activation distributions</strong> and scale poorly. Swift-SVD reframes the problem so a <strong>single eigen-decomposition of the output-activation covariance</strong> yields the entire optimal solution spectrum — both the compressed weights and the loss for any rank — in one pass.</p>
+    <p class="t-ko">LLM 배포는 정적 가중치와 점점 커지는 KV 캐시라는 두 메모리 비용에 짓눌린다. 저랭크 압축은 매력적이다 — dense 연산을 유지하고, 하드웨어 친화적이며, 양자화·프루닝과 직교적이다. 그러나 이 분야는 trade-off에 갇혀 있다. 활성값을 무시하는 방법은 빠르지만 부정확하고, 활성값을 고려하는 방법(SVD-LLM, Dobi-SVD)은 반복 SVD나 Cholesky 분해를 통해서만 이론적 최적에 도달하는데, 이는 <strong>양정치(positive-definite)가 아닌 활성값 분포에서 붕괴</strong>하고 확장성이 나쁘다. Swift-SVD는 문제를 재정식화해, <strong>출력 활성값 공분산에 대한 단 한 번의 고유분해</strong>로 — 압축 가중치와 임의 rank에서의 손실까지 — 전체 최적 해 스펙트럼을 한 번에 얻는다.</p>
+    <figure class="fig">
+      <img src="fig/2604.01609/x2.png" alt="Swift-SVD 개요: 활성값 공분산 누적 → 단일 고유분해 → 동적 rank 배분">
+      <figcaption class="t-en"><b>Figure 2.</b> Overview of Swift-SVD. (a) At each layer it hooks the output activation Y=XW, incrementally aggregates the covariance YᵀY, and a single eigen-decomposition yields the singular values Σ and right singular vectors V — the optimal low-rank weight in closed form. (b) Dynamic rank allocation then balances local compressibility against layer importance.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> Swift-SVD 개요. (a) 각 레이어에서 출력 활성값 Y=XW를 후킹하고 공분산 YᵀY를 점진적으로 누적한 뒤, 단 한 번의 고유분해로 특이값 Σ와 우특이벡터 V를 얻어 닫힌 형태의 최적 저랭크 가중치를 구한다. (b) 이어 동적 rank 배분이 국소 압축성과 레이어 중요도를 균형 있게 조정한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.01609</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">3.2–76.9×</div><div class="l"><span class="t-en">Faster end-to-end<br>compression vs baselines</span><span class="t-ko">기준선 대비 종단간<br>압축 속도 향상</span></div></div>
+      <div class="stat"><div class="n">1</div><div class="l"><span class="t-en">Eigen-decomposition<br>(no repeated SVD / Cholesky)</span><span class="t-ko">고유분해 횟수<br>(반복 SVD·Cholesky 불필요)</span></div></div>
+      <div class="stat"><div class="n">+0.0000</div><div class="l"><span class="t-en">Gap to theoretical<br>min reconstruction loss</span><span class="t-ko">이론적 최소<br>복원 손실과의 차이</span></div></div>
+      <div class="stat"><div class="n">6 / 8</div><div class="l"><span class="t-en">LLMs / datasets<br>evaluated</span><span class="t-ko">평가한 LLM / 데이터셋<br>(9개 벤치마크)</span></div></div>
+      <div class="stat"><div class="n">11</div><div class="l"><span class="t-en">Rank-allocation candidates<br>(α = 0…1, grid search)</span><span class="t-ko">rank 배분 후보<br>(α = 0…1 그리드 탐색)</span></div></div>
+      <div class="stat"><div class="n">N=256</div><div class="l"><span class="t-en">Calibration samples<br>(training-free)</span><span class="t-ko">캘리브레이션 샘플 수<br>(학습 불필요)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — same accuracy, a fraction of the time</span><span class="t-ko">결과 — 같은 정확도를 시간의 일부로</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 4 excerpt.</b> End-to-end compression latency on C4 (LLaMA-7B, total seconds across ρ=0.8/0.6/0.4). Speedup is relative to Dobi-SVD(w/o). The gap widens with more calibration samples.</caption>
+        <caption class="t-ko"><b>Table 4 발췌.</b> C4 기준 종단간 압축 지연시간(LLaMA-7B, ρ=0.8/0.6/0.4 합산 초). Speedup은 Dobi-SVD(w/o) 대비. 샘플이 많아질수록 격차가 벌어진다.</caption>
+        <thead><tr><th>Samples</th><th>Method</th><th>Total (s)</th><th>Speedup</th></tr></thead>
+        <tbody>
+          <tr><td>16</td><td>Dobi-SVD(w/o)</td><td>1,983</td><td>1.0×</td></tr>
+          <tr><td>16</td><td>Swift-SVD</td><td>621</td><td class="up">3.2×</td></tr>
+          <tr><td>64</td><td>Swift-SVD</td><td>654</td><td class="up">12.1×</td></tr>
+          <tr><td>256</td><td>SVD-LLM(W)</td><td>2,213</td><td>14.3×</td></tr>
+          <tr><td>256</td><td>Swift-SVD</td><td>753</td><td class="up">42.1×</td></tr>
+          <tr><td>512</td><td>Swift-SVD</td><td>827</td><td class="up">76.9×</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Output activation Y=XW</span><span class="t-ko">출력 활성값 Y=XW</span></div>
+          <div class="sub"><span class="t-en">aggregate covariance YᵀY</span><span class="t-ko">공분산 YᵀY 누적</span></div>
+          <div class="latent"><span class="t-en">incremental, one pass</span><span class="t-ko">점진적·1패스</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Single eigen-decomp</span><span class="t-ko">단일 고유분해</span></div>
+          <div class="sub"><span class="t-en">Σ, V ⇒ optimal Wₖ = W·VₖVₖᵀ</span><span class="t-ko">Σ, V ⇒ 최적 Wₖ = W·VₖVₖᵀ</span></div>
+          <div class="latent"><span class="t-en">full ratio spectrum at once</span><span class="t-ko">모든 압축비 한 번에</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Dynamic rank alloc.</span><span class="t-ko">동적 rank 배분</span></div>
+          <div class="sub"><span class="t-en">balance loss × importance</span><span class="t-ko">손실 × 중요도 균형</span></div>
+          <div class="latent"><span class="t-en">compressed weight + KV</span><span class="t-ko">압축 가중치 + KV</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Compute once, reuse forever</b> — caching Σ and V means re-compressing at a new ratio collapses to just reloading weights, with <b>zero</b> extra decomposition.</div>
+      <div class="cap t-ko"><b>한 번 계산해 영원히 재사용</b> — Σ와 V를 캐싱하므로, 새 압축비로의 재압축은 가중치를 다시 불러오는 것으로 끝나고 추가 분해는 <b>전혀</b> 필요 없다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: turn activation-aware SVD into a single eigen-problem</span><span class="t-ko">아이디어: 활성값 인지 SVD를 단일 고유문제로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 닫힌 형태 해</span>
+        <h3>Closed-Form Spectral Solution</h3>
+        <p class="t-en">The activation-aware objective minₖ ‖XW − XWₖ‖_F has a clean answer: with the SVD of the <span class="term">output</span> Y=XW=UΣVᵀ, the optimal weight is <span class="term">Wₖ* = W·VₖVₖᵀ</span> and the loss is exactly (Σⱼ&gt;ₖ σⱼ²)^½ — Eckart–Young optimal, no approximation.</p>
+        <p class="t-ko">활성값 인지 목적함수 minₖ ‖XW − XWₖ‖_F에는 깔끔한 답이 있다. <span class="term">출력</span> Y=XW=UΣVᵀ의 SVD를 쓰면 최적 가중치는 <span class="term">Wₖ* = W·VₖVₖᵀ</span>, 손실은 정확히 (Σⱼ&gt;ₖ σⱼ²)^½ — Eckart–Young 최적이며 근사가 아니다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 효율·안정</span>
+        <h3>Incremental Covariance Aggregation</h3>
+        <p class="t-en">Instead of SVD on the huge Y, it streams outer products yₜᵀyₜ into an n×n covariance <span class="term">C = YᵀY = VΣ²Vᵀ</span>, then does <strong>one</strong> eigen-decomposition. Memory is n×n (not l×n), and it sidesteps Cholesky's positive-definite requirement — robust to ragged, padded calibration data.</p>
+        <p class="t-ko">거대한 Y에 SVD를 돌리는 대신, 외적 yₜᵀyₜ를 n×n 공분산 <span class="term">C = YᵀY = VΣ²Vᵀ</span>에 스트리밍 누적한 뒤 고유분해를 <strong>한 번</strong> 수행한다. 메모리는 l×n이 아닌 n×n이며, Cholesky의 양정치 조건을 우회해 길이가 들쭉날쭉하거나 패딩된 캘리브레이션 데이터에도 견고하다.</p>
+      </div>
+    </div>
+    <figure class="fig">
+      <img src="fig/2604.01609/x1.png" alt="Swift-SVD: 정적 가중치와 KV 캐시를 함께 줄이는 저랭크 분해">
+      <figcaption class="t-en"><b>Figure 1.</b> Swift-SVD compresses both static weights and the KV cache. Decomposing Wₖ = AₖBₖ shrinks weight storage from m×n to k(m+n); caching the latent H = XAₖ (size l×k) instead of XW (size l×n) shrinks the KV cache whenever k &lt; n.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> Swift-SVD는 정적 가중치와 KV 캐시를 함께 압축한다. Wₖ = AₖBₖ로 분해하면 가중치 저장량이 m×n에서 k(m+n)로 줄고, XW(l×n) 대신 잠재값 H = XAₖ(l×k)를 캐싱하면 k &lt; n일 때 KV 캐시가 줄어든다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.01609</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Hook outputs, aggregate covariance</span><span class="t-ko">출력 후킹·공분산 누적</span></b><span class="t-en">For each calibration batch, compute output y = xW and add the outer product yᵀy into an accumulating n×n covariance C — no full activations cached (Algorithm 1).</span><span class="t-ko">각 캘리브레이션 배치마다 출력 y = xW를 계산하고 외적 yᵀy를 n×n 공분산 C에 누적한다 — 전체 활성값을 저장하지 않는다(Algorithm 1).</span></li>
+      <li><b><span class="t-en">One eigen-decomposition</span><span class="t-ko">단일 고유분해</span></b><span class="t-en">Decompose C = VΣ²Vᵀ once. This gives Σ and V for the whole solution spectrum — the optimal Wₖ* = W·VₖVₖᵀ and loss εₖ* are read off for any rank k.</span><span class="t-ko">C = VΣ²Vᵀ를 한 번 분해한다. 이로써 전체 해 스펙트럼의 Σ와 V를 얻어, 임의의 rank k에 대한 최적 Wₖ* = W·VₖVₖᵀ와 손실 εₖ*를 바로 읽어낸다.</span></li>
+      <li><b><span class="t-en">Score layers, allocate rank</span><span class="t-ko">레이어 점수화·rank 배분</span></b><span class="t-en">Combine local loss εₖ* with end-to-end layer importance β via sᵢ = (βᵢ)^α·(log(e+εₖ,ᵢ*))^{1−α}; guarantee a minimal rank (δ=0.5) then distribute the budget by score (Algorithm 2).</span><span class="t-ko">국소 손실 εₖ*와 종단간 레이어 중요도 β를 sᵢ = (βᵢ)^α·(log(e+εₖ,ᵢ*))^{1−α}로 결합한다. 최소 rank(δ=0.5)를 보장한 뒤 점수에 비례해 예산을 배분한다(Algorithm 2).</span></li>
+      <li><b><span class="t-en">Grid-search and pick</span><span class="t-ko">그리드 탐색·선택</span></b><span class="t-en">Sweep α∈{0,0.1,…,1} for 11 candidates; since Σ,V are cached, each re-compression is near-free. Evaluate on a validation set and keep the best.</span><span class="t-ko">α∈{0,0.1,…,1}를 훑어 11개 후보를 만든다. Σ,V가 캐싱돼 있어 각 재압축은 거의 무비용이다. 검증셋에서 평가해 최적 후보를 채택한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">⚡</span><p class="t-en"><strong>Optimality need not be slow.</strong> A single eigen-decomposition reaches the Eckart–Young optimum that rivals pay for with repeated SVDs — hence 3.2–76.9× faster compression.</p><p class="t-ko"><strong>최적이 곧 느림은 아니다.</strong> 단 한 번의 고유분해로, 경쟁 기법이 반복 SVD로 치르는 Eckart–Young 최적에 도달한다 — 그래서 3.2~76.9배 빠르다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Compute once, reuse for any ratio.</strong> Caching Σ,V means switching from ρ=0.8 to 0.4 costs only a weight reload — ideal for serving under shifting memory budgets.</p><p class="t-ko"><strong>한 번 계산해 모든 압축비에 재사용.</strong> Σ,V 캐싱 덕에 ρ=0.8→0.4 전환이 가중치 재로딩만으로 끝난다 — 메모리 예산이 변하는 서빙에 이상적.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Importance ↔ compressibility are anti-correlated.</strong> Important layers tend to have lower effective rank, so a min-rank floor (δ=0.5) is needed to stop over-compressing them.</p><p class="t-ko"><strong>중요도와 압축성은 음의 상관.</strong> 중요한 레이어일수록 effective rank가 낮은 경향이 있어, 과압축을 막는 최소 rank 하한(δ=0.5)이 필요하다.</p></div>
+      <div class="t"><span class="ic">🛡</span><p class="t-en"><strong>Numerically robust.</strong> It hits the theoretical minimum loss to +0.0000 across matrix sizes, where SVD-LLM and Dobi-SVD drift upward — no Cholesky positive-definite trap.</p><p class="t-ko"><strong>수치적으로 견고.</strong> 다양한 행렬 크기에서 이론적 최소 손실에 +0.0000로 도달한다 — SVD-LLM·Dobi-SVD가 위로 벗어나는 지점에서. Cholesky 양정치 함정도 없다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The accuracy gains are real but modest — at ρ=0.8 on LLaMA-7B, Swift-SVD* averages 0.51 vs 0.49 for SVD-LLM/Dobi-SVD, and under aggressive ρ=0.4 it drops to 0.34 average with PPL ballooning to 62–138, i.e. still heavily degraded. The headline 3–70× speedup is also somewhat baseline-dependent (it is largest against Dobi-SVD's per-sample full SVD); against SVD-LLM the gain is ~3–4×. And the closed-form solution is exactly truncated-SVD of the output — so its advantage over rivals is efficiency and numerical stability, not a fundamentally lower loss ceiling.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 정확도 향상은 실재하나 미미하다 — LLaMA-7B의 ρ=0.8에서 Swift-SVD*의 평균은 0.51로 SVD-LLM/Dobi-SVD의 0.49 대비 소폭이고, 공격적인 ρ=0.4에서는 평균 0.34·PPL 62~138로 여전히 크게 열화된다. 대표 수치인 3~70배 가속도 기준선 의존적이다(Dobi-SVD의 샘플별 전체 SVD 대비일 때 최대이며, SVD-LLM 대비로는 약 3~4배). 또한 닫힌 형태 해는 결국 출력의 절단 SVD 그 자체이므로, 경쟁 기법 대비 강점은 효율·수치 안정성이지 근본적으로 더 낮은 손실 한계가 아니다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2604.01609">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2604.01609">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2604.01609">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2604.01609">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · ICML 2026 (Poster) · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Wishlist · ICML 2026 (Poster) · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

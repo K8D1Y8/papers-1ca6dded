@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · GHOST: Unmasking Phantom States in Mamba2 via Grouped Hidden-state Output-aware Selection &amp; Truncation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · Mamba-2</span><span class="t-ko">⚡ Efficient Seq · Mamba-2</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>GHOST: Unmasking Phantom States in Mamba2<br><span class="glow t-en">— Prune the recurrent state with control theory, no gradients required</span><span class="glow t-ko">— 제어이론으로 순환 상태를 가지치되, 그래디언트는 필요 없다</span></h1>
+    <div class="meta">
+      <span>👥 <b>Michael Menezes</b>, <b>Anastasios Kyrillidis</b></span>
+      <span>🏛 Rice University</span>
+      <span>🗓 2026.02.11</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.11408">arXiv:2602.11408</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Mamba-2 grew its SSM state dimension from 16 to 128, which boosts temporal modeling but turns the recurrent state into a <b>memory-bandwidth bottleneck</b> (≈100 MB at 1.3B). Standard pruning fails here: unstructured sparsity leaves activations dense, and weight-magnitude scores are <b>blind to runtime dynamics</b>. GHOST scores each state channel by the <span class="hl">product of empirical controllability × observability</span> — a forward-pass approximation of control-theoretic balanced truncation — and prunes the inert "corporeal" states while keeping high-activity "phantom" ones. Result: <b>~50% state-dimension reduction at roughly +1 perplexity</b> on WikiText-2 across 130M–2.7B, <b>rivaling gradient-based Taylor pruning</b> with no backprop and 15 GB instead of 45 GB.</p>
+    <p class="t-ko">Mamba-2는 SSM 상태 차원을 16에서 128로 키워 시계열 모델링을 강화했지만, 그 대가로 순환 상태가 <b>메모리 대역폭 병목</b>이 되었다(1.3B에서 약 100 MB). 기존 가지치기는 여기서 실패한다 — 비구조적 희소화는 활성값을 여전히 조밀하게 두고, 가중치 크기 기반 점수는 <b>런타임 동역학을 보지 못한다</b>. GHOST는 각 상태 채널을 <span class="hl">경험적 가제어성 × 가관측성의 곱</span>으로 채점하는데, 이는 제어이론의 균형 절단(balanced truncation)을 순방향 패스만으로 근사한 것이다. 그렇게 활동이 없는 "corporeal" 상태는 잘라내고 활동이 큰 "phantom" 상태는 남긴다. 결과적으로 WikiText-2에서 130M–2.7B 전 구간에 걸쳐 <b>상태 차원을 약 50% 줄이고도 퍼플렉서티 증가는 약 +1</b>에 그치며, 역전파 없이 45 GB 대신 15 GB만으로 <b>그래디언트 기반 Taylor 가지치기에 필적</b>한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">A state channel's weight magnitude tells you almost nothing about whether the model actually uses it.</p>
+    <p class="lead t-ko">상태 채널의 가중치 크기는 그 채널을 모델이 실제로 쓰는지에 대해 거의 아무것도 말해주지 않는다.</p>
+    <p class="t-en">During autoregressive generation, Mamba-2 must load and store its recurrent state <strong>at every step</strong>, so the 8× larger state directly saturates memory bandwidth. Compressing it is the cheapest path to faster SSM inference — but only if you prune the <em>right</em> channels. The paper's central observation is a <strong>proxy failure</strong>: there is essentially no correlation between a state's static weight norm and its dynamic energy. Magnitude pruning therefore discards high-activity <strong>phantom states</strong> (low weight, high use) while preserving inert <strong>corporeal states</strong> (high weight, low use). GHOST reframes the choice as an information-flow question — keep channels that are both <strong>reachable (controllable)</strong> and <strong>impactful (observable)</strong>.</p>
+    <p class="t-ko">자기회귀 생성 동안 Mamba-2는 <strong>매 스텝마다</strong> 순환 상태를 적재·저장해야 하므로, 8배 커진 상태는 곧바로 메모리 대역폭을 포화시킨다. 이를 압축하는 것이 SSM 추론을 빠르게 하는 가장 저렴한 길이지만, 단 <em>올바른</em> 채널을 잘라야만 한다. 이 논문의 핵심 관찰은 <strong>대리 지표의 실패</strong>다 — 상태의 정적 가중치 노름과 동적 에너지 사이에는 사실상 상관이 없다. 그래서 크기 기반 가지치기는 활동이 큰 <strong>phantom 상태</strong>(낮은 가중치, 높은 사용)를 버리고, 활동이 없는 <strong>corporeal 상태</strong>(높은 가중치, 낮은 사용)를 남긴다. GHOST는 이 선택을 정보 흐름의 문제로 재정의한다 — <strong>도달 가능하고(가제어성)</strong> 동시에 <strong>영향력 있는(가관측성)</strong> 채널을 남긴다.</p>
+    <figure class="fig">
+      <img src="fig/2602.11408/x1.png" alt="Static magnitude vs dynamic energy scatter for Mamba2-1.3B states">
+      <figcaption class="t-en"><b>Figure 1.</b> The proxy failure on Mamba2-1.3B: each point is one of 6,144 hidden states. The x-axis is the static weight-based score, the y-axis the dynamic energy. The lack of positive correlation exposes <b>phantom states</b> (top-left: low weight, high activity) and <b>corporeal states</b> (bottom-right: high weight, low use).</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> Mamba2-1.3B에서의 대리 지표 실패 — 각 점은 6,144개 은닉 상태 중 하나다. x축은 정적 가중치 기반 점수, y축은 동적 에너지. 양의 상관이 없다는 점이 <b>phantom 상태</b>(좌상단: 낮은 가중치, 높은 활동)와 <b>corporeal 상태</b>(우하단: 높은 가중치, 낮은 사용)를 드러낸다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.11408</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">50%</div><div class="l"><span class="t-en">State-dimension<br>reduction (κ)</span><span class="t-ko">상태 차원<br>감축률 (κ)</span></div></div>
+      <div class="stat"><div class="n">+1.06</div><div class="l"><span class="t-en">PPL cost @ 50%<br>(14.23 vs 13.17 dense, 1.3B)</span><span class="t-ko">50% 시 PPL 증가<br>(14.23 vs dense 13.17, 1.3B)</span></div></div>
+      <div class="stat"><div class="n">15 GB</div><div class="l"><span class="t-en">Peak VRAM<br>(Taylor needs 45 GB)</span><span class="t-ko">최대 VRAM<br>(Taylor는 45 GB 필요)</span></div></div>
+      <div class="stat"><div class="n">2</div><div class="l"><span class="t-en">Forward passes<br>per layer · no gradients</span><span class="t-ko">레이어당<br>순방향 패스 · 무그래디언트</span></div></div>
+      <div class="stat"><div class="n">130M–2.7B</div><div class="l"><span class="t-en">Model sizes<br>where it stays usable</span><span class="t-ko">사용 가능한<br>모델 규모 범위</span></div></div>
+      <div class="stat"><div class="n">73.12%</div><div class="l"><span class="t-en">PIQA acc<br>(within 0.22% of dense)</span><span class="t-ko">PIQA 정확도<br>(dense와 0.22% 차)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — robust where gradient pruning collapses</span><span class="t-ko">결과 — 그래디언트 가지치기가 무너지는 곳에서 견고</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3 excerpt.</b> WikiText-2 perplexity at 50% sparsity across Mamba2 sizes. Δ = (GHOST − Dense). Taylor collapses (perplexity explosion) on small models; GHOST stays usable everywhere.</caption>
+        <caption class="t-ko"><b>Table 3 발췌.</b> Mamba2 규모별 50% 희소화 시 WikiText-2 퍼플렉서티. Δ = (GHOST − Dense). Taylor는 소형 모델에서 붕괴(퍼플렉서티 폭발)하지만 GHOST는 전 구간에서 사용 가능.</caption>
+        <thead><tr><th>Model</th><th>Dense</th><th>Taylor</th><th>GHOST</th><th>Δ vs Dense</th></tr></thead>
+        <tbody>
+          <tr><td>130M</td><td>25.85</td><td>1E16</td><td>29.06</td><td class="down">+3.21</td></tr>
+          <tr><td>370M</td><td>18.13</td><td>12647</td><td>19.96</td><td class="down">+1.83</td></tr>
+          <tr><td>780M</td><td>14.97</td><td>15.13</td><td>16.13</td><td class="down">+1.16</td></tr>
+          <tr><td>1.3B</td><td>13.17</td><td>13.94</td><td>14.23</td><td class="down">+1.06</td></tr>
+          <tr><td>2.7B</td><td>11.46</td><td>11.50</td><td>12.14</td><td class="down">+0.68</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Forward pass</span><span class="t-ko">순방향 패스</span></div>
+          <div class="sub"><span class="t-en">collect H<sub>t</sub> &amp; C′<sub>t</sub></span><span class="t-ko">H<sub>t</sub>·C′<sub>t</sub> 수집</span></div>
+          <div class="latent"><span class="t-en">128 calib samples</span><span class="t-ko">캘리브 128 샘플</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Score S = P · Q</span><span class="t-ko">점수 S = P · Q</span></div>
+          <div class="sub"><span class="t-en">controllability × observability</span><span class="t-ko">가제어성 × 가관측성</span></div>
+          <div class="latent"><span class="t-en">pool across groups, threshold</span><span class="t-ko">그룹별 풀링 후 임계화</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Prune state N</span><span class="t-ko">상태 N 가지치기</span></div>
+          <div class="sub"><span class="t-en">mask W<sub>B</sub>, W<sub>C</sub>, conv</span><span class="t-ko">W<sub>B</sub>·W<sub>C</sub>·conv 마스킹</span></div>
+          <div class="latent"><span class="t-en">smaller recurrent state</span><span class="t-ko">더 작은 순환 상태</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Score, then truncate</b> — keep states that are both reachable under the input history and impactful on the output, allocating capacity adaptively across GQA groups within each layer.</div>
+      <div class="cap t-ko"><b>채점 후 절단</b> — 입력 이력 아래에서 도달 가능하면서 출력에 영향력 있는 상태를 남기고, 각 레이어 내 GQA 그룹들에 용량을 적응적으로 배분한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: balanced truncation from forward-pass statistics</span><span class="t-ko">아이디어: 순방향 통계로부터의 균형 절단</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 가제어성</span>
+        <h3>Hidden-state covariance</h3>
+        <p class="t-en">Since the hidden state H<sub>t</sub> accumulates processed inputs, its <span class="term">covariance / energy</span> measures how much the input history actually drives each channel — an empirical proxy for the <span class="term">controllability Gramian</span>, read straight off the forward pass.</p>
+        <p class="t-ko">은닉 상태 H<sub>t</sub>는 처리된 입력을 누적하므로, 그 <span class="term">공분산/에너지</span>는 입력 이력이 각 채널을 실제로 얼마나 구동하는지를 측정한다 — 순방향 패스에서 곧바로 읽어낸 <span class="term">가제어성 그라미안</span>의 경험적 대리값이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 가관측성</span>
+        <h3>Output-energy Hessian</h3>
+        <p class="t-en">The curvature of output energy w.r.t. the state reduces to <span class="term">(C′<sub>t</sub>)<sup>⊤</sup>C′<sub>t</sub></span> — a causal, backward-pass-free proxy for <span class="term">observability</span>. Multiplying the two (P · Q) mirrors Hankel singular values, and a final square-root aligns the score with σ ≈ √λ(PQ).</p>
+        <p class="t-ko">상태에 대한 출력 에너지의 곡률은 <span class="term">(C′<sub>t</sub>)<sup>⊤</sup>C′<sub>t</sub></span>로 환원된다 — 역방향 패스가 필요 없는 인과적 <span class="term">가관측성</span> 대리값이다. 둘을 곱한 P · Q는 한켈 특이값을 본떴고, 마지막 제곱근이 점수를 σ ≈ √λ(PQ)에 정렬시킨다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Run forward, collect stats</span><span class="t-ko">순방향 실행, 통계 수집</span></b><span class="t-en">Pass 128 WikiText-2 calibration samples through the layer and accumulate squared hidden states (controllability P) and squared C′ projections (observability Q) — no gradients, no Hessians.</span><span class="t-ko">128개 WikiText-2 캘리브 샘플을 레이어에 통과시키며 은닉 상태 제곱(가제어성 P)과 C′ 투영 제곱(가관측성 Q)을 누적한다 — 그래디언트도, 헤시안도 없다.</span></li>
+      <li><b><span class="t-en">Compute saliency S = P · Q</span><span class="t-ko">중요도 S = P · Q 계산</span></b><span class="t-en">For each state channel, multiply controllability by observability and aggregate over heads, sequence length, and the calibration set. Minimizing S provably minimizes the expected local mean-squared output error.</span><span class="t-ko">각 상태 채널마다 가제어성과 가관측성을 곱하고 헤드·시퀀스 길이·캘리브 집합에 걸쳐 합산한다. S를 최소화하는 것은 기대 국소 평균제곱 출력 오차를 최소화하는 것과 (증명상) 동치다.</span></li>
+      <li><b><span class="t-en">Inter-group threshold</span><span class="t-ko">그룹 간 임계화</span></b><span class="t-en">Pool the G×N scores across all GQA groups in the layer and pick one global threshold τ for the target sparsity κ. Complex groups keep more channels; redundant groups are pruned harder — adaptive capacity allocation.</span><span class="t-ko">레이어 내 모든 GQA 그룹의 G×N 점수를 함께 풀링하고 목표 희소도 κ에 맞춰 하나의 전역 임계값 τ를 정한다. 복잡한 그룹은 더 많은 채널을 남기고, 중복 그룹은 더 강하게 가지친다 — 적응적 용량 배분.</span></li>
+      <li><b><span class="t-en">Mask &amp; sequential update</span><span class="t-ko">마스킹 후 순차 갱신</span></b><span class="t-en">Zero out W<sub>B</sub>, W<sub>C</sub>, and convolution filters per the mask, then recompute activations to calibrate the next layer — this sequential update mitigates the distribution shift that wrecks one-shot gradient methods.</span><span class="t-ko">마스크에 따라 W<sub>B</sub>·W<sub>C</sub>·컨볼루션 필터를 0으로 만든 뒤 활성값을 다시 계산해 다음 레이어를 캘리브한다 — 이 순차 갱신이 일회성 그래디언트 기법을 망가뜨리는 분포 이동을 완화한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Cheap fidelity.</strong> Matches gradient-based Taylor pruning quality at 50% sparsity using only forward passes — 15 GB vs 45 GB VRAM, fitting on a single 40 GB A100 where Taylor cannot.</p><p class="t-ko"><strong>저렴한 충실도.</strong> 순방향 패스만으로 50% 희소화에서 그래디언트 기반 Taylor 품질에 필적 — 15 GB vs 45 GB VRAM으로, Taylor가 못 들어가는 40 GB A100 한 장에 들어간다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Dynamics over magnitude.</strong> Scoring by controllability × observability exorcises corporeal states and preserves phantom ones — the right answer to a proxy that weight norms get wrong.</p><p class="t-ko"><strong>크기보다 동역학.</strong> 가제어성 × 가관측성으로 채점해 corporeal 상태를 쫓아내고 phantom 상태를 보존한다 — 가중치 노름이 틀리는 대리 문제에 대한 올바른 답이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Stable across scale.</strong> Where Taylor explodes (130M → 1E16, 370M → 12647 PPL), GHOST degrades smoothly and even leads on small models and OOD math/code.</p><p class="t-ko"><strong>규모 전반에서 안정.</strong> Taylor가 폭발하는 지점(130M → 1E16, 370M → 12647 PPL)에서 GHOST는 매끄럽게 저하되며, 소형 모델과 OOD 수학/코드에서는 오히려 앞선다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>O(G·N) memory.</strong> Only N statistics per group — no O(N²) covariance or Hessian storage — and two forward passes that match a normal inference pass in cost.</p><p class="t-ko"><strong>O(G·N) 메모리.</strong> 그룹당 N개 통계만 저장 — O(N²) 공분산이나 헤시안 저장 없음 — 비용이 일반 추론 패스와 같은 두 번의 순방향 패스로 끝난다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> GHOST demonstrates <em>prunable</em> states, not measured speedup — it uses soft (masked) pruning, and the paper explicitly defers physical channel removal and sparse-kernel support to future work, citing prior art for the actual bandwidth gains. So the headline "≈1 PPL at 50%" is an accuracy result, not a wall-clock one. The saliency relies on a <em>local</em> single-step observability approximation justified by "exponential decay" of the dynamics, and degradation is uneven (130M still loses +3.2 PPL; &gt;90% sparsity breaks down). Most evidence is WikiText-2 perplexity on one backbone family with a fixed 50% budget — the strongest practical claim (faster inference) remains unproven in this paper.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> GHOST가 보이는 것은 상태가 <em>가지칠 수 있다</em>는 점이지 실측 속도 향상이 아니다 — 소프트(마스킹) 가지치기를 쓰며, 물리적 채널 제거와 희소 커널 지원은 명시적으로 후속 과제로 미루고 실제 대역폭 이득은 선행 연구를 인용한다. 따라서 "50%에서 ≈1 PPL"이라는 표제는 정확도 결과이지 실제 시간 결과가 아니다. 중요도 점수는 동역학의 "지수적 감쇠"로 정당화된 <em>국소</em> 단일 스텝 가관측성 근사에 의존하며, 저하는 고르지 않다(130M은 여전히 +3.2 PPL 손실, &gt;90% 희소화에서는 붕괴). 증거의 대부분은 단일 백본 계열·고정 50% 예산에서의 WikiText-2 퍼플렉서티로, 가장 강한 실용적 주장(추론 가속)은 이 논문에서 입증되지 않은 채로 남는다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.11408">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.11408">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.11408">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.11408">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · ICML 2026 (Poster) · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 · ICML 2026 (Poster) · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

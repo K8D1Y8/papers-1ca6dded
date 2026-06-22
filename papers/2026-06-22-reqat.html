@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · ReQAT: Achieving Full-Precision Reasoning Accuracy with 4-bit Floating-Point Quantization-Aware Training</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Model Compression · FP4 QAT</span><span class="t-ko">🗜 Model Compression · FP4 QAT</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>ReQAT: Achieving Full-Precision Reasoning Accuracy with 4-bit Floating-Point Quantization-Aware Training<br>
+      <span class="glow t-en">— 4-bit everywhere (W4A4KV4): recover and beat BF16 reasoning accuracy</span>
+      <span class="glow t-ko">— 전부 4비트(W4A4KV4)로: BF16 추론 정확도를 회복하고 넘어서다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Janghwan Lee</b> <span class="t-en">et al.</span><span class="t-ko">외</span></span>
+      <span>🏛 Hanyang University · Rebellions</span>
+      <span>🗓 2026.06.14</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.15682">arXiv:2606.15682</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Fully quantizing a reasoning model's <b>weights, activations AND KV cache to FP4 (W4A4KV4)</b> normally wrecks chain-of-thought accuracy — and neither PTQ nor plain QAT recovers it. ReQAT pinpoints the failure to <span class="hl">low-entropy tokens (digits, operators) where FP4 noise cascades through the reasoning trace</span>, then fixes it with trace-aligned QAT + selective entropy minimization + a quantization-friendly KV-cache init. The result: it <b>recovers and even surpasses BF16 fine-tuning accuracy</b> (65.94% vs 56.83% baseline AIME on R1-Qwen-14B) while running <b>up to 3.9× faster</b>.</p>
+    <p class="t-ko">추론 모델의 <b>가중치·활성값·KV 캐시를 전부 FP4(W4A4KV4)로</b> 양자화하면 보통 사고연쇄(CoT) 정확도가 무너지며, PTQ도 일반 QAT도 이를 회복하지 못한다. ReQAT는 그 실패가 <span class="hl">저엔트로피 토큰(숫자·연산자)에서 FP4 잡음이 추론 흐름을 타고 증폭되는 데서</span> 비롯됨을 짚고, trace-aligned QAT + 선택적 엔트로피 최소화 + 양자화 친화 KV 캐시 초기화로 해결한다. 그 결과 <b>BF16 미세조정 정확도를 회복하고 오히려 능가</b>하며(R1-Qwen-14B AIME 65.94% vs 베이스라인 56.83%), <b>최대 3.9배 빠르게</b> 동작한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">FP4 fails not uniformly, but precisely where reasoning is most fragile: the digits and operators a proof depends on.</p>
+    <p class="lead t-ko">FP4의 실패는 골고루 일어나지 않는다 — 추론이 가장 취약한 지점, 즉 증명이 의존하는 숫자와 연산자에서 집중적으로 터진다.</p>
+    <p class="t-en">Large Reasoning Models lean on long chain-of-thought, but full-precision inference is expensive and the KV cache balloons. Microscaled FP4 formats (MXFP4, NVFP4) promise cheap deployment, yet quantizing <strong>everything — weights, activations, and the KV cache (W4A4KV4)</strong> — collapses reasoning accuracy in ways existing PTQ and QAT cannot recover. The authors trace the cause: <strong>low-entropy tokens</strong> — precise symbolic commitments like digits and operators — are where quantization noise inflates sampling errors that then <strong>cascade through the entire reasoning trace</strong>. Treating compression as a reasoning problem, not a generic accuracy problem, is the key reframing.</p>
+    <p class="t-ko">대형 추론 모델(LRM)은 긴 사고연쇄에 의존하지만, 풀프리시전 추론은 비싸고 KV 캐시는 급격히 커진다. 마이크로스케일 FP4 포맷(MXFP4, NVFP4)은 저렴한 배포를 약속하지만, <strong>가중치·활성값·KV 캐시를 전부(W4A4KV4)</strong> 양자화하면 추론 정확도가 무너지고 기존 PTQ·QAT로는 회복되지 않는다. 저자들은 원인을 <strong>저엔트로피 토큰</strong> — 숫자·연산자처럼 정밀한 상징적 결정 — 에서 찾는다. 바로 이곳에서 양자화 잡음이 샘플링 오류를 키우고, 그 오류가 <strong>추론 흐름 전체로 연쇄 증폭</strong>된다. 압축을 일반 정확도 문제가 아니라 '추론 문제'로 재정의한 것이 핵심 전환이다.</p>
+    <figure class="fig">
+      <img src="fig/2606.15682/x1.png" alt="ReQAT overview: FP4 PTQ accuracy drop, MXFP4/NVFP4 accuracy on R1-Qwen-14B, and accuracy-throughput tradeoff">
+      <figcaption class="t-en"><b>Figure 1.</b> (a) NVFP4 W4A4KV4 PTQ accuracy drop across R1-distilled models. (b–c) Accuracy under MXFP4 W4A16 and NVFP4 W4A4KV4 on R1-Qwen-14B, comparing Full-FT and QAT. (d) Accuracy–throughput across deployment recipes — ReQAT sits at the top-right.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> (a) R1-distilled 모델들에서 NVFP4 W4A4KV4 PTQ 정확도 하락. (b–c) R1-Qwen-14B의 MXFP4 W4A16·NVFP4 W4A4KV4 정확도(Full-FT vs QAT 비교). (d) 배포 방식별 정확도–처리량 — ReQAT가 우상단에 위치.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.15682</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">W4A4KV4</div><div class="l"><span class="t-en">Weights + activations + KV<br>cache, all FP4</span><span class="t-ko">가중치+활성값+KV 캐시<br>전부 FP4</span></div></div>
+      <div class="stat"><div class="n">65.94%</div><div class="l"><span class="t-en">AIME accuracy<br>(vs BF16 baseline 56.83%)</span><span class="t-ko">AIME 정확도<br>(BF16 베이스라인 56.83% 대비)</span></div></div>
+      <div class="stat"><div class="n">+9.1%p</div><div class="l"><span class="t-en">AIME gain over<br>BF16 baseline</span><span class="t-ko">BF16 베이스라인 대비<br>AIME 향상폭</span></div></div>
+      <div class="stat"><div class="n">3.9×</div><div class="l"><span class="t-en">Throughput speedup<br>on DGX Spark</span><span class="t-ko">처리량 가속<br>(DGX Spark)</span></div></div>
+      <div class="stat"><div class="n">3.1×</div><div class="l"><span class="t-en">Throughput speedup<br>on B200</span><span class="t-ko">처리량 가속<br>(B200)</span></div></div>
+      <div class="stat"><div class="n">−65%</div><div class="l"><span class="t-en">Inference memory<br>storage reduction</span><span class="t-ko">추론 메모리<br>저장 절감</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — FP4 surpasses BF16 fine-tuning</span><span class="t-ko">결과 — FP4가 BF16 미세조정을 능가한다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> AIME accuracy (%) on R1-Qwen-14B at the 350M-token budget. Δ = (ReQAT full − BF16 FT). Best ReQAT variant shown per setting.</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> R1-Qwen-14B의 AIME 정확도(%), 350M 토큰 예산 기준. Δ = (ReQAT 전체 − BF16 FT). 설정별 최고 ReQAT 변형.</caption>
+        <thead><tr><th>Setting</th><th>BF16 FT</th><th>QAT</th><th>ReQAT</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>MXFP4 W4A16</td><td>65.46</td><td>62.29</td><td>68.02</td><td class="up">+2.56</td></tr>
+          <tr><td>MXFP4 W4A4</td><td>65.46</td><td>58.03</td><td>65.94</td><td class="up">+0.48</td></tr>
+          <tr><td>NVFP4 W4A4KV4</td><td>65.46</td><td>58.86</td><td>65.94</td><td class="up">+0.48</td></tr>
+          <tr><td>BF16 baseline</td><td>56.83</td><td>—</td><td>—</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap" style="margin-top:18px">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 excerpt.</b> R1-Llama-8B under NVFP4 W4A4KV4 (350M-token budget). Δ = (ReQAT full − Direct PTQ).</caption>
+        <caption class="t-ko"><b>Table 2 발췌.</b> R1-Llama-8B, NVFP4 W4A4KV4 (350M 토큰 예산). Δ = (ReQAT 전체 − Direct PTQ).</caption>
+        <thead><tr><th>Benchmark</th><th>Direct PTQ</th><th>ReQAT</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>GSM8K</td><td>86.45</td><td>89.85</td><td class="up">+3.40</td></tr>
+          <tr><td>MATH-500</td><td>84.62</td><td>90.53</td><td class="up">+5.91</td></tr>
+          <tr><td>AIME-120</td><td>23.13</td><td>41.85</td><td class="up">+18.72</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">FP4 model</span><span class="t-ko">FP4 모델</span></div>
+          <div class="sub"><span class="t-en">W4A4KV4 quantized</span><span class="t-ko">W4A4KV4 양자화</span></div>
+          <div class="latent"><span class="t-en">reasoning collapses</span><span class="t-ko">추론 붕괴</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">ReQAT</span><span class="t-ko">ReQAT</span></div>
+          <div class="sub"><span class="t-en">TAQ + SEM + Q-FIT</span><span class="t-ko">TAQ + SEM + Q-FIT</span></div>
+          <div class="latent"><span class="t-en">fix low-entropy tokens</span><span class="t-ko">저엔트로피 토큰 보정</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Deploy</span><span class="t-ko">배포</span></div>
+          <div class="sub"><span class="t-en">≥ BF16 accuracy</span><span class="t-ko">BF16 이상 정확도</span></div>
+          <div class="latent"><span class="t-en">up to 3.9× faster</span><span class="t-ko">최대 3.9배 빠름</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Quantize everything to FP4, then train where it hurts</b> — instead of spreading updates evenly, ReQAT concentrates learning on the precise low-entropy decisions that FP4 noise destroys.</div>
+      <div class="cap t-ko"><b>전부 FP4로 양자화한 뒤, 아픈 곳을 학습</b> — 업데이트를 골고루 뿌리지 않고, FP4 잡음이 망가뜨리는 정밀한 저엔트로피 결정에 학습을 집중한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: train for the tokens FP4 breaks</span><span class="t-ko">아이디어: FP4가 부수는 토큰을 위해 학습한다</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 추적 정렬 학습</span>
+        <h3>Trace-Aligned QAT (TAQ)</h3>
+        <p class="t-en">Instead of fine-tuning on arbitrary data, TAQ <span class="term">revisits identical reasoning traces</span> and focuses gradient updates on the <strong>critical low-entropy decisions</strong> — the digits and operators — where FP4 quantization noise does the most damage to the chain of thought.</p>
+        <p class="t-ko">임의의 데이터로 미세조정하지 않고, TAQ는 <span class="term">동일한 추론 추적(trace)을 다시 방문</span>해 FP4 양자화 잡음이 사고연쇄에 가장 큰 해를 끼치는 <strong>핵심 저엔트로피 결정</strong>(숫자·연산자)에 그래디언트 업데이트를 집중한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 신뢰도 강화 + 초기화</span>
+        <h3>SEM + Q-FIT</h3>
+        <p class="t-en"><span class="term">Selective Entropy Minimization (SEM)</span> reinforces confidence specifically at low-entropy positions (soft, not a hard mask). <span class="term">Q-FIT</span> is a quantization-friendly initialization that jointly calibrates <strong>RoPE-consistent KV-cache transformations</strong> so QAT starts stable rather than fighting a broken cache.</p>
+        <p class="t-ko"><span class="term">선택적 엔트로피 최소화(SEM)</span>는 저엔트로피 위치에서만 신뢰도를 강화한다(하드 마스크가 아닌 소프트 방식). <span class="term">Q-FIT</span>는 <strong>RoPE 일관 KV 캐시 변환</strong>을 함께 보정하는 양자화 친화 초기화로, QAT가 망가진 캐시와 싸우는 대신 안정적으로 출발하게 한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Diagnose the failure</span><span class="t-ko">실패 진단</span></b><span class="t-en">Show that FP4 W4A4KV4 errors concentrate on low-entropy tokens; injecting noise there (not at high-entropy positions) is what tanks AIME accuracy.</span><span class="t-ko">FP4 W4A4KV4 오류가 저엔트로피 토큰에 집중됨을 보이고, 고엔트로피가 아닌 그곳에 잡음을 주입할 때 AIME 정확도가 무너짐을 확인한다.</span></li>
+      <li><b><span class="t-en">Q-FIT initialization</span><span class="t-ko">Q-FIT 초기화</span></b><span class="t-en">Calibrate RoPE-consistent KV-cache transformations so the quantized cache is well-conditioned before QAT begins, stabilizing training.</span><span class="t-ko">QAT 시작 전 RoPE 일관 KV 캐시 변환을 보정해 양자화된 캐시를 잘 조건화하고 학습을 안정화한다.</span></li>
+      <li><b><span class="t-en">Trace-aligned QAT</span><span class="t-ko">추적 정렬 QAT</span></b><span class="t-en">Run a fixed 70M-token QAT stage that revisits identical reasoning traces, concentrating updates on the critical low-entropy decisions — under the same total budget as the baselines.</span><span class="t-ko">동일 추론 추적을 다시 방문하는 70M 토큰 QAT 단계를 베이스라인과 같은 총 예산 안에서 실행, 핵심 저엔트로피 결정에 업데이트를 집중한다.</span></li>
+      <li><b><span class="t-en">Reinforce with SEM</span><span class="t-ko">SEM으로 강화</span></b><span class="t-en">Apply selective entropy minimization at low-entropy positions — most effective on the hardest benchmark (AIME 40.32 → 41.85 on R1-Llama-8B).</span><span class="t-ko">저엔트로피 위치에 선택적 엔트로피 최소화를 적용 — 가장 어려운 벤치마크에서 효과 최대(R1-Llama-8B AIME 40.32 → 41.85).</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>4-bit everywhere is viable.</strong> Quantizing weights, activations <em>and</em> the KV cache to FP4 no longer means sacrificing reasoning — ReQAT matches or beats BF16 fine-tuning at up to 3.9× throughput.</p><p class="t-ko"><strong>전부 4비트가 실현 가능.</strong> 가중치·활성값·KV 캐시까지 FP4로 양자화해도 추론을 포기할 필요가 없다 — ReQAT는 최대 3.9배 처리량에서 BF16 미세조정을 동등·능가한다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Entropy is the right lens.</strong> The failure isn't average error — it's a few precise, low-entropy tokens whose corruption cascades. Targeting them changes everything.</p><p class="t-ko"><strong>엔트로피가 올바른 렌즈.</strong> 실패는 평균 오류가 아니라, 부패가 연쇄되는 소수의 정밀한 저엔트로피 토큰에 있다. 그곳을 겨냥하는 것이 판도를 바꾼다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Don't forget the KV cache.</strong> Q-FIT's RoPE-consistent KV transform shows the cache is a first-class quantization target, not an afterthought.</p><p class="t-ko"><strong>KV 캐시를 잊지 말 것.</strong> Q-FIT의 RoPE 일관 KV 변환은 캐시가 부차적 대상이 아니라 일급 양자화 대상임을 보여준다.</p></div>
+      <div class="t"><span class="ic">🏭</span><p class="t-en"><strong>Hardware-real.</strong> Speedups are measured on shipping Blackwell silicon (DGX Spark, B200) with trtllm-bench — not a theoretical FLOP count.</p><p class="t-ko"><strong>하드웨어 실측.</strong> 가속은 출시된 Blackwell 실리콘(DGX Spark, B200)에서 trtllm-bench로 측정 — 이론적 FLOP 계산이 아니다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> Evaluation is narrow — two R1-distilled math models (Qwen-14B, Llama-8B) on three math benchmarks (AIME, GSM8K, MATH-500). Whether "FP4 surpasses BF16" generalizes beyond math reasoning, larger models, or non-distilled bases is untested, and the headline gain over the BF16 <em>baseline</em> partly reflects that ReQAT's training improves the model — the margin over BF16 <em>full fine-tuning</em> is much thinner (often under +1%p). The low-entropy diagnosis is also specific to symbolic-heavy reasoning and may not transfer to open-ended generation.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 평가가 좁다 — R1-distilled 수학 모델 두 개(Qwen-14B, Llama-8B)를 세 개의 수학 벤치마크(AIME, GSM8K, MATH-500)에서만 검증한다. "FP4가 BF16를 능가"하는 현상이 수학 추론을 넘어, 더 큰 모델이나 distill되지 않은 베이스로 일반화되는지는 검증되지 않았고, BF16 <em>베이스라인</em> 대비 큰 향상폭은 ReQAT의 학습이 모델 자체를 개선한 효과도 포함한다 — BF16 <em>풀 미세조정</em> 대비 마진은 훨씬 얇다(흔히 +1%p 미만). 저엔트로피 진단 역시 상징 중심 추론에 특화돼 있어, 개방형 생성으로 전이될지는 미지수.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.15682">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.15682">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.15682">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.15682">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · ICML 2026 (Oral) · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Wishlist · ICML 2026 (Oral) · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

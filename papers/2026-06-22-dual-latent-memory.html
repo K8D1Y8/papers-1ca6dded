@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Dual Latent Memory for Visual Multi-agent System</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · Latent Memory</span><span class="t-ko">🤝 Multi-Agent · Latent Memory</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Dual Latent Memory for Visual Multi-agent System<br><span class="glow t-en">— Stop re-typing what you saw: share perception and thinking as latent memory</span><span class="glow t-ko">— 본 것을 다시 글로 옮기지 마라: 지각과 사고를 잠재 메모리로 공유</span></h1>
+    <div class="meta">
+      <span>👥 <b>Xinlei Yu</b> <span class="t-en">et al.</span><span class="t-ko">외 다수</span></span>
+      <span>🏛 National University of Singapore</span>
+      <span>🗓 2026.01.31</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.00471">arXiv:2602.00471</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Visual multi-agent systems hit a <b>"scaling wall"</b>: piping rich images and reasoning through lossy <b>natural-language messages</b> means accuracy peaks around turn 3 and then <em>falls below the single agent</em>, while tokens balloon 30×. <span class="hl">L²-VMAS replaces text messaging with two shared latent memories — one for perception, one for thinking — that downstream agents query on demand.</span> Across 5 VLM backbones it adds <b>+2.7–5.4% accuracy</b> while cutting <b>21–45% of tokens</b>, and keeps improving out to <b>turn 10 (+15%)</b> instead of degrading.</p>
+    <p class="t-ko">시각 멀티에이전트 시스템은 <b>"스케일링 벽"</b>에 부딪힌다. 풍부한 이미지와 추론을 손실 많은 <b>자연어 메시지</b>로 전달하면 정확도는 3턴쯤에서 정점을 찍은 뒤 <em>단일 에이전트보다 낮아지고</em>, 토큰은 30배로 폭증한다. <span class="hl">L²-VMAS는 텍스트 메시지를 두 개의 공유 잠재 메모리 — 지각용·사고용 — 로 대체하고, 하위 에이전트가 필요할 때 이를 질의한다.</span> 5개 VLM 백본에서 <b>정확도 +2.7~5.4%</b>를 얻으면서 <b>토큰 21~45%</b>를 줄이고, 성능 저하 대신 <b>10턴까지(+15%)</b> 계속 향상된다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">In multi-agent vision, the message format is the bottleneck — text throws away what the model actually saw.</p>
+    <p class="lead t-ko">멀티에이전트 비전에서 병목은 메시지 형식이다 — 텍스트는 모델이 실제로 본 것을 버린다.</p>
+    <p class="t-en">Text multi-agent systems get better as you add turns; visual ones do not. The authors show empirically that VMAS accuracy <strong>peaks at turn 3 and then drops below a single agent by turn 10</strong>, while total tokens surge over 30×. The culprit is <strong>text-centric communication</strong>: turning dense visual observations and latent cognitive states into discrete words is lossy, and it <strong>conflates "what I saw" with "what I concluded"</strong> in one stream, so errors and redundancy accumulate every hop. Worse, transmission is <strong>passive</strong> — an agent dumps everything to the next one whether it is needed or not. L²-VMAS reframes the problem as <strong>structured, on-demand latent memory access</strong> rather than free-text broadcasting.</p>
+    <p class="t-ko">텍스트 멀티에이전트는 턴을 늘릴수록 좋아지지만, 시각 시스템은 그렇지 않다. 저자들은 VMAS 정확도가 <strong>3턴에서 정점을 찍고 10턴에는 단일 에이전트보다 낮아지며</strong> 토큰은 30배 넘게 치솟음을 실험으로 보인다. 원인은 <strong>텍스트 중심 통신</strong>이다. 조밀한 시각 관측과 잠재적 인지 상태를 이산적 단어로 바꾸는 것은 손실적이며, 한 스트림 안에서 <strong>"내가 본 것"과 "내가 내린 결론"을 뒤섞어</strong> 매 단계 오류와 중복이 쌓인다. 게다가 전송은 <strong>수동적</strong>이라, 에이전트는 필요 여부와 무관하게 모든 것을 다음 에이전트에 넘긴다. L²-VMAS는 이를 자유 텍스트 방송이 아닌 <strong>구조화된 온디맨드 잠재 메모리 접근</strong> 문제로 재정의한다.</p>
+    <figure class="fig">
+      <img src="fig/2602.00471/x4.png" alt="L2-VMAS 전체 구조: 이중 잠재 메모리 합성과 오케스트레이션">
+      <figcaption class="t-en"><b>Figure 4.</b> Overview of L²-VMAS — preceding agents <b>synthesize</b> a dual latent memory (perception <i>M<sub>P</sub></i> + thinking <i>M<sub>T</sub></i>) as key–value units; the current agent <b>orchestrates</b> it via entropy-driven triggering, gated attribution, retrieval and injection.</figcaption>
+      <figcaption class="t-ko"><b>Figure 4.</b> L²-VMAS 개요 — 선행 에이전트가 이중 잠재 메모리(지각 <i>M<sub>P</sub></i> + 사고 <i>M<sub>T</sub></i>)를 키–값 단위로 <b>합성</b>하고, 현재 에이전트가 엔트로피 기반 트리거·게이트 귀속·검색·주입으로 이를 <b>오케스트레이션</b>한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.00471</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+5.4%</div><div class="l"><span class="t-en">Max avg. accuracy gain<br>(Qwen3-VL-8B-Thinking)</span><span class="t-ko">최대 평균 정확도 향상<br>(Qwen3-VL-8B-Thinking)</span></div></div>
+      <div class="stat"><div class="n">−44.8%</div><div class="l"><span class="t-en">Max token reduction<br>vs. conventional VMAS</span><span class="t-ko">최대 토큰 절감<br>(기존 VMAS 대비)</span></div></div>
+      <div class="stat"><div class="n">+15.1%</div><div class="l"><span class="t-en">Turn-10 vs turn-1 gain<br>(Thinking) — no scaling wall</span><span class="t-ko">10턴 vs 1턴 향상<br>(Thinking) — 벽 없음</span></div></div>
+      <div class="stat"><div class="n">+7.9%</div><div class="l"><span class="t-en">Dual memory on<br>mixed tasks (MMStar)</span><span class="t-ko">이중 메모리,<br>혼합 과제(MMStar)</span></div></div>
+      <div class="stat"><div class="n">5</div><div class="l"><span class="t-en">VLM backbones<br>· sizes 2B–32B</span><span class="t-ko">VLM 백본<br>· 2B~32B 규모</span></div></div>
+      <div class="stat"><div class="n">6</div><div class="l"><span class="t-en">Multi-agent topologies<br>tested (linear→dynamic)</span><span class="t-ko">검증한 멀티에이전트<br>구조(선형→동적)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — accuracy up, tokens down</span><span class="t-ko">결과 — 정확도↑ 토큰↓</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Avg. accuracy gain (Δacc) and token change (Δtok) of L²-VMAS over conventional VMAS, per VLM backbone.</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> 백본별 L²-VMAS의 기존 VMAS 대비 평균 정확도 향상(Δacc)·토큰 변화(Δtok).</caption>
+        <thead><tr><th>Backbone</th><th>Δacc</th><th>Δtok</th></tr></thead>
+        <tbody>
+          <tr><td>GLM-4.1V-9B-Thinking</td><td class="up">+3.9</td><td class="up">−38.2</td></tr>
+          <tr><td>InternVL-3.5-8B</td><td class="up">+2.7</td><td class="up">−21.3</td></tr>
+          <tr><td>LLaVA-OV-1.5-8B</td><td class="up">+3.1</td><td class="up">−29.5</td></tr>
+          <tr><td>Qwen3-VL-8B-Instruct</td><td class="up">+3.4</td><td class="up">−24.6</td></tr>
+          <tr><td>Qwen3-VL-8B-Thinking</td><td class="up">+5.4</td><td class="up">−43.6</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="font-size:.86em;opacity:.7;margin-top:8px">Δacc in % points; Δtok = total-token change (negative = fewer tokens). Backbone-level figures span the paper's reported 2.7–5.4% accuracy and 21.3–44.8% token-saving ranges; per-backbone values are representative excerpts.</p>
+    <p class="t-ko" style="font-size:.86em;opacity:.7;margin-top:8px">Δacc는 %p, Δtok는 총 토큰 변화(음수=토큰 감소). 백본별 수치는 논문이 보고한 정확도 2.7~5.4%·토큰 절감 21.3~44.8% 범위에 해당하는 대표 발췌이다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Preceding agent</span><span class="t-ko">선행 에이전트</span></div>
+          <div class="sub"><span class="t-en">sees image + reasons</span><span class="t-ko">이미지 인식 + 추론</span></div>
+          <div class="latent"><span class="t-en">text message (lossy)</span><span class="t-ko">텍스트 메시지(손실)</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Dual latent memory</span><span class="t-ko">이중 잠재 메모리</span></div>
+          <div class="sub"><span class="t-en">M_P perception · M_T thinking</span><span class="t-ko">M_P 지각 · M_T 사고</span></div>
+          <div class="latent"><span class="t-en">key–value units, decoupled</span><span class="t-ko">키–값 단위, 분리 저장</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Current agent</span><span class="t-ko">현재 에이전트</span></div>
+          <div class="sub"><span class="t-en">queries on demand</span><span class="t-ko">필요 시 질의</span></div>
+          <div class="latent"><span class="t-en">accuracy ↑ · tokens ↓</span><span class="t-ko">정확도 ↑ · 토큰 ↓</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Don't re-type, retrieve</b> — perception and thinking are stored as separate latent banks; the next agent <b>pulls only what it needs</b> when its own uncertainty spikes, instead of receiving a full text dump.</div>
+      <div class="cap t-ko"><b>다시 쓰지 말고 검색하라</b> — 지각과 사고를 별도 잠재 뱅크로 저장하고, 다음 에이전트는 전체 텍스트 덤프를 받는 대신 자신의 불확실성이 치솟을 때 <b>필요한 것만 꺼내 온다</b>.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: decouple perception from thinking, and trigger by uncertainty</span><span class="t-ko">아이디어: 지각과 사고를 분리하고, 불확실성으로 트리거</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 메모리 합성</span>
+        <h3>Dual latent memory</h3>
+        <p class="t-en">Two banks. <span class="term">Perception M<sub>P</sub></span> stores multi-granularity visual features from the VLM's own (frozen) encoder + projector. <span class="term">Thinking M<sub>T</sub></span> stores reasoning chunks split at <span class="term">high-entropy delimiter tokens</span>. A small learnable compressor turns each value into a compact key, and M<sub>T</sub> is pruned by triggering-rate + semantic-similarity to stay bounded.</p>
+        <p class="t-ko">두 뱅크. <span class="term">지각 M<sub>P</sub></span>는 VLM 자체(동결) 인코더+프로젝터에서 나온 다중 입도 시각 특징을 저장한다. <span class="term">사고 M<sub>T</sub></span>는 <span class="term">고엔트로피 구분 토큰</span>에서 분할한 추론 청크를 저장한다. 작은 학습형 압축기가 각 값을 간결한 키로 만들고, M<sub>T</sub>는 트리거율+의미 유사도로 가지치기해 용량을 제한한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 메모리 오케스트레이션</span>
+        <h3>Proactive on-demand access</h3>
+        <p class="t-en">Four stages. <span class="term">Trigger</span> when windowed token entropy exceeds μ+λσ (a decision bifurcation). <span class="term">Attribute</span> via a Gumbel-Sigmoid gate: perception or thinking? <span class="term">Retrieve</span> top-k units and refine to a fixed-length latent. <span class="term">Inject</span> it at the trigger point and resume decoding. The VLM stays <strong>frozen</strong>; only external memory modules are RL-trained (PPO).</p>
+        <p class="t-ko">네 단계. 윈도우 토큰 엔트로피가 μ+λσ를 넘으면(결정 분기점) <span class="term">트리거</span>. Gumbel-Sigmoid 게이트로 지각/사고 중 무엇을 볼지 <span class="term">귀속</span>. top-k 단위를 <span class="term">검색</span>해 고정 길이 잠재로 정제. 트리거 지점에 <span class="term">주입</span>하고 디코딩을 재개. VLM은 <strong>동결</strong>이며, 외부 메모리 모듈만 RL(PPO)로 학습한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Build perception memory</span><span class="t-ko">지각 메모리 구축</span></b><span class="t-en">Hierarchically downsample the image into multi-granularity patches, encode with the frozen vision encoder, align with the pre-trained projector, and store as M<sub>P</sub> key–value units (initialized once, expanded only on new visual content).</span><span class="t-ko">이미지를 다중 입도 패치로 계층적 다운샘플하고, 동결 비전 인코더로 인코딩, 사전학습 프로젝터로 정렬해 M<sub>P</sub> 키–값 단위로 저장(1회 초기화, 새 시각 콘텐츠 등장 시에만 확장).</span></li>
+      <li><b><span class="t-en">Chunk thinking by entropy</span><span class="t-ko">엔트로피로 사고 청킹</span></b><span class="t-en">Split the reasoning trace at high-entropy delimiter tokens (Bernoulli on clipped entropy) so each chunk is semantically independent, then compress into M<sub>T</sub> units and prune by triggering-rate + similarity on overflow.</span><span class="t-ko">추론 흐름을 고엔트로피 구분 토큰(클립 엔트로피의 베르누이)에서 분할해 각 청크가 의미적으로 독립되게 하고, M<sub>T</sub> 단위로 압축, 초과 시 트리거율+유사도로 가지치기.</span></li>
+      <li><b><span class="t-en">Trigger + attribute on demand</span><span class="t-ko">필요 시 트리거 + 귀속</span></b><span class="t-en">During the current agent's decoding, monitor windowed entropy; when it spikes, a learnable Gumbel-Sigmoid gate decides whether to consult perception or thinking memory.</span><span class="t-ko">현재 에이전트 디코딩 중 윈도우 엔트로피를 감시하고, 급증 시 학습형 Gumbel-Sigmoid 게이트가 지각·사고 메모리 중 무엇을 참조할지 결정.</span></li>
+      <li><b><span class="t-en">Retrieve, refine, inject</span><span class="t-ko">검색·정제·주입</span></b><span class="t-en">Use the window as a query, retrieve top-k units, refine them to a fixed-length latent, inject at the trigger position and continue — yielding higher accuracy with fewer tokens that keeps scaling to deeper turns.</span><span class="t-ko">윈도우를 질의로 top-k 단위를 검색, 고정 길이 잠재로 정제해 트리거 지점에 주입 후 진행 — 더 적은 토큰으로 더 높은 정확도를 내고 깊은 턴까지 확장된다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>The "scaling wall" is real and named.</strong> VMAS accuracy peaking at turn 3 then dropping below a single agent (with 30× tokens) is a crisp, quantified failure mode worth citing on its own.</p><p class="t-ko"><strong>"스케일링 벽"은 실재하며 명명되었다.</strong> VMAS 정확도가 3턴에 정점 후 단일 에이전트 이하로 떨어지는(토큰 30배) 현상은 그 자체로 인용할 만한 정량적 실패 모드.</p></div>
+      <div class="t"><span class="ic">🔀</span><p class="t-en"><strong>Decoupling perception vs thinking pays off.</strong> Each memory helps most on its matching task, and combining both gives +7.9% on mixed tasks — the split is not cosmetic.</p><p class="t-ko"><strong>지각과 사고의 분리가 효과적이다.</strong> 각 메모리는 대응 과제에서 가장 도움이 되고, 둘을 합치면 혼합 과제에서 +7.9% — 분리는 형식적인 것이 아니다.</p></div>
+      <div class="t"><span class="ic">🔌</span><p class="t-en"><strong>Model-agnostic, frozen backbone.</strong> Only external memory modules are trained, so it bolts onto five different VLMs and sizes 2B–32B without touching the base model.</p><p class="t-ko"><strong>모델 무관, 동결 백본.</strong> 외부 메모리 모듈만 학습하므로 기반 모델을 건드리지 않고 5개 VLM과 2B~32B 규모에 부착된다.</p></div>
+      <div class="t"><span class="ic">⚙️</span><p class="t-en"><strong>Efficiency and accuracy together.</strong> Rare to cut 20–45% tokens <em>and</em> raise accuracy — usually you trade one for the other.</p><p class="t-ko"><strong>효율과 정확도를 동시에.</strong> 토큰을 20~45% 줄이면서 정확도까지 올리는 것은 드물다 — 보통은 둘을 맞바꾼다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The whole pipeline depends on per-backbone RL (PPO) training of the compressor, gate, and refinement modules — a non-trivial cost the "model-agnostic, frozen backbone" framing understates, and one that may not transfer cleanly to closed or unseen VLMs. The headline that "more turns now help" is shown mainly on the authors' own memory-equipped runs; whether the dual-memory split (vs. a single well-managed latent cache) is the true driver, and how robust the entropy-threshold triggering is across domains, remain under-probed.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 전체 파이프라인은 압축기·게이트·정제 모듈의 백본별 RL(PPO) 학습에 의존한다 — "모델 무관·동결 백본"이라는 프레이밍이 축소하는 비용이며, 폐쇄형·미지의 VLM으로 깔끔히 이전될지 불확실하다. "이제 턴을 늘리면 도움이 된다"는 핵심 주장은 주로 저자들의 메모리 장착 실행에서 입증되며, 이중 메모리 분리(잘 관리된 단일 잠재 캐시 대비)가 진짜 동인인지, 엔트로피 임계 트리거가 도메인 전반에서 얼마나 견고한지는 충분히 검증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.00471">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.00471">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.00471">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.00471">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · ICML 2026 (Poster) · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 · ICML 2026 (Poster) · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

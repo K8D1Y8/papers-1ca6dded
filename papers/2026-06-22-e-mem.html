@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · E-mem: Multi-Agent Based Episodic Context Reconstruction for LLM Agent Memory</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · Agent Memory</span><span class="t-ko">🤝 Multi-Agent · Agent Memory</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>E-mem: Episodic Context Reconstruction<br><span class="glow t-en">— Don't compress the memory; re-experience it with a team of agents</span><span class="glow t-ko">— 기억을 압축하지 말고, 에이전트 팀으로 '다시 경험'하라</span></h1>
+    <div class="meta">
+      <span>👥 <b>Kaixiang Wang</b> <span class="t-en">et al.</span><span class="t-ko">외 다수</span></span>
+      <span>🏛 Shanghai Jiao Tong University</span>
+      <span>🗓 2026.01.29</span>
+      <span>📄 <a href="https://arxiv.org/abs/2601.21714">arXiv:2601.21714</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Most LLM-agent memory systems <b>preprocess</b> raw history into embeddings or graphs — and in doing so suffer <b>"destructive de-contextualization,"</b> breaking the causal chains deep reasoning needs. E-mem keeps the <span class="hl">full, uncompressed episodic context</span> and assigns each segment to a small <b>assistant agent</b>; a <b>master agent</b> routes a query, the activated assistants <b>locally re-reason</b> over their intact context, and the master aggregates the evidence. Result: <b>54.17% F1 on LoCoMo</b> (+8.86%p over the strongest baseline) at a <b>~43× lower token cost</b> than full-context.</p>
+    <p class="t-ko">대부분의 LLM 에이전트 메모리 시스템은 원본 이력을 임베딩·그래프로 <b>전처리</b>하며, 그 과정에서 <b>"파괴적 탈맥락화(destructive de-contextualization)"</b>를 겪어 깊은 추론에 필요한 인과 사슬을 끊어버린다. E-mem은 <span class="hl">압축하지 않은 온전한 에피소드 맥락</span>을 그대로 보존하고, 각 구간을 작은 <b>보조 에이전트(assistant)</b>에 맡긴다. <b>마스터 에이전트</b>가 질의를 라우팅하면, 활성화된 보조들이 손상되지 않은 맥락 위에서 <b>국소적으로 다시 추론</b>하고, 마스터가 그 근거를 종합한다. 결과: <b>LoCoMo에서 F1 54.17%</b>(최강 베이스라인 대비 +8.86%p), 토큰 비용은 풀컨텍스트 대비 <b>약 43배 절감</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The bottleneck of agent memory isn't storage size — it's the contextual integrity destroyed at write time.</p>
+    <p class="lead t-ko">에이전트 메모리의 병목은 저장 용량이 아니라, 기록 시점에 파괴되는 '맥락 보존성'이다.</p>
+    <p class="t-en">When you flatten a long, sequential history into static embeddings, a knowledge graph, or a hierarchical archive, you gain cheap lookup but you <strong>sever the sequential dependencies</strong> that deep, multi-hop reasoning depends on. The authors call this <strong>destructive de-contextualization</strong>: once causal chains are compressed into fixed points, the agent can no longer reconstruct <em>why</em> or <em>in what order</em> things happened. E-mem reframes memory not as a compression problem but as <strong>episodic context reconstruction</strong> — preserve the raw context, then actively "re-experience" only the segments a query needs, reasoning inside their native order.</p>
+    <p class="t-ko">긴 순차 이력을 정적 임베딩, 지식 그래프, 계층적 아카이브로 납작하게 만들면 조회는 싸지지만, 깊은 멀티홉 추론이 의존하는 <strong>순차적 의존성을 끊어버린다</strong>. 저자들은 이를 <strong>파괴적 탈맥락화</strong>라 부른다 — 인과 사슬이 고정된 점으로 압축되는 순간, 에이전트는 일이 <em>왜</em>·<em>어떤 순서로</em> 일어났는지 더는 복원하지 못한다. E-mem은 메모리를 압축 문제가 아니라 <strong>에피소드 맥락 재구성</strong> 문제로 재정의한다 — 원본 맥락을 보존하고, 질의에 필요한 구간만 능동적으로 '다시 경험'하며 본래 순서 안에서 추론한다.</p>
+    <figure class="fig">
+      <img src="fig/2601.21714/x1.png" alt="전통적 전처리 메모리(정보 손실) vs E-mem 에피소드 재구성(맥락 보존) 비교">
+      <figcaption class="t-en"><b>Figure 1.</b> Traditional memory (top) preprocesses raw history into pre-defined structures → information loss. E-mem (bottom) chunks history into episodic contexts kept as archived memory, routes a query to the right segments, and reasons over the <b>reconstructed context</b> → contextual integrity.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 전통적 메모리(위)는 원본 이력을 미리 정의된 구조로 전처리해 정보 손실이 생긴다. E-mem(아래)은 이력을 에피소드 맥락으로 분할해 아카이브로 보존하고, 질의를 알맞은 구간으로 라우팅한 뒤 <b>재구성된 맥락</b> 위에서 추론한다 → 맥락 보존.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2601.21714</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">54.17%</div><div class="l"><span class="t-en">LoCoMo F1<br>(GPT-4o-mini master)</span><span class="t-ko">LoCoMo F1<br>(GPT-4o-mini 마스터)</span></div></div>
+      <div class="stat"><div class="n">+8.86%p</div><div class="l"><span class="t-en">F1 over GAM<br>(strongest baseline)</span><span class="t-ko">GAM 대비 F1<br>(최강 베이스라인)</span></div></div>
+      <div class="stat"><div class="n">~43×</div><div class="l"><span class="t-en">Token-cost reduction<br>vs full-context</span><span class="t-ko">토큰 비용 절감<br>풀컨텍스트 대비</span></div></div>
+      <div class="stat"><div class="n">95.74%</div><div class="l"><span class="t-en">Peak F1 on LoCoMo<br>adversarial subset</span><span class="t-ko">LoCoMo 적대적<br>부분집합 최고 F1</span></div></div>
+      <div class="stat"><div class="n">+6.51%p</div><div class="l"><span class="t-en">F1 over RAG<br>(HotpotQA, 1600 docs)</span><span class="t-ko">RAG 대비 F1<br>(HotpotQA, 1600문서)</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">Routing pathways<br>global · vector · keyword</span><span class="t-ko">라우팅 경로<br>전역 · 벡터 · 키워드</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — episodic reconstruction tops the board</span><span class="t-ko">결과 — 에피소드 재구성이 최상위</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> LoCoMo F1 (%) by master backbone — E-mem vs strongest baseline GAM. Δ = (E-mem − GAM).</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> 마스터 백본별 LoCoMo F1(%) — E-mem vs 최강 베이스라인 GAM. Δ = (E-mem − GAM).</caption>
+        <thead><tr><th>Setting</th><th>GAM</th><th>E-mem</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>LoCoMo · GPT-4o-mini</td><td>45.31</td><td>54.17</td><td class="up">+8.86</td></tr>
+          <tr><td>LoCoMo · Qwen2.5-14B</td><td>50.41</td><td>57.04</td><td class="up">+6.63</td></tr>
+          <tr><td>Multi-hop · Qwen2.5-14B</td><td>—</td><td>+10.0</td><td class="up">+10.0</td></tr>
+          <tr><td>Adversarial subset (peak)</td><td>—</td><td>95.74</td><td class="up">—</td></tr>
+          <tr><td>HotpotQA-1600 (vs RAG)</td><td>—</td><td>+6.51</td><td class="up">+6.51</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Raw history</span><span class="t-ko">원본 이력</span></div>
+          <div class="sub"><span class="t-en">sliding-window chunks</span><span class="t-ko">슬라이딩 윈도우 분할</span></div>
+          <div class="latent"><span class="t-en">kept uncompressed</span><span class="t-ko">무압축 보존</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Master + Router</span><span class="t-ko">마스터 + 라우터</span></div>
+          <div class="sub"><span class="t-en">activate the right segments</span><span class="t-ko">알맞은 구간 활성화</span></div>
+          <div class="latent"><span class="t-en">global · vector · keyword</span><span class="t-ko">전역 · 벡터 · 키워드</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Assistants (SLM)</span><span class="t-ko">보조 에이전트 (SLM)</span></div>
+          <div class="sub"><span class="t-en">re-reason on intact context</span><span class="t-ko">온전한 맥락서 재추론</span></div>
+          <div class="latent"><span class="t-en">timestamped evidence → master</span><span class="t-ko">타임스탬프 근거 → 마스터</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Reconstruct, don't compress</b> — each query activates only the relevant memory units, which locally derive temporally-grounded evidence that the master synthesizes by chronological logic.</div>
+      <div class="cap t-ko"><b>압축 말고 재구성</b> — 각 질의는 관련 메모리 유닛만 활성화하고, 그 유닛들이 시간 기반 근거를 국소적으로 도출하면 마스터가 시간 논리로 종합한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: memory as re-experience, not retrieval</span><span class="t-ko">아이디어: 검색이 아니라 '재경험'으로서의 기억</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 보존 + 분산</span>
+        <h3><span class="t-en">Heterogeneous master–assistant</span><span class="t-ko">이질적 마스터–보조 구조</span></h3>
+        <p class="t-en">A central <span class="term">master agent</span> handles global planning but holds no raw memory. Each history segment is owned by a small <span class="term">assistant SLM (Qwen3-4B)</span> that keeps a dual representation: an immutable full context <span class="term">E_i</span> for local reasoning and a concise summary <span class="term">s_i</span> for routing. This dodges the "Lost-in-the-Middle" failure of stuffing everything into one context.</p>
+        <p class="t-ko">중앙 <span class="term">마스터 에이전트</span>는 전역 계획만 담당하고 원본 기억은 갖지 않는다. 각 이력 구간은 작은 <span class="term">보조 SLM(Qwen3-4B)</span>이 소유하며, 국소 추론용 불변 전체 맥락 <span class="term">E_i</span>와 라우팅용 요약 <span class="term">s_i</span>를 함께 보관한다. 모든 것을 한 맥락에 욱여넣을 때 생기는 "Lost-in-the-Middle"을 회피한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 활성화 + 재추론</span>
+        <h3><span class="t-en">Multi-pathway routing + local reasoning</span><span class="t-ko">다중 경로 라우팅 + 국소 추론</span></h3>
+        <p class="t-en">A query activates segments through <strong>three parallel pathways</strong> — global narrative alignment, latent vector similarity, and symbolic keyword (BM25) match — with no runtime LLM call. Activated assistants then <strong>re-reason</strong> over intact context and emit timestamped evidence tuples <span class="term">⟨c_i, τ_i⟩</span> the master fuses by chronology.</p>
+        <p class="t-ko">질의는 <strong>세 병렬 경로</strong>로 구간을 활성화한다 — 전역 서사 정합, 잠재 벡터 유사도, 기호적 키워드(BM25) 일치 — 런타임 LLM 호출 없이. 활성화된 보조들은 온전한 맥락에서 <strong>다시 추론</strong>해 타임스탬프 근거 튜플 <span class="term">⟨c_i, τ_i⟩</span>을 내보내고, 마스터가 이를 시간순으로 융합한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Build &amp; store</span><span class="t-ko">구축·저장</span></b><span class="t-en">Partition the unbounded stream with an overlapping sliding window (stride S &lt; length L) into episodic contexts E_i; each is held by a dormant assistant agent with O(1) streaming updates and carried-over overlap for boundary continuity.</span><span class="t-ko">무한 입력 스트림을 겹침이 있는 슬라이딩 윈도우(stride S &lt; 길이 L)로 에피소드 맥락 E_i로 분할한다. 각 구간은 휴면 보조 에이전트가 보관하며, O(1) 스트리밍 업데이트와 경계 연속성을 위한 겹침 영역 인계를 지원한다.</span></li>
+      <li><b><span class="t-en">Route the query</span><span class="t-ko">질의 라우팅</span></b><span class="t-en">Score every segment via three pathways (global summary alignment · raw-chunk vector similarity · BM25 keyword), then take the union of any positive signal to form the activated set A∗ — purely retrieval, no LLM inference at this stage.</span><span class="t-ko">세 경로(전역 요약 정합·원본 청크 벡터 유사도·BM25 키워드)로 모든 구간을 채점하고, 양의 신호가 하나라도 있으면 합집합으로 활성 집합 A∗를 만든다 — 이 단계는 순수 검색이며 LLM 추론이 없다.</span></li>
+      <li><b><span class="t-en">Reconstruct &amp; reason locally</span><span class="t-ko">국소 재구성·추론</span></b><span class="t-en">Each activated assistant attends to its intact E_i and produces a temporally-anchored evidence tuple ⟨c_i, τ_i⟩ — re-experiencing the segment rather than returning a text chunk.</span><span class="t-ko">활성화된 각 보조는 온전한 E_i에 주의를 기울여 시간 기반 근거 튜플 ⟨c_i, τ_i⟩을 생성한다 — 텍스트 청크 반환이 아니라 구간을 '재경험'한다.</span></li>
+      <li><b><span class="t-en">Aggregate &amp; resolve</span><span class="t-ko">종합·조정</span></b><span class="t-en">The master synthesizes the evidence set, resolving conflicts by chronological logic (recency via τ_i); for hard tasks it iterates sub-queries until the reasoning trace converges.</span><span class="t-ko">마스터는 근거 집합을 종합하며 시간 논리(τ_i 기반 최신성)로 충돌을 해소한다. 어려운 과제에서는 추론 흐름이 수렴할 때까지 하위 질의를 반복한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Preprocessing is the enemy.</strong> Keeping context uncompressed and reasoning in-place beats embeddings/graphs precisely on multi-hop and temporal questions — the cases where compression hurts most.</p><p class="t-ko"><strong>전처리가 적이다.</strong> 맥락을 압축하지 않고 제자리에서 추론하는 편이, 압축이 가장 해로운 멀티홉·시간 추론에서 임베딩·그래프를 능가한다.</p></div>
+      <div class="t"><span class="ic">🤝</span><p class="t-en"><strong>Decoupling buys robustness.</strong> Removing the assistant agents (feeding chunks straight to one LLM) collapses F1 from 54.17 to 38.27 — the multi-agent split is doing real work, not just bookkeeping.</p><p class="t-ko"><strong>역할 분리가 견고함을 만든다.</strong> 보조 에이전트를 제거해 청크를 단일 LLM에 직접 넣으면 F1이 54.17에서 38.27로 붕괴한다 — 멀티에이전트 분리는 장식이 아니라 실효가 있다.</p></div>
+      <div class="t"><span class="ic">💸</span><p class="t-en"><strong>Small models, big leverage.</strong> Offloading raw-text reasoning to 4B assistants gives a ~43× token-cost cut while a GPT-4o-mini master + SLMs rivals GPT-5.1 on parts of LoCoMo.</p><p class="t-ko"><strong>작은 모델, 큰 지렛대.</strong> 원문 추론을 4B 보조에 위임해 토큰 비용을 약 43배 줄이고, GPT-4o-mini 마스터+SLM 조합이 LoCoMo 일부에서 GPT-5.1과 견준다.</p></div>
+      <div class="t"><span class="ic">🧭</span><p class="t-en"><strong>Routing &gt; brute recall.</strong> Just 8 activated chunks already beat strong baselines; global alignment is the most load-bearing pathway (−10.46 F1 when removed).</p><p class="t-ko"><strong>라우팅 &gt; 무차별 회수.</strong> 단 8개 청크 활성화만으로 강한 베이스라인을 능가하며, 전역 정합 경로가 가장 핵심적이다(제거 시 −10.46 F1).</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> "Preserve everything uncompressed" trades storage and latency for fidelity — each query spins up multiple parallel SLM inferences, and the headline ~43× cost win is measured against an expensive full-context baseline under an assumed 1:10 small-to-large token price ratio, not against lean RAG. Evaluation is concentrated on conversational/QA benchmarks (LoCoMo, HotpotQA) with a fixed assistant family; whether episodic reconstruction holds up under truly lifelong, millions-of-segments memory — where routing precision and per-segment agent overhead dominate — remains unproven.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> "전부 무압축 보존"은 충실도를 얻는 대신 저장·지연을 치른다 — 질의마다 여러 SLM 추론이 병렬로 돌고, 대표 수치인 약 43배 비용 절감은 가벼운 RAG가 아니라 값비싼 풀컨텍스트 베이스라인 대비, 그것도 소:대 토큰 가격비 1:10 가정 하에서 측정됐다. 평가는 고정된 보조 모델군으로 대화·QA 벤치마크(LoCoMo, HotpotQA)에 집중돼 있다. 라우팅 정밀도와 구간별 에이전트 오버헤드가 지배하는 진정한 평생·수백만 구간 메모리에서도 에피소드 재구성이 버틸지는 아직 입증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2601.21714">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2601.21714">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2601.21714">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2601.21714">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · ICML 2026 (Poster) · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 · ICML 2026 (Poster) · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

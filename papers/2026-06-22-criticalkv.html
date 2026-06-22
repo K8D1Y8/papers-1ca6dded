@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · CriticalKV: Optimizing KV Cache Eviction from an Output Perturbation Perspective</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🗜 Model Compression · KV Cache</span><span class="t-ko">🗜 Model Compression · KV Cache</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>CriticalKV: Optimizing KV Cache Eviction from an Output Perturbation Perspective<br><span class="glow t-en">— Don't ask which token gets the most attention; ask which one, if dropped, breaks the output</span><span class="glow t-ko">— '어떤 토큰이 주목받나'가 아니라 '버리면 출력이 깨지는 토큰이 무엇인가'를 물어라</span></h1>
+    <div class="meta">
+      <span>👥 <b>Yuan Feng</b> <span class="t-en">et al. (Xike Xie)</span><span class="t-ko">외 (교신: Xike Xie)</span></span>
+      <span>🏛 USTC</span>
+      <span>🗓 2025.02.06</span>
+      <span>📄 <a href="https://arxiv.org/abs/2502.03805">arXiv:2502.03805</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">KV-cache eviction methods (SnapKV, AdaKV) decide what to keep using <b>attention weights alone</b> — an empirical heuristic with no formal grounding. This paper analyzes the <span class="hl">attention-output perturbation</span> caused by dropping an entry and proves the loss depends not just on attention weight $a_i$ but also on the <b>value state and the pretrained parameter matrix</b> ($\|Wv_i\|$). A plug-and-play perturbation-constrained selector then minimizes the worst-case perturbation — <b>cutting average compression loss by more than half across 29 datasets</b> (Ruler + LongBench) on three LLMs, at negligible overhead.</p>
+    <p class="t-ko">KV-cache eviction 기법(SnapKV, AdaKV)은 무엇을 남길지 <b>attention weight만으로</b> 결정한다 — 형식적 근거 없는 경험적 휴리스틱이다. 이 논문은 항목을 버릴 때 생기는 <span class="hl">attention 출력 섭동(perturbation)</span>을 분석해, 손실이 attention weight $a_i$뿐 아니라 <b>value 상태와 사전학습 파라미터 행렬</b>($\|Wv_i\|$)에도 좌우됨을 증명한다. 이어 최악 섭동을 최소화하는 plug-and-play 선택기를 제안 — 세 LLM·29개 데이터셋(Ruler + LongBench)에서 <b>평균 압축 손실을 절반 이상 절감</b>하면서 오버헤드는 무시할 수준이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">"High attention weight" is not the same as "critical to keep."</p>
+    <p class="lead t-ko">"attention weight가 높다"는 "남겨야 할 만큼 중요하다"와 같지 않다.</p>
+    <p class="t-en">For long-context inference the KV cache grows linearly with sequence length and dominates memory. Eviction methods shrink it by discarding "unimportant" entries — but they judge importance purely by accumulated attention weight, a heuristic that is empirical and never tied to what we actually care about: <strong>the model's output</strong>. This paper makes the connection formal. It bounds the change in attention output when an entry is dropped, and shows the bound contains a factor everyone had ignored — the magnitude of the value state after the output projection ($\|Wv_i\|$). A token with modest attention but a large value contribution can perturb the output more than a high-attention token, so attention-only eviction can throw away exactly the entries that matter.</p>
+    <p class="t-ko">긴 컨텍스트 추론에서 KV 캐시는 시퀀스 길이에 비례해 커져 메모리를 지배한다. eviction 기법은 "덜 중요한" 항목을 버려 캐시를 줄이지만, 중요도를 오직 누적 attention weight로만 판단한다 — 경험적이며 우리가 정말 신경 쓰는 대상, 즉 <strong>모델의 출력</strong>과 한 번도 연결되지 않은 휴리스틱이다. 이 논문은 그 연결을 형식화한다. 항목을 버릴 때 attention 출력이 얼마나 변하는지 상한을 유도하고, 그 상한에 모두가 간과한 항 — 출력 사영 후 value 상태의 크기($\|Wv_i\|$) — 이 들어 있음을 보인다. attention은 작아도 value 기여가 큰 토큰이 attention이 큰 토큰보다 출력을 더 흔들 수 있으므로, attention만 보는 eviction은 정작 중요한 항목을 버릴 수 있다.</p>
+    <figure class="fig">
+      <img src="fig/2502.03805/x1.png" alt="Needle-in-a-Haystack performance across cache sizes, with and without the proposed method">
+      <figcaption class="t-en"><b>Figure 1.</b> Needle-in-a-Haystack retrieval across cache sizes — adding the perturbation-constrained selector (w/ ours) consistently lifts retrieval over attention-only baselines (w/o ours), most visibly at small cache budgets.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 캐시 크기별 Needle-in-a-Haystack 검색 성능 — 섭동 제약 선택기(w/ ours)를 더하면 attention-only 베이스라인(w/o ours) 대비 검색 성능이 일관되게 상승하며, 특히 작은 캐시 예산에서 뚜렷하다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2502.03805</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">&gt;50%</div><div class="l"><span class="t-en">Avg. compression-loss<br>cut vs. baselines</span><span class="t-ko">평균 압축 손실<br>절감(베이스라인 대비)</span></div></div>
+      <div class="stat"><div class="n">29</div><div class="l"><span class="t-en">Datasets<br>(Ruler + LongBench)</span><span class="t-ko">데이터셋<br>(Ruler + LongBench)</span></div></div>
+      <div class="stat"><div class="n">3 × 3</div><div class="l"><span class="t-en">Eviction methods<br>× LLMs tested</span><span class="t-ko">eviction 기법<br>× LLM 조합</span></div></div>
+      <div class="stat"><div class="n">≈0</div><div class="l"><span class="t-en">Extra compute<br>(plug-and-play)</span><span class="t-ko">추가 연산량<br>(plug-and-play)</span></div></div>
+      <div class="stat"><div class="n">2.5–10%</div><div class="l"><span class="t-en">Cache budgets<br>stress-tested</span><span class="t-ko">테스트한<br>캐시 예산 범위</span></div></div>
+      <div class="stat"><div class="n">L1</div><div class="l"><span class="t-en">Perturbation norm<br>(beats L2)</span><span class="t-ko">섭동 노름<br>(L2보다 우수)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — a plug-in that helps every base method</span><span class="t-ko">결과 — 모든 기반 기법을 돕는 plug-in</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Effect of adding the perturbation-constrained selector on top of state-of-the-art eviction methods (qualitative direction of reported results; ✓ = improves over the attention-only base). Quantified headline: average compression loss cut by more than half across 29 datasets.</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> SOTA eviction 기법 위에 섭동 제약 선택기를 얹었을 때의 효과(보고된 결과의 정성적 방향; ✓ = attention-only 대비 향상). 대표 수치: 29개 데이터셋 평균 압축 손실 절반 이상 절감.</caption>
+        <thead><tr><th>Setting</th><th>Base</th><th>+ CriticalKV</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>SnapKV · LongBench</td><td>w/o</td><td>w/</td><td class="up">↓ loss</td></tr>
+          <tr><td>AdaKV · LongBench</td><td>w/o</td><td>w/</td><td class="up">↓ loss</td></tr>
+          <tr><td>Needle (single, ctx-only)</td><td>w/o</td><td>w/</td><td class="up">↑ retrieval</td></tr>
+          <tr><td>Needle (multi-retrieval)</td><td>w/o</td><td>w/</td><td class="up">↑ retrieval</td></tr>
+          <tr><td>Small budget (2.5%)</td><td>w/o</td><td>w/</td><td class="up">↑ retrieval</td></tr>
+          <tr><td>Avg. over 29 datasets</td><td>w/o</td><td>w/</td><td class="up">&gt;50% less loss</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="opacity:.7;font-size:.9em"><em>Numeric per-dataset tables are in the paper; cells above show the consistent reported direction, with the one hard headline figure (&gt;50% average loss reduction) kept verbatim.</em></p>
+    <p class="t-ko" style="opacity:.7;font-size:.9em"><em>데이터셋별 수치 표는 논문 본문에 있으며, 위 셀은 보고된 일관된 방향을 나타낸다. 유일한 핵심 수치(평균 손실 50% 이상 절감)는 원문 그대로 유지.</em></p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Full KV cache</span><span class="t-ko">전체 KV 캐시</span></div>
+          <div class="sub"><span class="t-en">long context, large memory</span><span class="t-ko">긴 컨텍스트, 큰 메모리</span></div>
+          <div class="latent"><span class="t-en">grows with length</span><span class="t-ko">길이에 비례 증가</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Perturbation selector</span><span class="t-ko">섭동 제약 선택</span></div>
+          <div class="sub"><span class="t-en">score by aᵢ · ‖Wvᵢ‖</span><span class="t-ko">aᵢ · ‖Wvᵢ‖로 점수화</span></div>
+          <div class="latent"><span class="t-en">minimize worst-case loss</span><span class="t-ko">최악 손실 최소화</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Evicted cache</span><span class="t-ko">압축된 캐시</span></div>
+          <div class="sub"><span class="t-en">tiny, output preserved</span><span class="t-ko">작아도 출력 보존</span></div>
+          <div class="latent"><span class="t-en">loss cut &gt;50%</span><span class="t-ko">손실 50%↓</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Pick by output impact, not attention.</b> Instead of "keep the most-attended," keep the entries whose removal would perturb the attention output most — measured by attention weight <em>times</em> projected value magnitude.</div>
+      <div class="cap t-ko"><b>attention이 아니라 출력 영향으로 선별.</b> "가장 주목받는 것"이 아니라, 제거 시 attention 출력을 가장 크게 흔드는 항목 — attention weight <em>곱하기</em> 사영된 value 크기 — 을 남긴다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: ground eviction in output perturbation</span><span class="t-ko">아이디어: eviction을 출력 섭동에 근거시키기</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 이론</span>
+        <h3>Perturbation bound</h3>
+        <p class="t-en">Dropping a set of entries $\mathcal{D}$ changes the attention output by at most $\sum_{i\in\mathcal{D}} |a_i|\,\|Wv_i\|_1$. The bound exposes two co-equal factors: the attention weight $a_i$ <em>and</em> the value state passed through the output projection $W$. Prior methods used only the first.</p>
+        <p class="t-ko">항목 집합 $\mathcal{D}$를 버릴 때 attention 출력 변화는 최대 $\sum_{i\in\mathcal{D}} |a_i|\,\|Wv_i\|_1$. 이 상한은 두 동등한 요인을 드러낸다: attention weight $a_i$ <em>그리고</em> 출력 사영 $W$를 통과한 value 상태. 기존 기법은 첫째만 썼다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 알고리즘</span>
+        <h3>Two-stage selector</h3>
+        <p class="t-en">Stage 1 spends a fraction $\alpha\!\cdot\!B$ of the budget on high-attention entries (honoring the power-law of attention). Stage 2 greedily fills the rest to minimize the worst-case perturbation bound, scoring each candidate by $a_i\,\|Wv_i\|$. It drops in as a replacement selector for SnapKV / AdaKV with near-zero overhead.</p>
+        <p class="t-ko">1단계는 예산의 일부 $\alpha\!\cdot\!B$를 high-attention 항목에 배정(attention의 멱법칙 존중). 2단계는 나머지를 탐욕적으로 채워 최악 섭동 상한을 최소화하며, 후보를 $a_i\,\|Wv_i\|$로 점수화한다. SnapKV/AdaKV의 선택기를 거의 0 오버헤드로 대체한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Bound the output change</span><span class="t-ko">출력 변화 상한화</span></b><span class="t-en">Derive an upper bound on the attention-output perturbation from evicting a set of entries: it equals the sum of attention weight × projected value norm over the discarded set.</span><span class="t-ko">항목 집합을 버릴 때의 attention 출력 섭동에 대한 상한을 유도 — 버린 집합에 대해 attention weight × 사영 value 노름의 합으로 표현된다.</span></li>
+      <li><b><span class="t-en">Reserve budget for attention</span><span class="t-ko">attention에 예산 일부 배정</span></b><span class="t-en">Keep a fraction α·B of the budget for high-attention entries, since attention follows a power-law and these are reliably useful.</span><span class="t-ko">예산의 α·B는 high-attention 항목에 유지 — attention은 멱법칙을 따르므로 이들은 안정적으로 유용하다.</span></li>
+      <li><b><span class="t-en">Fill to minimize worst-case loss</span><span class="t-ko">최악 손실 최소화로 충원</span></b><span class="t-en">For the remaining budget, greedily pick entries that most reduce the perturbation bound — scored by attention weight times projected value magnitude (L1).</span><span class="t-ko">남은 예산은 섭동 상한을 가장 많이 줄이는 항목을 탐욕적으로 선택 — attention weight 곱하기 사영 value 크기(L1)로 점수화.</span></li>
+      <li><b><span class="t-en">Drop into existing frameworks</span><span class="t-ko">기존 프레임워크에 결합</span></b><span class="t-en">Swap this selector into SnapKV / AdaKV and similar methods on Llama-3.1-8B, Mistral-7B and others — average compression loss falls by more than half across 29 datasets.</span><span class="t-ko">이 선택기를 SnapKV/AdaKV 등에 교체 투입(Llama-3.1-8B, Mistral-7B 등) — 29개 데이터셋 평균 압축 손실이 절반 이상 감소.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">📐</span><p class="t-en"><strong>A formal criterion, not a heuristic.</strong> Eviction is finally tied to a provable bound on output change, replacing "highest attention" with "lowest output perturbation."</p><p class="t-ko"><strong>휴리스틱이 아닌 형식적 기준.</strong> eviction이 마침내 출력 변화의 증명 가능한 상한과 연결돼, "최대 attention"을 "최소 출력 섭동"으로 대체한다.</p></div>
+      <div class="t"><span class="ic">🔑</span><p class="t-en"><strong>Value states matter too.</strong> The forgotten factor ‖Wvᵢ‖ — value magnitude after the output projection — can outweigh attention. Importance is a product, not a single signal.</p><p class="t-ko"><strong>value 상태도 중요하다.</strong> 잊혔던 항 ‖Wvᵢ‖ — 출력 사영 후 value 크기 — 가 attention을 압도할 수 있다. 중요도는 단일 신호가 아니라 곱이다.</p></div>
+      <div class="t"><span class="ic">🧩</span><p class="t-en"><strong>Plug-and-play, near-zero cost.</strong> It replaces only the selection step, so it stacks on top of SnapKV, AdaKV and others without retraining or extra compute.</p><p class="t-ko"><strong>plug-and-play, 비용 거의 0.</strong> 선택 단계만 교체하므로 재학습·추가 연산 없이 SnapKV·AdaKV 등 위에 그대로 얹힌다.</p></div>
+      <div class="t"><span class="ic">📊</span><p class="t-en"><strong>Broad, consistent gains.</strong> More than half the compression loss removed on average across 29 datasets and three LLMs — not a single cherry-picked benchmark.</p><p class="t-ko"><strong>넓고 일관된 향상.</strong> 29개 데이터셋·세 LLM 평균에서 압축 손실 절반 이상 제거 — 단일 체리피킹 벤치마크가 아니다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline "more than half" is a <em>relative</em> reduction of an already-small compression loss, and is reported as an average — it can hide datasets with little or negative gain. The worst-case L1 perturbation bound is loose (a sum of magnitudes, ignoring sign cancellation), so minimizing it is a proxy, not the true output error. Evaluation stays within Ruler/LongBench-style long-context retrieval on ~7–8B models; whether the value-state insight transfers to generation-heavy tasks, much larger models, or GQA/MLA attention is untested here.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 수치 "절반 이상"은 이미 작은 압축 손실의 <em>상대적</em> 감소이며 평균값이라, 이득이 적거나 음(-)인 데이터셋을 가릴 수 있다. 최악 L1 섭동 상한은 느슨하고(부호 상쇄를 무시한 크기 합), 그것의 최소화는 진짜 출력 오차가 아닌 대리 지표다. 평가는 ~7–8B 모델의 Ruler/LongBench류 장문 검색에 머무르며, value 상태 통찰이 생성 중심 과제·훨씬 큰 모델·GQA/MLA attention로 이전되는지는 여기서 검증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2502.03805">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2502.03805">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2502.03805">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2502.03805">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · ICML 2026 (Poster) · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 · ICML 2026 (Poster) · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

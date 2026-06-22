@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Learning Latent Action World Models In The Wild</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · Latent Action</span><span class="t-ko">🌍 World Model · Latent Action</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Learning Latent Action World Models In The Wild<br><span class="glow t-en">— Discover actions from unlabeled internet video, then steer with them</span><span class="glow t-ko">— 라벨 없는 인터넷 영상에서 '행동'을 발견하고, 그것으로 조종하다</span></h1>
+    <div class="meta">
+      <span>👥 <b>Quentin Garrido</b> <span class="t-en">et al.</span><span class="t-ko">외 5인</span></span>
+      <span>🏛 Meta AI (FAIR)</span>
+      <span>🗓 2026.01.08</span>
+      <span>📄 <a href="https://arxiv.org/abs/2601.05230">arXiv:2601.05230</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Most world models need <b>action labels</b>, which only exist for narrow, curated datasets. This paper trains a world model + inverse-dynamics model jointly on <b>uncurated YouTube-scale video</b> (atop a frozen V-JEPA 2 encoder) so that <span class="hl">a continuous latent action space emerges with no labels at all</span>. The learned actions are <b>camera-relative, transferable across videos</b>, and a tiny controller maps real robot/navigation commands onto them — reaching planning quality <b>comparable to action-supervised baselines</b> like V-JEPA 2-AC on DROID and RECON.</p>
+    <p class="t-ko">대부분의 월드 모델은 <b>행동 라벨</b>을 필요로 하며, 그런 라벨은 좁고 정제된 데이터셋에만 존재한다. 이 논문은 (고정된 V-JEPA 2 인코더 위에서) 월드 모델과 역동역학 모델을 <b>정제되지 않은 유튜브 규모의 영상</b>으로 동시 학습해, <span class="hl">라벨 없이도 연속적인 잠재 행동 공간이 스스로 떠오르게 한다</span>. 학습된 행동은 <b>카메라 상대적이고 영상 간 전이 가능</b>하며, 작은 컨트롤러가 실제 로봇·내비게이션 명령을 그 위에 매핑한다 — DROID·RECON에서 V-JEPA 2-AC 같은 <b>행동 지도학습 기준선에 필적</b>하는 계획 성능 달성.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The bottleneck for world models is not video — it is the action labels that video almost never comes with.</p>
+    <p class="lead t-ko">월드 모델의 병목은 영상이 아니라, 영상에 거의 따라오지 않는 '행동 라벨'이다.</p>
+    <p class="t-en">Action-conditioned world models (DreamerV3 and kin) predict the future given a <strong>known</strong> action — but the internet's vast video archive is unlabeled, multi-embodiment, and noisy. Prior latent-action models sidestepped labels only inside toy sims, games, or curated robot data, yielding actions tied to a single embodiment. This work asks: can a usable action space be <strong>discovered directly from in-the-wild video</strong>? Doing so turns the entire web of human activity into training signal and points toward a <strong>universal action interface</strong> that any embodiment can plug into.</p>
+    <p class="t-ko">행동 조건부 월드 모델(DreamerV3 계열)은 <strong>알려진</strong> 행동을 입력받아 미래를 예측하지만, 인터넷의 방대한 영상은 라벨이 없고 다중 임베디먼트이며 잡음이 많다. 기존 잠재 행동 모델은 장난감 시뮬레이션·게임·정제된 로봇 데이터 안에서만 라벨을 우회했고, 그 결과 행동이 단일 임베디먼트에 묶였다. 이 연구는 묻는다 — 쓸 만한 행동 공간을 <strong>야생의 영상에서 곧바로 발견</strong>할 수 있는가? 그렇게 하면 인류 활동의 웹 전체가 학습 신호가 되고, 어떤 임베디먼트든 꽂을 수 있는 <strong>보편적 행동 인터페이스</strong>로 향하게 된다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">1B</div><div class="l"><span class="t-en">In-the-wild clips<br>(YouTubeTemporal-1B)</span><span class="t-ko">야생 영상 클립<br>(YouTubeTemporal-1B)</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">Action labels used<br>during pretraining</span><span class="t-ko">사전학습에 쓴<br>행동 라벨</span></div></div>
+      <div class="stat"><div class="n">128-d</div><div class="l"><span class="t-en">Continuous latent<br>action vector</span><span class="t-ko">연속 잠재<br>행동 벡터</span></div></div>
+      <div class="stat"><div class="n">&gt;2×</div><div class="l"><span class="t-en">Error spike on scene cut<br>(no future leakage)</span><span class="t-ko">장면 전환 시 오차 급증<br>(미래 누설 없음)</span></div></div>
+      <div class="stat"><div class="n">64</div><div class="l"><span class="t-en">H100 GPUs<br>· 16-frame clips @4fps</span><span class="t-ko">H100 GPU<br>· 16프레임 클립 @4fps</span></div></div>
+      <div class="stat"><div class="n">2</div><div class="l"><span class="t-en">Control domains transferred<br>(DROID · RECON)</span><span class="t-ko">전이된 제어 도메인<br>(DROID · RECON)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — label-free, yet competitive</span><span class="t-ko">결과 — 라벨 없이도 경쟁력</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table excerpt.</b> Qualitative comparison of latent-action regularizers and downstream planning. ↑ = better captures rich in-the-wild dynamics / planning.</caption>
+        <caption class="t-ko"><b>표 발췌.</b> 잠재 행동 정규화 기법과 다운스트림 계획의 정성 비교. ↑ = 풍부한 야생 동역학·계획을 더 잘 포착.</caption>
+        <thead><tr><th>Aspect</th><th>Discrete (VQ)</th><th>Continuous</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>Tunable capacity</td><td>limited</td><td>wide</td><td class="up">↑</td></tr>
+          <tr><td>Rich-action capture</td><td>weak</td><td>strong</td><td class="up">↑</td></tr>
+          <tr><td>Cross-video transfer</td><td>partial</td><td>good</td><td class="up">↑</td></tr>
+          <tr><td>Future leakage</td><td>none</td><td>none</td><td>—</td></tr>
+          <tr><td>Best planning regularizer</td><td>—</td><td>noise (VAE-like)</td><td class="up">↑</td></tr>
+          <tr><td>DROID vs V-JEPA 2-AC</td><td>—</td><td>comparable</td><td class="up">≈</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">In-the-wild video</span><span class="t-ko">야생 영상</span></div>
+          <div class="sub"><span class="t-en">frozen V-JEPA 2 → states</span><span class="t-ko">고정 V-JEPA 2 → 상태</span></div>
+          <div class="latent"><span class="t-en">unlabeled · noisy</span><span class="t-ko">라벨 없음 · 잡음</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">IDM + World Model</span><span class="t-ko">IDM + 월드 모델</span></div>
+          <div class="sub"><span class="t-en">infer latent action zₜ</span><span class="t-ko">잠재 행동 zₜ 추론</span></div>
+          <div class="latent"><span class="t-en">128-d · regularized</span><span class="t-ko">128차원 · 정규화</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Plan / control</span><span class="t-ko">계획 · 제어</span></div>
+          <div class="sub"><span class="t-en">tiny controller maps real actions</span><span class="t-ko">작은 컨트롤러가 실제 행동 매핑</span></div>
+          <div class="latent"><span class="t-en">DROID · RECON via CEM</span><span class="t-ko">CEM로 DROID · RECON</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Discover, then reuse</b> — actions are learned with no labels from raw video, then a lightweight adapter binds them to a specific embodiment for goal-based planning.</div>
+      <div class="cap t-ko"><b>발견하고, 재사용한다</b> — 행동은 원시 영상에서 라벨 없이 학습되고, 가벼운 어댑터가 그것을 특정 임베디먼트에 묶어 목표 기반 계획에 쓴다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: regulate how much an action is "allowed to know"</span><span class="t-ko">아이디어: 행동이 '알아도 되는 양'을 조절</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 누설 방지</span>
+        <h3><span class="t-en">Information-limited latent actions</span><span class="t-ko">정보 제한 잠재 행동</span></h3>
+        <p class="t-en">The IDM peeks at the future to infer <span class="term">zₜ</span>, so it could cheat by copying the next frame. The paper compares three brakes — <span class="term">sparsity (L1 + VICReg-style VCM)</span>, <span class="term">noise (VAE-like KL)</span>, and <span class="term">vector quantization</span> — to force zₜ to hold only minimal, action-relevant information.</p>
+        <p class="t-ko">IDM은 미래를 엿보며 <span class="term">zₜ</span>를 추론하므로 다음 프레임을 베껴 '치팅'할 수 있다. 논문은 세 가지 제동을 비교한다 — <span class="term">희소성(L1 + VICReg식 VCM)</span>, <span class="term">잡음(VAE식 KL)</span>, <span class="term">벡터 양자화</span> — zₜ가 최소한의 행동 관련 정보만 담도록 강제한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 연속 &gt; 이산</span>
+        <h3><span class="t-en">Continuous wins; noise plans best</span><span class="t-ko">연속이 우세, 잡음이 최고 계획</span></h3>
+        <p class="t-en">Continuous actions (sparsity or noise) scale capacity smoothly and capture rich events; VQ stays near a deterministic model and misses nuance. Crucially, planning quality is <strong>non-monotonic</strong> in capacity — a <strong>balanced, noisy</strong> action regularizer works best, not the most expressive one.</p>
+        <p class="t-ko">연속 행동(희소성·잡음)은 용량을 매끄럽게 키우며 풍부한 사건을 포착하지만, VQ는 결정론적 모델에 머물며 뉘앙스를 놓친다. 결정적으로 계획 품질은 용량에 대해 <strong>단조롭지 않다</strong> — 가장 표현력 큰 것이 아니라 <strong>균형 잡힌 잡음형</strong> 정규화가 최고다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Freeze the encoder</span><span class="t-ko">인코더 고정</span></b><span class="t-en">Map each frame through a frozen V-JEPA 2-L encoder into a latent visual state sₜ, so the new models only have to learn dynamics, not pixels.</span><span class="t-ko">각 프레임을 고정된 V-JEPA 2-L 인코더로 잠재 시각 상태 sₜ로 변환 — 새 모델은 픽셀이 아닌 동역학만 학습하면 된다.</span></li>
+      <li><b><span class="t-en">Infer + predict jointly</span><span class="t-ko">추론·예측 동시</span></b><span class="t-en">An IDM reads (sₜ, sₜ₊₁) to infer latent action zₜ; a ViT-L world model conditioned via AdaLN-zero predicts sₜ₊₁ from past states + zₜ, trained with an L1 reconstruction loss.</span><span class="t-ko">IDM이 (sₜ, sₜ₊₁)을 읽어 잠재 행동 zₜ를 추론하고, AdaLN-zero로 조건화된 ViT-L 월드 모델이 과거 상태 + zₜ에서 sₜ₊₁을 예측 — L1 복원 손실로 학습.</span></li>
+      <li><b><span class="t-en">Regularize the action</span><span class="t-ko">행동 정규화</span></b><span class="t-en">Apply sparsity, noise, or VQ to cap zₜ's information. A scene-cut leakage test confirms error more than doubles — actions encode change, not the whole next frame.</span><span class="t-ko">희소성·잡음·VQ로 zₜ의 정보를 제한. 장면 전환 누설 테스트에서 오차가 2배 넘게 뛰어 — 행동이 다음 프레임 전체가 아니라 '변화'를 담음을 확인.</span></li>
+      <li><b><span class="t-en">Bind to control & plan</span><span class="t-ko">제어 연결 후 계획</span></b><span class="t-en">Train a lightweight MLP/cross-attention controller to map known robot/nav actions to latent zₜ, then plan with CEM toward goal states on DROID and RECON.</span><span class="t-ko">가벼운 MLP/교차어텐션 컨트롤러로 알려진 로봇·내비 행동을 잠재 zₜ에 매핑하고, DROID·RECON에서 CEM으로 목표 상태를 향해 계획.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🌐</span><p class="t-en"><strong>Labels are optional now.</strong> A usable action space can be mined from raw internet video — the action-label bottleneck for world models is no longer fundamental.</p><p class="t-ko"><strong>라벨은 이제 선택사항.</strong> 쓸 만한 행동 공간을 원시 인터넷 영상에서 캐낼 수 있다 — 월드 모델의 행동 라벨 병목은 더 이상 본질적이지 않다.</p></div>
+      <div class="t"><span class="ic">📷</span><p class="t-en"><strong>Camera-relative actions.</strong> With no shared embodiment, actions become spatially-localized camera-relative transforms — enabling wild transfers (human motion onto a flying ball).</p><p class="t-ko"><strong>카메라 상대 행동.</strong> 공통 임베디먼트가 없으니 행동이 공간적으로 국소화된 카메라 상대 변환이 된다 — 엉뚱한 전이(사람의 동작을 날아가는 공으로)가 가능.</p></div>
+      <div class="t"><span class="ic">🔌</span><p class="t-en"><strong>Universal interface.</strong> One web-trained world model + a per-embodiment adapter reaches V-JEPA 2-AC-level planning without domain action labels.</p><p class="t-ko"><strong>보편 인터페이스.</strong> 웹으로 학습한 월드 모델 하나 + 임베디먼트별 어댑터로, 도메인 행동 라벨 없이 V-JEPA 2-AC 수준의 계획 도달.</p></div>
+      <div class="t"><span class="ic">⚖️</span><p class="t-en"><strong>Balance beats expressiveness.</strong> Best planning comes from a middle-capacity, noisy action — more information is not better.</p><p class="t-ko"><strong>균형이 표현력을 이긴다.</strong> 최고의 계획은 중간 용량의 잡음형 행동에서 나온다 — 정보가 많다고 좋은 게 아니다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> "Comparable to action-supervised baselines" rests on two control suites (DROID, RECON) and qualitative video inspection, not a broad quantitative leaderboard. The camera-relative nature of the actions is a clever finding but also a limitation — it can entangle ego-motion with object motion, and the authors themselves flag that a fixed regularization coefficient is suboptimal (ideal capacity varies per video). Planning directly in this high-dim continuous space remains unsolved.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> "행동 지도학습 기준선에 필적"이라는 주장은 폭넓은 정량 리더보드가 아니라 두 제어 스위트(DROID·RECON)와 정성적 영상 검토에 기댄다. 행동의 카메라 상대성은 영리한 발견인 동시에 한계 — 자기운동과 물체운동을 뒤엉키게 할 수 있고, 저자들 스스로 고정 정규화 계수가 차선이라고(영상마다 이상적 용량이 다름) 짚는다. 이 고차원 연속 공간에서의 직접 계획은 여전히 미해결.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2601.05230">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2601.05230">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2601.05230">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2601.05230">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist · ICML 2026 (Poster) · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 · ICML 2026 (Poster) · Shared / Multi-Agent World Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
