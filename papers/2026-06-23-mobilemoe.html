@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · MobileMoE: Scaling On-Device Mixture of Experts</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · On-Device MoE</span><span class="t-ko">Model Compression · On-Device MoE</span></span>
+      <span>2026 · 06 · 23</span>
+    </div>
+    <h1>MobileMoE: Scaling On-Device Mixture of Experts<br><span class="glow t-en">— Bring sparse experts to your phone: more capacity, less compute</span><span class="glow t-ko">— 희소 전문가를 휴대폰으로: 용량은 키우고 연산은 줄이고</span></h1>
+    <div class="meta">
+      <span>👥 <b>Yanbei Chen</b> <span class="t-en">et al.</span><span class="t-ko">외 7인</span></span>
+      <span>🏛 Meta AI</span>
+      <span>🗓 2026.05.27</span>
+      <span>📄 <a href="https://arxiv.org/abs/2605.27358">arXiv:2605.27358</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">On-device LLMs are still almost all <b>dense</b>; nobody had scaled <b>Mixture-of-Experts (MoE)</b> down to the sub-billion-active regime where phones operate. MobileMoE derives an <span class="hl">on-device MoE scaling law</span> that jointly respects mobile memory and compute, lands on a sweet spot (<b>moderate sparsity + fine-grained + shared experts</b>), and trains a S/M/L family (0.3–0.9B active, 1.3–5.3B total). Across 14 benchmarks it matches or beats dense baselines at <b>2–4× fewer inference FLOPs</b>, and the smallest model runs <b>1.8–3.8× faster prefill / 2.2–3.4× faster decode</b> than the dense MobileLLM-Pro on real phones.</p>
+    <p class="t-ko">온디바이스 LLM은 아직 거의 다 <b>dense</b>이고, 휴대폰이 동작하는 <b>sub-billion active</b> 영역으로 <b>Mixture-of-Experts(MoE)</b>를 내려본 사례가 없었다. MobileMoE는 모바일 메모리·연산을 동시에 고려한 <span class="hl">온디바이스 MoE 스케일링 법칙</span>을 세워, 최적점(<b>적당한 희소성 + 세분화 + 공유 전문가</b>)을 찾고 S/M/L 패밀리(active 0.3–0.9B, total 1.3–5.3B)를 학습한다. 14개 벤치마크에서 dense 베이스라인을 <b>추론 FLOPs 2–4× 적게</b> 쓰고도 동등·상회하며, 가장 작은 모델은 실기기에서 dense MobileLLM-Pro 대비 <b>prefill 1.8–3.8× / decode 2.2–3.4× 빠르다</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">MoE rules the data center but never reached the phone — because nobody asked what "optimal" means under a 3–5 GB DRAM budget.</p>
+    <p class="lead t-ko">MoE는 데이터센터를 지배하지만 휴대폰엔 도달하지 못했다 — 3–5 GB DRAM 예산 아래에서 '최적'이 무엇인지 아무도 묻지 않았기 때문이다.</p>
+    <p class="t-en">Server scaling laws optimize for total parameters or training compute, where huge memory footprints are fine and inference is parallelized across GPUs. On a phone the constraints flip: <strong>active parameters govern latency and battery, total parameters govern whether the model even fits in RAM</strong>. MobileMoE reframes MoE design as a <strong>joint memory-and-compute optimization</strong> for the edge, then proves it works end-to-end — from a scaling law, through a four-stage training recipe, all the way to a custom fused MoE kernel running on a Galaxy S25 and iPhone 16 Pro. It is the first sub-billion-active MoE family actually deployed on commodity smartphones.</p>
+    <p class="t-ko">서버용 스케일링 법칙은 total parameter나 학습 연산을 최적화한다 — 거대한 메모리 사용량도 괜찮고 추론은 여러 GPU로 병렬화되기 때문이다. 휴대폰에선 제약이 뒤집힌다. <strong>active parameter가 지연·배터리를, total parameter가 모델이 RAM에 들어가는지를 좌우한다</strong>. MobileMoE는 MoE 설계를 엣지를 위한 <strong>메모리·연산 동시 최적화 문제</strong>로 재정의하고, 스케일링 법칙 → 4단계 학습 레시피 → Galaxy S25·iPhone 16 Pro에서 도는 커스텀 fused MoE 커널까지 전 과정을 입증한다. 상용 스마트폰에 실제로 배포된 최초의 sub-billion-active MoE 패밀리다.</p>
+    <figure class="fig">
+      <img src="fig/2605.27358/fig1.png" alt="MobileMoE Pareto frontier: average accuracy vs per-token inference compute">
+      <figcaption class="t-en"><b>Figure 1.</b> MobileMoE establishes a new Pareto frontier for on-device LLMs: average accuracy over 14 benchmarks vs. per-token inference compute (F_inf = 2·N_act, GFLOPs). MobileMoE-S/M/L sit above prior dense and MoE baselines (Gemma 3, Qwen3.5, Llama 3.2, SmolLM2, MobileLLM-Pro, OLMoE), delivering higher accuracy at lower inference cost.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> MobileMoE는 온디바이스 LLM의 새로운 파레토 경계를 제시한다. 14개 벤치마크 평균 정확도를 토큰당 추론 연산량(F_inf = 2·N_act, GFLOPs) 대비 도식화했다. MobileMoE-S/M/L은 기존 dense 및 MoE 베이스라인(Gemma 3, Qwen3.5, Llama 3.2, SmolLM2, MobileLLM-Pro, OLMoE)을 상회하여 더 낮은 추론 비용에서 더 높은 정확도를 달성한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2605.27358</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">59.8</div><div class="l"><span class="t-en">MobileMoE-L Base avg over<br>14 benchmarks (%)</span><span class="t-ko">MobileMoE-L Base<br>14개 평균 정확도(%)</span></div></div>
+      <div class="stat"><div class="n">+7.4</div><div class="l"><span class="t-en">vs OLMoE-1B-7B<br>at 30% fewer active params</span><span class="t-ko">OLMoE-1B-7B 대비<br>active 30%↓에도 우위</span></div></div>
+      <div class="stat"><div class="n">2–4×</div><div class="l"><span class="t-en">Fewer inference FLOPs<br>vs dense baselines</span><span class="t-ko">dense 대비<br>추론 FLOPs 절감</span></div></div>
+      <div class="stat"><div class="n">1.8–3.8×</div><div class="l"><span class="t-en">MobileMoE-S prefill speedup<br>vs MobileLLM-Pro</span><span class="t-ko">MobileMoE-S prefill 가속<br>vs MobileLLM-Pro</span></div></div>
+      <div class="stat"><div class="n">~6T</div><div class="l"><span class="t-en">Pre-training tokens<br>(vs 9–11T for dense)</span><span class="t-ko">사전학습 토큰<br>(dense는 9–11T)</span></div></div>
+      <div class="stat"><div class="n">2.75 GB</div><div class="l"><span class="t-en">MobileMoE-L INT4 weights<br>(&lt;5 GB peak RSS at 8k)</span><span class="t-ko">MobileMoE-L INT4 가중치<br>(8k에서 peak RSS &lt;5 GB)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — base models on 14 foundational benchmarks</span><span class="t-ko">결과 — 14개 기초 벤치마크 base 모델</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 excerpt.</b> Base-model average accuracy (%) over 14 benchmarks. N_act / N_total in parameters. MobileMoE matches or beats far larger models at fewer active params.</caption>
+        <caption class="t-ko"><b>Table 2 발췌.</b> 14개 벤치마크 평균 정확도(%). N_act / N_total는 파라미터 수. MobileMoE는 더 적은 active로 훨씬 큰 모델을 동등·상회한다.</caption>
+        <thead><tr><th>Model</th><th>N_act / N_total</th><th>Avg (%)</th><th>vs MobileMoE</th></tr></thead>
+        <tbody>
+          <tr><td>Gemma 3 270M</td><td>270M</td><td>33.5</td><td class="up">S +13.0</td></tr>
+          <tr><td>MobileMoE-S</td><td>272M / 1.3B</td><td>46.5</td><td>—</td></tr>
+          <tr><td>Qwen3.5 2B</td><td>1.9B</td><td>53.3</td><td class="up">M +2.1</td></tr>
+          <tr><td>MobileMoE-M</td><td>528M / 2.8B</td><td>55.4</td><td>—</td></tr>
+          <tr><td>OLMoE-1B-7B</td><td>1.3B / 6.9B</td><td>52.4</td><td class="up">L +7.4</td></tr>
+          <tr><td>MobileMoE-L</td><td>922M / 5.3B</td><td>59.8</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Scaling law</span><span class="t-ko">스케일링 법칙</span></div>
+          <div class="sub"><span class="t-en">joint memory + compute</span><span class="t-ko">메모리+연산 동시</span></div>
+          <div class="latent">E=8 · g=8 · s=✓</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">4-stage recipe</span><span class="t-ko">4단계 레시피</span></div>
+          <div class="sub"><span class="t-en">PT → MT → SFT → QAT</span><span class="t-ko">PT → MT → SFT → QAT</span></div>
+          <div class="latent"><span class="t-en">~6T tokens · INT4</span><span class="t-ko">~6T 토큰 · INT4</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">On device</span><span class="t-ko">온디바이스</span></div>
+          <div class="sub"><span class="t-en">fused MoE kernel</span><span class="t-ko">fused MoE 커널</span></div>
+          <div class="latent"><span class="t-en">S25 · iPhone 16 Pro</span><span class="t-ko">S25 · iPhone 16 Pro</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>From law to phone</b> — the on-device scaling law picks 60 fine-grained routed experts (top-4) plus one shared expert, then the four-stage recipe and a custom kernel turn FLOP savings into real prefill/decode speedups.</div>
+      <div class="cap t-ko"><b>법칙에서 휴대폰까지</b> — 온디바이스 스케일링 법칙이 60개 세분화 routed 전문가(top-4) + 공유 전문가 1개를 고르고, 4단계 레시피와 커스텀 커널이 FLOP 절감을 실제 prefill/decode 가속으로 바꾼다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The on-device sweet spot</span><span class="t-ko">온디바이스 최적점</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 아키텍처 법칙</span>
+        <h3>On-Device MoE Scaling Law</h3>
+        <p class="t-en">A generalized scaling law (Eq. 1) ties loss to active params, data, a transformed expert count, granularity g, and a shared-expert flag — minimized under <span class="term">F_inf = 2·N_act</span> and a memory cap (4-bit weights, 8-bit KV). A divide-and-conquer sweep yields three findings: <strong>E=8</strong> is the memory/compute sweet spot, <strong>g=8</strong> fine-grained experts win with diminishing returns past 8, and a <strong>shared expert</strong> lowers loss at fixed FLOPs.</p>
+        <p class="t-ko">일반화된 스케일링 법칙(식 1)은 loss를 active params·데이터·변환된 전문가 수·세분화 g·공유 전문가 플래그에 연결하고, <span class="term">F_inf = 2·N_act</span>와 메모리 상한(4-bit 가중치, 8-bit KV) 아래에서 최소화한다. 분할정복 스윕으로 세 가지를 찾았다. <strong>E=8</strong>이 메모리/연산 최적점, <strong>g=8</strong> 세분화가 유리(8 이상은 수익체감), <strong>공유 전문가</strong>가 동일 FLOPs에서 loss를 낮춘다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 4단계 학습</span>
+        <h3>PT → MT → SFT → INT4 QAT</h3>
+        <p class="t-en">Pre-train (~6T tokens, 2K ctx), mid-train (~500B, 8K ctx, curated knowledge/code/math), instruction SFT (~126B, dropless dispatch), then <span class="term">INT4 quantization-aware training</span> (group-32 weights, INT8 activations, FP32 router). Each stage has a clear job: <strong>PT</strong> sets commonsense, <strong>MT</strong> drives knowledge/reading, <strong>SFT</strong> unlocks reasoning (GSM8K +21.9 for L), <strong>QAT</strong> shrinks weights 4× with a 2–3 pt drop.</p>
+        <p class="t-ko">사전학습(~6T, 2K ctx), 중간학습(~500B, 8K ctx, 선별 지식/코드/수학), 명령 SFT(~126B, dropless 디스패치), 그리고 <span class="term">INT4 양자화 인지 학습</span>(group-32 가중치, INT8 활성, FP32 라우터). 단계별 역할이 분명하다. <strong>PT</strong>는 상식, <strong>MT</strong>는 지식/독해, <strong>SFT</strong>는 추론(L에서 GSM8K +21.9), <strong>QAT</strong>는 가중치를 4× 줄이며 2–3pt만 손실.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Define the design space</span><span class="t-ko">설계 공간 정의</span></b><span class="t-en">Within a decoder-only transformer, parameterize MoE by sparsity (experts E, active k), granularity g, and a shared expert s, on a common deep-and-thin on-device backbone.</span><span class="t-ko">decoder-only 트랜스포머에서 MoE를 희소성(전문가 E, active k)·세분화 g·공유 전문가 s로 매개변수화하고, 공통 deep-and-thin 온디바이스 백본 위에 둔다.</span></li>
+      <li><b><span class="t-en">Fit the scaling law &amp; sweep</span><span class="t-ko">스케일링 법칙 적합·스윕</span></b><span class="t-en">Run controlled ablations (E∈{1..32}, g∈{1..16}, s∈{✓,×}) on 500B tokens each, fit Eq. 1, and read off E=8, g=8, shared-expert as memory- and compute-optimal.</span><span class="t-ko">제어된 ablation(E∈{1..32}, g∈{1..16}, s∈{✓,×})을 각 500B 토큰으로 돌려 식 1을 적합, E=8·g=8·공유 전문가가 메모리·연산 최적임을 읽어낸다.</span></li>
+      <li><b><span class="t-en">Train S/M/L with four stages</span><span class="t-ko">S/M/L 4단계 학습</span></b><span class="t-en">Apply MoE(E=8, g=8, s=✓) at 0.3/0.5/0.9B active and run PT→MT→SFT→QAT with MoE-specific tricks (aux-loss-free balancing, grouped MLP, EP=4, FP32 router).</span><span class="t-ko">MoE(E=8, g=8, s=✓)를 active 0.3/0.5/0.9B에 적용해 PT→MT→SFT→QAT를 MoE 전용 기법(aux-loss-free 밸런싱, grouped MLP, EP=4, FP32 라우터)으로 학습.</span></li>
+      <li><b><span class="t-en">Deploy with a fused kernel</span><span class="t-ko">fused 커널로 배포</span></b><span class="t-en">Build a custom fused MoE kernel in ExecuTorch (mmap only activated experts), profile on Galaxy S25 &amp; iPhone 16 Pro with real prompts — turning FLOP/bandwidth savings into measured speedups.</span><span class="t-ko">ExecuTorch에 커스텀 fused MoE 커널(활성 전문가만 mmap)을 만들고, 실제 프롬프트로 Galaxy S25·iPhone 16 Pro에서 프로파일 — FLOP/대역폭 절감을 실측 가속으로 전환.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>MoE finally fits in your pocket.</strong> Sub-billion-active MoE beats dense on-device LLMs at 2–4× fewer inference FLOPs, with the smallest model 1.8–3.8× faster prefill on real phones.</p><p class="t-ko"><strong>MoE가 드디어 주머니에 들어간다.</strong> sub-billion-active MoE가 추론 FLOPs 2–4× 적게 쓰고 dense를 능가하며, 최소 모델은 실기기 prefill 1.8–3.8× 빠르다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>The constraint flips on the edge.</strong> Active params drive latency, total params drive fit — the scaling law optimizes both jointly instead of borrowing server heuristics.</p><p class="t-ko"><strong>엣지에선 제약이 뒤집힌다.</strong> active는 지연을, total은 적재 가능성을 좌우 — 서버 휴리스틱을 빌리지 않고 둘을 함께 최적화한다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Token-efficient MoE.</strong> ~6T pre-training tokens beat dense models trained on 9–11T, validating MoE's learning efficiency even at sub-billion active scale.</p><p class="t-ko"><strong>토큰 효율적 MoE.</strong> ~6T 사전학습으로 9–11T로 학습한 dense를 능가 — sub-billion active에서도 MoE 학습 효율을 입증.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Profiling must use real prompts.</strong> MoE peak RAM rises 1.2–2.1× under real prompts (diverse expert routing) vs dummy ones — dummy profiling badly undercounts.</p><p class="t-ko"><strong>프로파일은 실제 프롬프트로.</strong> MoE peak RAM은 실제 프롬프트(다양한 전문가 라우팅)에서 dummy 대비 1.2–2.1× 상승 — dummy는 메모리를 크게 과소평가.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The win is real but uneven. MobileMoE-M/L pay a steep memory tax for accuracy — Peak RSS runs up to 2.2–4.1× MobileLLM-Pro at short context, and MobileMoE-L's prefill is actually 0.4–0.9× (slower) than the dense baseline. On reasoning and instruction-following, Qwen3.5 2B still leads, which the authors attribute to its richer post-training (distillation, thinking). So MoE's edge is concentrated in knowledge/reading/code, not a free lunch everywhere.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이득은 분명하지만 고르지 않다. MobileMoE-M/L은 정확도를 위해 메모리 비용을 크게 치른다 — Peak RSS가 짧은 컨텍스트에서 MobileLLM-Pro의 2.2–4.1×에 달하고, MobileMoE-L의 prefill은 dense 대비 0.4–0.9×로 오히려 느리다. 추론·명령수행에선 여전히 Qwen3.5 2B가 앞서며, 저자들은 이를 더 풍부한 post-training(distillation, thinking) 덕으로 본다. 즉 MoE의 우위는 지식/독해/코드에 집중돼 있고 모든 곳의 공짜 점심은 아니다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2605.27358">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2605.27358">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2605.27358">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2605.27358">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Selected · Model Compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-23.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Selected · Model Compression</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-23.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

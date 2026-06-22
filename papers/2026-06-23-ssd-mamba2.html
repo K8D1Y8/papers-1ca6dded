@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Efficient Seq · SSD / Mamba-2</span><span class="t-ko">Efficient Seq · SSD / Mamba-2</span></span>
+      <span>2026 · 06 · 23</span>
+    </div>
+    <h1>Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality<br><span class="glow t-en">— Attention and SSMs are two views of one structured matrix</span><span class="glow t-ko">— 어텐션과 SSM은 하나의 구조화 행렬을 보는 두 시선이다</span></h1>
+    <div class="meta">
+      <span>👥 <b>Tri Dao</b> <span class="t-en">&amp; Albert Gu</span><span class="t-ko">· Albert Gu</span></span>
+      <span>🏛 Princeton · CMU</span>
+      <span>🗓 2024.05.31</span>
+      <span>📄 <a href="https://arxiv.org/abs/2405.21060">arXiv:2405.21060</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Transformers and state-space models (Mamba) look like rivals, but this paper proves they are <span class="hl">duals of the same structured matrix</span>: SSMs are <b>semiseparable matrices</b>, attention is <b>structured masked attention (SMA)</b>, and they meet at <b>state space duality (SSD)</b>. Exploiting this, the new <b>SSD algorithm</b> is <b>2–8× faster</b> than Mamba's selective scan, supports <b>8× larger states</b>, and yields the <b>Mamba-2</b> architecture, whose 2.7B model beats Mamba-2.8B and even Pythia-6.9B.</p>
+    <p class="t-ko">트랜스포머와 상태공간모델(Mamba)은 경쟁자처럼 보이지만, 이 논문은 둘이 <span class="hl">같은 구조화 행렬의 이중성(dual)</span>임을 증명한다: SSM은 <b>준분리(semiseparable) 행렬</b>, 어텐션은 <b>구조화 마스크 어텐션(SMA)</b>이며, 둘은 <b>상태공간 이중성(SSD)</b>에서 만난다. 이를 활용한 새 <b>SSD 알고리즘</b>은 Mamba의 selective scan보다 <b>2~8배 빠르고</b>, <b>8배 큰 상태</b>를 지원하며, <b>Mamba-2</b> 구조를 낳는다 — 2.7B 모델이 Mamba-2.8B는 물론 Pythia-6.9B까지 능가한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">If attention and SSMs are the same math, every optimization built for Transformers can be transferred to SSMs.</p>
+    <p class="lead t-ko">어텐션과 SSM이 같은 수학이라면, 트랜스포머를 위해 쌓아온 모든 최적화를 SSM으로 그대로 옮길 수 있다.</p>
+    <p class="t-en">SSMs (S4, Mamba) scale linearly in sequence length and keep a constant-size state during generation, but their development has been <strong>disjoint from the Transformer ecosystem</strong> — harder to understand theoretically and harder to make hardware-efficient. By showing both families are decompositions of <strong>structured semiseparable matrices</strong>, this work imports attention's algorithmic and systems toolkit (matmul-heavy kernels, tensor/sequence parallelism, variable-length batching) into SSMs, and exposes a new algorithm that is both linear-time like an SSM and matmul-friendly like attention.</p>
+    <p class="t-ko">SSM(S4, Mamba)은 시퀀스 길이에 선형으로 확장되고 생성 시 상태 크기가 일정하지만, 그 발전은 <strong>트랜스포머 생태계와 단절</strong>돼 있었다 — 이론적 이해도, 하드웨어 효율화도 더 어려웠다. 이 논문은 두 계열이 모두 <strong>구조화 준분리 행렬</strong>의 분해임을 보여, 어텐션의 알고리즘·시스템 도구(행렬곱 중심 커널, 텐서/시퀀스 병렬화, 가변 길이 배칭)를 SSM으로 들여오고, SSM처럼 선형이면서 어텐션처럼 행렬곱 친화적인 새 알고리즘을 끌어낸다.</p>
+    <figure class="fig">
+      <img src="fig/2405.21060/fig1.png" alt="Structured State-Space Duality framework diagram connecting SSMs, attention, and structured matrices">
+      <figcaption class="t-en"><b>Figure 1.</b> Structured State-Space Duality (SSD). The framework connects state space models (SSMs) and attention through the shared abstraction of structured matrices: SSMs correspond to semiseparable matrices (Sec. 3) and attention corresponds to structured masked attention/SMA (Sec. 4), with the two views linked by state space duality (Sec. 5). Structured matrices enable efficient algorithms (Sec. 6), and the duality yields the Mamba-2 architecture (Sec. 7).</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 구조화 상태공간 이중성(SSD). 이 프레임워크는 상태공간모델(SSM)과 어텐션을 '구조화 행렬'이라는 공통 추상화로 연결한다. SSM은 준분리(semiseparable) 행렬에 대응하고(3절), 어텐션은 구조화 마스크 어텐션(SMA)에 대응하며(4절), 두 관점은 상태공간 이중성으로 이어진다(5절). 구조화 행렬은 효율적 알고리즘을 가능하게 하고(6절), 이중성으로부터 Mamba-2 구조가 도출된다(7절).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2405.21060</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">2–8×</div><div class="l"><span class="t-en">SSD speedup over<br>Mamba's selective scan</span><span class="t-ko">SSD가 Mamba<br>selective scan 대비</span></div></div>
+      <div class="stat"><div class="n">8×</div><div class="l"><span class="t-en">Larger recurrent state<br>vs. Mamba (or more)</span><span class="t-ko">Mamba 대비 더 큰<br>순환 상태 (이상)</span></div></div>
+      <div class="stat"><div class="n">6×</div><div class="l"><span class="t-en">Faster than FlashAttention-2<br>at sequence length 16K</span><span class="t-ko">시퀀스 길이 16K에서<br>FlashAttn-2 대비</span></div></div>
+      <div class="stat"><div class="n">2K</div><div class="l"><span class="t-en">Seq length where SSD<br>crosses over attention</span><span class="t-ko">SSD가 어텐션을<br>역전하는 시퀀스 길이</span></div></div>
+      <div class="stat"><div class="n">6.09</div><div class="l"><span class="t-en">Mamba-2-2.7B Pile ppl<br>(vs Mamba-2.8B 6.22)</span><span class="t-ko">Mamba-2-2.7B Pile ppl<br>(vs Mamba-2.8B 6.22)</span></div></div>
+      <div class="stat"><div class="n">300B</div><div class="l"><span class="t-en">Pile training tokens<br>· Mamba-2 family</span><span class="t-ko">Pile 학습 토큰<br>· Mamba-2 계열</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — Mamba-2 matches Pythia at twice its size</span><span class="t-ko">결과 — Mamba-2는 2배 크기의 Pythia를 따라잡는다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Zero-shot evals (NeoX tokenizer, 300B Pile tokens). Pile ppl ↓ better; accuracy ↑ better. Δ = (Mamba-2 − prior Mamba) on the average.</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> Zero-shot 평가(NeoX 토크나이저, Pile 300B 토큰). Pile ppl은 낮을수록, 정확도는 높을수록 좋음. Δ = 평균에서 (Mamba-2 − 기존 Mamba).</caption>
+        <thead><tr><th>Model</th><th>Pile ppl ↓</th><th>LAMBADA acc ↑</th><th>Avg acc ↑</th></tr></thead>
+        <tbody>
+          <tr><td>Pythia-2.8B</td><td>6.73</td><td>64.7</td><td>55.7</td></tr>
+          <tr><td>Mamba-2.8B</td><td>6.22</td><td>69.2</td><td>59.9</td></tr>
+          <tr><td>Mamba-2-2.7B</td><td>6.09</td><td>69.7</td><td class="up">60.2</td></tr>
+          <tr><td>Mamba-1.4B</td><td>6.80</td><td>65.0</td><td>56.4</td></tr>
+          <tr><td>Mamba-2-1.3B</td><td>6.66</td><td>65.7</td><td>56.4</td></tr>
+          <tr><td>Mamba-2-780M</td><td>7.26</td><td>61.7</td><td>53.5</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">SSM</div>
+          <div class="sub"><span class="t-en">linear recurrence</span><span class="t-ko">선형 순환</span></div>
+          <div class="latent"><span class="t-en">= semiseparable matrix</span><span class="t-ko">= 준분리 행렬</span></div>
+        </div>
+        <div class="flow">⇄</div>
+        <div class="agent mid">
+          <div class="role">SSD</div>
+          <div class="sub"><span class="t-en">block decomposition</span><span class="t-ko">블록 분해</span></div>
+          <div class="latent"><span class="t-en">diag = quadratic · off-diag = linear</span><span class="t-ko">대각=2차 · 비대각=선형</span></div>
+        </div>
+        <div class="flow">⇄</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Attention</span><span class="t-ko">어텐션</span></div>
+          <div class="sub"><span class="t-en">pairwise scores</span><span class="t-ko">쌍별 점수</span></div>
+          <div class="latent"><span class="t-en">= 1-SS masked attention</span><span class="t-ko">= 1-SS 마스크 어텐션</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>One matrix, two modes.</b> SSD chunks the semiseparable matrix into blocks: <b>diagonal blocks</b> run in attention's quadratic mode (matmul-friendly), <b>off-diagonal blocks</b> collapse to a small recurrence (linear) — getting both at once.</div>
+      <div class="cap t-ko"><b>하나의 행렬, 두 가지 모드.</b> SSD는 준분리 행렬을 블록으로 쪼갠다: <b>대각 블록</b>은 어텐션의 2차 모드(행렬곱 친화)로, <b>비대각 블록</b>은 작은 순환(선형)으로 처리 — 두 장점을 동시에 취한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: bridge two model families through structured matrices</span><span class="t-ko">아이디어: 구조화 행렬로 두 모델 계열을 잇다</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 이중성 (Duality)</span>
+        <h3>SSM = Semiseparable, Attention = SMA</h3>
+        <p class="t-en">An SSM's sequence map is exactly multiplication by a <span class="term">semiseparable matrix</span>, which has a quadratic "dual" form. Conversely, autoregressive attention with any fast recurrent form must have a semiseparable mask. The shared sweet spot — <span class="term">scalar-identity A</span> + <span class="term">1-semiseparable mask</span> — is the SSD layer.</p>
+        <p class="t-ko">SSM의 시퀀스 변환은 정확히 <span class="term">준분리 행렬</span> 곱이며, 여기엔 2차 "dual" 형태가 존재한다. 역으로, 빠른 순환 형태를 갖는 자기회귀 어텐션의 마스크는 반드시 준분리여야 한다. 두 계열이 겹치는 최적점 — <span class="term">스칼라·항등 A</span> + <span class="term">1-준분리 마스크</span> — 이 바로 SSD 레이어다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 하드웨어 효율</span>
+        <h3>SSD block algorithm</h3>
+        <p class="t-en">Partition the T×T matrix into Q×Q blocks. <span class="term">Diagonal blocks</span> use the quadratic attention dual (pure matmul); <span class="term">off-diagonal blocks</span> are low-rank and reduce to a chunk-level recurrence. Result: <span class="term">O(TN²)</span> training FLOPs, dominated by matmuls — 2–8× faster than Mamba's scan.</p>
+        <p class="t-ko">T×T 행렬을 Q×Q 블록으로 분할한다. <span class="term">대각 블록</span>은 2차 어텐션 dual(순수 행렬곱)로, <span class="term">비대각 블록</span>은 저랭크라 청크 단위 순환으로 축약된다. 결과는 행렬곱이 지배하는 <span class="term">O(TN²)</span> 학습 FLOPs — Mamba scan보다 2~8배 빠르다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Recast SSM as a matrix</span><span class="t-ko">SSM을 행렬로 재표현</span></b><span class="t-en">Write the linear recurrence as multiplication by a single semiseparable matrix M, whose off-diagonal blocks are provably low-rank.</span><span class="t-ko">선형 순환을 하나의 준분리 행렬 M 곱으로 적고, 그 비대각 블록이 저랭크임을 활용한다.</span></li>
+      <li><b><span class="t-en">Block-decompose M</span><span class="t-ko">M을 블록 분해</span></b><span class="t-en">Tile M into Q×Q chunks; diagonal blocks are intra-chunk, off-diagonal blocks are inter-chunk passed through the SSM hidden state.</span><span class="t-ko">M을 Q×Q 청크로 타일링 — 대각은 청크 내부, 비대각은 SSM 은닉상태를 거치는 청크 간 계산.</span></li>
+      <li><b><span class="t-en">Mix the two modes</span><span class="t-ko">두 모드를 혼합</span></b><span class="t-en">Compute diagonal blocks with attention-style matmul, and off-diagonal blocks via right/center/left factors (a small 1-SS scan over chunk states).</span><span class="t-ko">대각 블록은 어텐션식 행렬곱으로, 비대각 블록은 right/center/left 인수(청크 상태에 대한 작은 1-SS scan)로 계산한다.</span></li>
+      <li><b><span class="t-en">Build Mamba-2</span><span class="t-ko">Mamba-2 구성</span></b><span class="t-en">Add SSM "heads" (P=64/128), parallel data-dependent projections, and grouped-value attention so tensor/sequence parallelism work — giving the Mamba-2 block.</span><span class="t-ko">SSM "헤드"(P=64/128), 병렬 데이터 의존 투영, 그룹-값 어텐션을 더해 텐서/시퀀스 병렬화를 가능케 한 것이 Mamba-2 블록.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Speed without losing the recurrence.</strong> SSD is 2–8× faster than Mamba's scan and beats FlashAttention-2 beyond 2K tokens, while keeping linear-time generation.</p><p class="t-ko"><strong>순환을 잃지 않은 속도.</strong> SSD는 Mamba scan보다 2~8배 빠르고 2K 토큰 이상에서 FlashAttention-2를 능가하면서도 선형시간 생성을 유지한다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>State size is capacity.</strong> Bigger states (N=64, 256) help Mamba-2 win on multi-query associative recall — even beating vanilla attention.</p><p class="t-ko"><strong>상태 크기가 곧 용량.</strong> 더 큰 상태(N=64, 256)는 다중질의 연상회상(MQAR)에서 Mamba-2를 이기게 한다 — 바닐라 어텐션마저 능가.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>One theory, two worlds.</strong> Treating SSMs as structured matrices lets Transformer systems tricks (tensor/sequence parallelism, no-pad variable length) transfer directly.</p><p class="t-ko"><strong>하나의 이론, 두 세계.</strong> SSM을 구조화 행렬로 보면 트랜스포머의 시스템 기법(텐서/시퀀스 병렬화, 무패딩 가변 길이)이 그대로 이식된다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Hybrids win.</strong> ~10% attention layers mixed with SSD beat both pure Mamba-2 and pure Transformer++ — attention as a retrieval shortcut.</p><p class="t-ko"><strong>하이브리드가 이긴다.</strong> 어텐션 ~10%를 SSD와 섞으면 순수 Mamba-2와 순수 Transformer++ 둘 다 능가 — 어텐션은 검색 지름길 역할.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> SSD buys speed by restricting A from diagonal (Mamba) to scalar-times-identity — a deliberate loss of expressivity. The authors even note Mamba-2 beats Mamba-1 on MQAR at equal state size (N=16) without fully understanding why, leaving the expressivity-vs-efficiency tradeoff not yet cleanly characterized.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> SSD는 A를 대각(Mamba)에서 스칼라·항등으로 제한해 속도를 얻는다 — 의도된 표현력 손실이다. 저자들조차 동일 상태 크기(N=16)에서 Mamba-2가 Mamba-1을 MQAR에서 이기는 이유를 완전히 설명하지 못한다고 적어, 표현력 대 효율의 트레이드오프는 아직 깔끔히 규명되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2405.21060">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2405.21060">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2405.21060">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2405.21060">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Selected · Efficient Sequence Models · venue: ICML 2024</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-23.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Selected · Efficient Sequence Models · venue: ICML 2024</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-23.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

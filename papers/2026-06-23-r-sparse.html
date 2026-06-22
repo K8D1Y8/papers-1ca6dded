@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · R-Sparse: Rank-Aware Activation Sparsity for Efficient LLM Inference</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Activation Sparsity</span><span class="t-ko">Model Compression · Activation Sparsity</span></span>
+      <span>2026 · 06 · 23</span>
+    </div>
+    <h1>R-Sparse: Rank-Aware Activation Sparsity for Efficient LLM Inference<br>
+      <span class="glow t-en">— Don't drop the small activations, demote them to a cheap low-rank path</span>
+      <span class="glow t-ko">— 작은 활성을 버리지 말고, 값싼 저랭크 경로로 강등하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Zhenyu Zhang</b> <span class="t-en">et al.</span><span class="t-ko">외 5인</span></span>
+      <span>🏛 UT Austin · Meta AI</span>
+      <span>🗓 2025.04.28</span>
+      <span>📄 <a href="https://arxiv.org/abs/2504.19449">arXiv:2504.19449</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Modern LLMs use non-ReLU activations (SiLU, GELU), so "just zero out the negatives" gives only modest sparsity unless you pay for ~150B tokens of continual training. R-Sparse is <span class="hl">training-free</span>: it splits every linear layer into a <b>sparse path</b> (keep only large-magnitude input channels) plus a <b>low-rank path</b> (an offline SVD that approximates everything the sparse path threw away). An evolutionary search tunes the sparse-vs-rank ratio per layer. The result reaches <b>50% model-level sparsity with performance comparable to the dense model</b> on Llama-2/3 and Mistral, and a custom kernel delivers up to <b>43% faster generation</b>.</p>
+    <p class="t-ko">최신 LLM은 비-ReLU 활성(SiLU, GELU)을 써서 "음수만 0으로 만들기"로는 약 1,500억 토큰의 추가 학습 없이는 희소성이 제한적이다. R-Sparse는 <span class="hl">학습이 필요 없는(training-free)</span> 방법으로, 각 선형 층을 <b>희소 경로</b>(큰 크기의 입력 채널만 유지) + <b>저랭크 경로</b>(희소 경로가 버린 것을 오프라인 SVD로 근사)로 분할한다. 진화 탐색으로 층마다 희소-랭크 비율을 조정한다. 그 결과 Llama-2/3·Mistral에서 <b>모델 전체 희소도 50%에서 밀집 모델과 비슷한 성능</b>을 내고, 맞춤 커널로 생성 속도를 최대 <b>43%</b> 높인다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The question isn't "which activations to drop" but "what to do with the ones you'd drop."</p>
+    <p class="lead t-ko">핵심은 "어떤 활성을 버리느냐"가 아니라 "버릴 활성을 어떻게 처리하느냐"다.</p>
+    <p class="t-en">Activation sparsity loads only the active rows/columns of weights from HBM into SRAM, directly attacking the memory bottleneck of the decode phase. But it stumbles on modern LLMs: ReLU's lossless zeroing is gone, predicting active <em>output</em> channels before computing them is hard, and training-free methods cap out near 33% model-level sparsity. R-Sparse reframes the problem — instead of either keeping or discarding a channel, it keeps the big ones exactly and routes the small ("non-sparse") ones through a cheap offline-SVD low-rank module. Because the discarded contributions empirically look like a low-rank set of biases, this recovers most of the lost signal almost for free, and it applies to <strong>both attention and MLP blocks</strong> with <strong>no retraining</strong>.</p>
+    <p class="t-ko">활성 희소성은 HBM에서 SRAM으로 활성 행/열만 적재해 디코딩 단계의 메모리 병목을 직접 공략한다. 하지만 최신 LLM에선 막힌다 — ReLU의 무손실 0-처리가 사라졌고, 계산 전에 활성 <em>출력</em> 채널을 예측하기 어려우며, 학습 없는 방법은 모델 전체 희소도 약 33%에서 한계에 부딪힌다. R-Sparse는 문제를 재정의한다. 채널을 "유지/폐기" 둘 중 하나로 보는 대신, 큰 채널은 그대로 두고 작은("비-희소") 채널은 값싼 오프라인 SVD 저랭크 모듈로 보낸다. 폐기되는 기여가 경험적으로 저랭크 바이어스 집합처럼 보이기 때문에, 잃은 신호 대부분을 거의 공짜로 복원하며 <strong>어텐션·MLP 블록 모두</strong>에 <strong>재학습 없이</strong> 적용된다.</p>
+    <figure class="fig">
+      <img src="fig/2504.19449/fig1.png" alt="Overview of the R-Sparse method combining activation sparsity and low-rank decomposition">
+      <figcaption class="t-en"><b>Figure 1.</b> Overview of the R-Sparse method. Activation sparsity prunes unimportant input channels of X while low-rank decomposition (W*=A_r B_r) captures the dominant singular components. R-Sparse combines both: input sparsification yields Y_s and the offline-SVD low-rank path yields Y_r, summed as Y = Y_s + Y_r, jointly covering the important input channels and singular values.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> R-Sparse 방법 개요. 활성화 희소성은 입력 X의 중요하지 않은 입력 채널을 제거하고, 저랭크 분해(W*=A_r B_r)는 지배적인 특이값 성분을 포착한다. R-Sparse는 둘을 결합하여 입력 희소화로 Y_s를, 오프라인 SVD 저랭크 경로로 Y_r를 얻고 Y = Y_s + Y_r로 합산함으로써 중요한 입력 채널과 특이값을 함께 포괄한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2504.19449</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">50%</div><div class="l"><span class="t-en">Model-level sparsity<br>at comparable accuracy</span><span class="t-ko">모델 전체 희소도<br>(성능 유지)</span></div></div>
+      <div class="stat"><div class="n">+43%</div><div class="l"><span class="t-en">End-to-end generation<br>speedup (custom kernel)</span><span class="t-ko">엔드투엔드 생성<br>속도 향상(맞춤 커널)</span></div></div>
+      <div class="stat"><div class="n">+18.7%</div><div class="l"><span class="t-en">Avg. gain over CATS<br>(Llama-2-7B, same budget)</span><span class="t-ko">CATS 대비 평균 향상<br>(Llama-2-7B, 동일 예산)</span></div></div>
+      <div class="stat"><div class="n">10</div><div class="l"><span class="t-en">Tasks · 3 LLM families<br>(Llama-2/3, Mistral)</span><span class="t-ko">평가 과제 · 3개 모델군<br>(Llama-2/3, Mistral)</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">Training tokens<br>(fully training-free)</span><span class="t-ko">학습 토큰<br>(완전 training-free)</span></div></div>
+      <div class="stat"><div class="n">~1 hr</div><div class="l"><span class="t-en">Evolutionary search<br>(Llama-2-7B, 1× A6000)</span><span class="t-ko">진화 탐색 시간<br>(Llama-2-7B, A6000 1장)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — matches dense, crushes prior sparsity</span><span class="t-ko">결과 — 밀집 모델 동률, 기존 희소법 압도</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Average common-sense reasoning accuracy (%, 8 tasks) — R-Sparse vs. training-free baselines at the same model-level sparsity. Δ = (R-Sparse − same-budget baseline).</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> 상식 추론 평균 정확도(%, 8개 과제) — 동일 모델 희소도에서 R-Sparse vs. 학습 없는 베이스라인. Δ = (R-Sparse − 동일 예산 베이스라인).</caption>
+        <thead><tr><th>Model</th><th>Dense</th><th>Baseline</th><th>R-Sparse</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>Llama-2-7B (CATS 40%)</td><td>65.88</td><td>46.26</td><td>65.00</td><td class="up">+18.74</td></tr>
+          <tr><td>Llama-2-7B (GRIFFIN 50%)</td><td>65.88</td><td>45.91</td><td>64.06</td><td class="up">+18.15</td></tr>
+          <tr><td>Llama-3-8B (CATS 40%)</td><td>69.44</td><td>35.91</td><td>68.37</td><td class="up">+32.46</td></tr>
+          <tr><td>Llama-3-8B (GRIFFIN 50%)</td><td>69.44</td><td>45.11</td><td>66.20</td><td class="up">+21.09</td></tr>
+          <tr><td>Mistral-7B (GRIFFIN 50%)</td><td>69.89</td><td>48.07</td><td>68.39</td><td class="up">+20.32</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Input X</span><span class="t-ko">입력 X</span></div>
+          <div class="sub"><span class="t-en">threshold by magnitude</span><span class="t-ko">크기 임계값 적용</span></div>
+          <div class="latent"><span class="t-en">large vs. small channels</span><span class="t-ko">큰 채널 vs. 작은 채널</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Two paths</span><span class="t-ko">두 경로</span></div>
+          <div class="sub"><span class="t-en">Y_s = sparse · Y_r = low-rank</span><span class="t-ko">Y_s = 희소 · Y_r = 저랭크</span></div>
+          <div class="latent"><span class="t-en">large→exact, small→SVD</span><span class="t-ko">큰값→정확, 작은값→SVD</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Y = Y_s + Y_r</span><span class="t-ko">Y = Y_s + Y_r</span></div>
+          <div class="sub"><span class="t-en">per-layer ρ searched</span><span class="t-ko">층별 ρ 탐색</span></div>
+          <div class="latent"><span class="t-en">~dense accuracy, 50% sparse</span><span class="t-ko">밀집 수준 정확도, 50% 희소</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Don't discard — demote.</b> Big input channels go through the full weight exactly (Y_s); the small ones, instead of being zeroed, flow through a cheap offline-SVD low-rank module (Y_r) that recovers their collective contribution.</div>
+      <div class="cap t-ko"><b>버리지 말고 강등하라.</b> 큰 입력 채널은 전체 가중치로 정확히 계산하고(Y_s), 작은 채널은 0으로 만드는 대신 값싼 오프라인 SVD 저랭크 모듈(Y_r)로 흘려보내 그 집합적 기여를 복원한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: two observations that justify the split</span><span class="t-ko">아이디어: 분할을 정당화하는 두 관찰</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① Non-sparse = biases</span>
+        <h3><span class="t-en">Small channels behave like biases</span><span class="t-ko">작은 채널 ≈ 바이어스</span></h3>
+        <p class="t-en">Using a soft multi-phase ReLU, the authors show the discarded (small-magnitude) input channels' output contribution collapses into just a few data-dependent bias terms. Across thousands of tokens these biases span a <span class="term">low-rank subspace</span> (stable rank ≈ 400), so the whole non-sparse residual can be approximated cheaply — even at 90% input sparsity.</p>
+        <p class="t-ko">소프트 다단계 ReLU를 써서, 폐기되는(작은 크기) 입력 채널의 출력 기여가 소수의 데이터 의존 바이어스 항으로 수렴함을 보인다. 수천 토큰에 걸쳐 이 바이어스들은 <span class="term">저랭크 부분공간</span>(안정 랭크 ≈ 400)을 이루므로, 비-희소 잔차 전체를 값싸게 근사할 수 있다 — 입력 희소도 90%에서도.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② Rank-aware sparsity</span>
+        <h3><span class="t-en">Importance concentrates in a corner</span><span class="t-ko">중요도가 한 구석에 집중</span></h3>
+        <p class="t-en">Scoring each (input channel × singular value) pair S = σ_i·X_j·V[j,i] reveals contribution mass concentrated in the bottom-right — large channels <em>and</em> dominant singular components. Sparsity drops the left part, low-rank drops the top; R-Sparse instead removes the top-left, keeping what matters. Patterns vary by layer (q/k easier to low-rank; middle layers more sparse), motivating per-layer tuning.</p>
+        <p class="t-ko">각 (입력 채널 × 특이값) 쌍을 S = σ_i·X_j·V[j,i]로 점수화하면 기여가 우하단에 몰린다 — 큰 채널 <em>과</em> 지배적 특이 성분. 희소법은 좌측을, 저랭크는 상단을 버리지만 R-Sparse는 좌상단을 제거해 중요한 부분을 남긴다. 패턴은 층마다 달라(q/k는 저랭크화 쉬움, 중간 층은 더 희소함) 층별 조정을 동기화한다.</p>
+      </div>
+    </div>
+    <figure class="fig">
+      <img src="fig/2504.19449/fig3.png" alt="Heatmaps of importance of input channels and singular values across layers">
+      <figcaption class="t-en"><b>Figure 3.</b> Importance score S of each input channel (x-axis) and singular value (y-axis) for first/middle/last layers of Llama-2-7B. Contribution mass concentrates in the bottom-right corner, and the pattern shifts across layer types — motivating an adaptive sparse-vs-rank ratio per layer.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> Llama-2-7B의 처음/중간/마지막 층에서 각 입력 채널(가로축)과 특이값(세로축)의 중요도 점수 S. 기여가 우하단에 집중되며, 층 유형마다 패턴이 달라져 층별 적응적 희소-랭크 비율을 동기화한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2504.19449</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Threshold the input</span><span class="t-ko">입력 임계 처리</span></b><span class="t-en">For a sparsity budget s, set threshold t(s) as the s-th percentile of |X|; keep channels with |X| ≥ t(s) as the sparse part, mask the rest.</span><span class="t-ko">희소 예산 s에 대해 임계값 t(s)를 |X|의 s번째 백분위로 설정 — |X| ≥ t(s) 채널은 희소부로 유지, 나머지는 마스킹.</span></li>
+      <li><b><span class="t-en">Sparse path Y_s</span><span class="t-ko">희소 경로 Y_s</span></b><span class="t-en">Compute Y_s = σ_t(s)(X)·Wᵀ, loading only the weight rows for active channels (stored column-major for bandwidth) into SRAM.</span><span class="t-ko">Y_s = σ_t(s)(X)·Wᵀ 계산 — 활성 채널의 가중치 행만(대역폭을 위해 열 우선 저장) SRAM에 적재.</span></li>
+      <li><b><span class="t-en">Low-rank path Y_r</span><span class="t-ko">저랭크 경로 Y_r</span></b><span class="t-en">Run the masked-out residual through an offline SVD module: Y_r = (X − σ_t(s)(X))(A_r B_r)ᵀ where A_r=U_rΣ_r^½, B_r=Σ_r^½Vᵀ. One-time SVD, zero inference latency cost.</span><span class="t-ko">마스킹된 잔차를 오프라인 SVD 모듈에 통과: Y_r = (X − σ_t(s)(X))(A_r B_r)ᵀ, A_r=U_rΣ_r^½, B_r=Σ_r^½Vᵀ. 일회성 SVD라 추론 지연 없음.</span></li>
+      <li><b><span class="t-en">Search per-layer ρ</span><span class="t-ko">층별 ρ 탐색</span></b><span class="t-en">An evolutionary search (pop 32, 5 generations, ~1 hr) picks each layer's sparse-vs-rank ratio ρ by minimizing C4 perplexity, then Y = Y_s + Y_r at 50% model-level sparsity.</span><span class="t-ko">진화 탐색(개체 32, 5세대, 약 1시간)이 C4 퍼플렉서티 최소화로 층별 희소-랭크 비율 ρ를 선택 → 모델 희소도 50%에서 Y = Y_s + Y_r.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Training-free, no predictor.</strong> By sparsifying <em>input</em> channels (read directly off X) instead of output channels, R-Sparse skips both the costly ReLUfication training and the fragile active-channel prediction that limited prior methods.</p><p class="t-ko"><strong>학습 불필요, 예측기 불필요.</strong> 출력이 아닌 <em>입력</em> 채널을 X에서 직접 읽어 희소화함으로써, 기존 방법을 제약하던 값비싼 ReLUfication 학습과 불안정한 활성 채널 예측을 모두 건너뛴다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Sparse + low-rank are complementary.</strong> Alone, low-rank collapses (33% avg) and pure sparsity lags; together they hit dense-level accuracy at 50% sparsity because each layer's mix is searched, not fixed.</p><p class="t-ko"><strong>희소 + 저랭크는 상호보완적.</strong> 단독으로는 저랭크가 붕괴(평균 33%)하고 순수 희소법은 뒤처지지만, 둘을 결합하면 층별 비율을 탐색하므로 50% 희소도에서 밀집 수준 정확도에 도달.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Stacks with quantization.</strong> With 4-bit GPTQ, R-Sparse still holds ~66% avg on common-sense tasks (vs 68% dense), so the savings compound rather than conflict.</p><p class="t-ko"><strong>양자화와 함께 쌓인다.</strong> 4-bit GPTQ와 결합해도 상식 과제 평균 약 66%(밀집 68% 대비)를 유지 — 절감 효과가 충돌 없이 누적된다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Whole-model coverage.</strong> Unlike CATS/GRIFFIN (MLP only), R-Sparse sparsifies attention <em>and</em> MLP, which is what unlocks the jump from ~33% to 50% model-level sparsity.</p><p class="t-ko"><strong>모델 전체 적용.</strong> MLP만 다루는 CATS/GRIFFIN과 달리 어텐션 <em>과</em> MLP를 모두 희소화 — 이것이 약 33%에서 50% 모델 희소도로의 도약을 가능케 한다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline 43% speedup is measured on a single A6000 in FP32 with a custom Triton kernel over a HuggingFace baseline, and the per-layer ρ is searched against C4 perplexity. How much of the win survives on production serving stacks (FP16/INT8, batched, paged-attention) — and whether the searched recipe transfers across deployment workloads — is not directly shown.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 수치인 43% 가속은 A6000 1장·FP32에서 맞춤 Triton 커널을 HuggingFace 베이스라인과 비교해 측정했고, 층별 ρ는 C4 퍼플렉서티로 탐색되었다. 이 이득이 실제 서빙 스택(FP16/INT8, 배치, paged-attention)에서 얼마나 유지되는지, 그리고 탐색된 레시피가 배포 워크로드 간에 전이되는지는 직접 제시되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2504.19449">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2504.19449">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2504.19449">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2504.19449">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Selected · Model Compression · venue: ICLR 2025</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-23.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>선정 · Model Compression · 발표: ICLR 2025</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-23.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
