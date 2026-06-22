@@ -185,7 +185,7 @@
   render();
 })();
 
-// archive index tabs: All / Must Read / Not interested + a "Conf" dropdown holding venue filters. Ratings in localStorage.
+// archive index tabs: All / Must Read / Not interested + Conf (venue) dropdown + Columns (by-topic board) toggle.
 (function () {
   var tabs = document.querySelector('.tabs');
   var list = document.querySelector('.list');
@@ -200,6 +200,9 @@
   var confmenu = tabs.querySelector('.confmenu');
   var conflabel = tabs.querySelector('.conflabel');
   var confLabelHTML = conflabel ? conflabel.innerHTML : '';
+  var coltoggle = tabs.querySelector('.coltoggle');
+  var TOPIC_ORDER = ['Multi-Agent & Latent Comm', 'Efficient Sequence Models', 'Model Compression', 'Shared World Models'];
+  var board = null, currentMode = 'all';
 
   function rating(ax) { try { return localStorage.getItem('paper-rating:' + ax); } catch (e) { return null; } }
   function shownIn(mode, r) {
@@ -211,6 +214,7 @@
   }
   function closeMenu() { if (confmenu) confmenu.hidden = true; if (confwrap) confwrap.classList.remove('open'); }
   function apply(mode) {
+    currentMode = mode;
     var n = 0;
     rows.forEach(function (r) {
       var show = shownIn(mode, r);
@@ -227,12 +231,53 @@
       if (empties[k]) empties[k].style.display = (mode === k && n === 0) ? 'block' : 'none';
     });
   }
+
+  // --- by-major-topic columns board ---
+  function buildBoard() {
+    if (board) return;
+    var groups = {};
+    rows.forEach(function (r) {
+      if (rating(r.getAttribute('data-arxiv')) === '1') return;     // exclude Not interested
+      var t = r.getAttribute('data-topic') || 'Other';
+      (groups[t] = groups[t] || []).push(r);
+    });
+    var topics = Object.keys(groups).sort(function (a, b) {
+      var ia = TOPIC_ORDER.indexOf(a), ib = TOPIC_ORDER.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    board = document.createElement('div'); board.className = 'board';
+    topics.forEach(function (t) {
+      var col = document.createElement('div'); col.className = 'topcol';
+      var h = document.createElement('div'); h.className = 'colhead'; h.textContent = t;
+      var ct = document.createElement('span'); ct.className = 'ct'; ct.textContent = groups[t].length; h.appendChild(ct);
+      var cc = document.createElement('div'); cc.className = 'colcards';
+      groups[t].forEach(function (r) { r.style.display = ''; cc.appendChild(r); });   // move card into its column
+      col.appendChild(h); col.appendChild(cc); board.appendChild(col);
+    });
+    Object.keys(empties).forEach(function (k) { if (empties[k]) empties[k].style.display = 'none'; });
+    list.style.display = 'none';
+    list.parentNode.insertBefore(board, list.nextSibling);
+  }
+  function teardownBoard() {
+    if (!board) return;
+    rows.forEach(function (r) { list.appendChild(r); });    // restore cards to the list in original order
+    board.remove(); board = null; list.style.display = '';
+  }
+
   [].slice.call(tabs.querySelectorAll('.tab[data-mode]')).forEach(function (t) {
-    t.addEventListener('click', function () { apply(t.getAttribute('data-mode')); closeMenu(); });
+    t.addEventListener('click', function () {
+      if (board) { teardownBoard(); if (coltoggle) coltoggle.classList.remove('on'); }
+      apply(t.getAttribute('data-mode')); closeMenu();
+    });
   });
   if (confbtn) confbtn.addEventListener('click', function (e) {
     e.stopPropagation();
     if (confmenu) { confmenu.hidden = !confmenu.hidden; if (confwrap) confwrap.classList.toggle('open', !confmenu.hidden); }
+  });
+  if (coltoggle) coltoggle.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (board) { teardownBoard(); coltoggle.classList.remove('on'); apply(currentMode); }
+    else { closeMenu(); buildBoard(); coltoggle.classList.add('on'); }
   });
   document.addEventListener('click', function (e) { if (confwrap && !confwrap.contains(e.target)) closeMenu(); });
   apply('all');

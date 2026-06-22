@@ -14,6 +14,19 @@ REVIEWS = os.path.join(ROOT, "reviews")
 def strip(s):
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", s))).strip()
 
+def major_topic(topic_text):
+    """Map a paper's topic-chip prefix to one of the canonical major topics (for the columns view)."""
+    p = (topic_text or "").split("·")[0].strip().lower()
+    if "agent" in p:
+        return "Multi-Agent & Latent Comm"
+    if "world" in p:
+        return "Shared World Models"
+    if any(k in p for k in ("compression", "kv", "low-rank", "svd", "quant", "prun", "cache", "distill")):
+        return "Model Compression"
+    if any(k in p for k in ("efficient", "ssm", "mamba", "attention", "sequence", "linear", "delta", "recurren", "state space", "ttt", "hybrid")):
+        return "Efficient Sequence Models"
+    return "Other"
+
 def meta(path):
     txt = open(path, encoding="utf-8").read()
     m = re.search(r"<title>\s*(?:5분 논문|5-min paper)\s*·\s*(.*?)</title>", txt, re.S)
@@ -68,7 +81,8 @@ def card(it):
     idlabel = "arXiv:" if re.match(r'^\d{4}\.\d+$', it["arxiv"] or "") else "OpenReview:"
     sub = html.escape(it["topic"]) + ((" · " + idlabel + html.escape(it["arxiv"])) if it["arxiv"] else "")
     vattr = (' data-venue="' + html.escape(it["venue"]) + '"') if it["venue"] else ""
-    return ('    <div class="rowwrap" data-arxiv="' + html.escape(it["arxiv"]) + '"' + vattr + (' data-full="1"' if hasfull else '') + '>\n'
+    tattr = ' data-topic="' + html.escape(major_topic(it["topic"])) + '"'
+    return ('    <div class="rowwrap" data-arxiv="' + html.escape(it["arxiv"]) + '"' + vattr + tattr + (' data-full="1"' if hasfull else '') + '>\n'
             '      <div class="d"><span class="dd">' + html.escape(it["date"]) + '</span>' + full + '</div>\n'
             '      <a class="row" href="' + html.escape(it["file"]) + '">\n'
             '        <div class="body">\n'
@@ -107,6 +121,7 @@ doc = f"""<!DOCTYPE html>
     <button class="tab on" data-mode="all"><span class="t-en">All</span><span class="t-ko">전체</span></button>
     <button class="tab" data-mode="mustread"><span class="t-en">Must Read</span><span class="t-ko">머스트리드</span></button>
     <button class="tab" data-mode="hidden"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></button>{conf_html}
+    <button class="tab coltoggle" type="button"><span class="t-en">▦ Columns</span><span class="t-ko">▦ 주제별 열</span></button>
   </div>
   <p class="mr-empty" style="display:none"><span class="t-en">No Must-read papers yet — rate a paper <b>Must read</b>, or add its arXiv ID to mustread.md.</span><span class="t-ko">아직 머스트리드가 없어요 — 논문을 <b>꼭 다시 읽기</b>로 평가하거나 mustread.md에 arXiv ID를 추가하면 모입니다.</span></p>
   <p class="ni-empty" style="display:none"><span class="t-en">Nothing here — papers you rate <b>Not interested</b> are collected here and hidden from <b>All</b>.</span><span class="t-ko">아직 없어요 — <b>관심 없음</b>으로 평가한 논문이 여기 모이고 <b>전체</b> 탭에서는 숨겨집니다.</span></p>
