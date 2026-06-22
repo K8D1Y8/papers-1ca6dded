@@ -30,17 +30,37 @@
   });
 })();
 
-// per-paper reader rating (1=not interested … 4=must read), saved in localStorage
+// per-paper reader rating (1=not interested … 4=must read), saved in localStorage.
+// Rating ⭐ Must read reveals a "Generate Full Review" link that opens a prefilled GitHub
+// issue (labels=mustread); the daily routine reads open mustread issues and auto-builds the review.
 (function () {
   var box = document.querySelector('.rating[data-arxiv]');
   if (!box) return;
-  var KEY = 'paper-rating:' + box.getAttribute('data-arxiv');
+  var arxiv = box.getAttribute('data-arxiv');
+  var KEY = 'paper-rating:' + arxiv;
+  var REPO = 'K8D1Y8/papers-1ca6dded';
   var rates = box.querySelectorAll('.rate');
+
+  // build the "Generate Full Review" CTA (prefilled GitHub issue)
+  var paperTitle = (document.title.split('·')[1] || document.title).trim();
+  var issueTitle = 'mustread: ' + arxiv + (paperTitle ? ' — ' + paperTitle : '');
+  var issueBody = 'Please generate a Full Review for this paper.\n\narXiv: https://arxiv.org/abs/' + arxiv + '\nPage: ' + location.href;
+  var issueUrl = 'https://github.com/' + REPO + '/issues/new?labels=mustread&title=' +
+    encodeURIComponent(issueTitle) + '&body=' + encodeURIComponent(issueBody);
+  var cta = document.createElement('div');
+  cta.className = 'fullreq';
+  cta.innerHTML = '<a target="_blank" rel="noopener">🔖 <span class="t-en">Generate Full Review</span><span class="t-ko">풀 리뷰 생성</span></a>' +
+    '<span class="hint"><span class="t-en">Opens a prefilled GitHub issue — just tap <b>Submit</b>; the daily routine builds the review and closes the issue.</span>' +
+    '<span class="t-ko">미리 채워진 GitHub 이슈가 열려요 — <b>Submit</b>만 누르면 매일 루틴이 리뷰를 생성하고 이슈를 닫습니다.</span></span>';
+  cta.querySelector('a').setAttribute('href', issueUrl);
+  box.appendChild(cta);
+
   function paint(v) {
     for (var i = 0; i < rates.length; i++) {
       rates[i].classList.toggle('on', rates[i].getAttribute('data-v') === v);
     }
     box.classList.toggle('rated', !!v);
+    box.classList.toggle('req4', v === '4');   // show the Full Review CTA only when ⭐ Must read
   }
   var saved = null;
   try { saved = localStorage.getItem(KEY); } catch (e) {}
