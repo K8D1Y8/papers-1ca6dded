@@ -185,7 +185,7 @@
   render();
 })();
 
-// archive index tabs: All (hides "Not interested") / Must Read / Not interested. Ratings live in localStorage (this device).
+// archive index tabs: All / Must Read / Not interested + a "Conf" dropdown holding venue filters. Ratings in localStorage.
 (function () {
   var tabs = document.querySelector('.tabs');
   var list = document.querySelector('.list');
@@ -195,6 +195,12 @@
     mustread: document.querySelector('.mr-empty'),
     hidden: document.querySelector('.ni-empty')
   };
+  var confwrap = tabs.querySelector('.confwrap');
+  var confbtn = tabs.querySelector('.confbtn');
+  var confmenu = tabs.querySelector('.confmenu');
+  var conflabel = tabs.querySelector('.conflabel');
+  var confLabelHTML = conflabel ? conflabel.innerHTML : '';
+
   function rating(ax) { try { return localStorage.getItem('paper-rating:' + ax); } catch (e) { return null; } }
   function shownIn(mode, r) {
     var rt = rating(r.getAttribute('data-arxiv'));
@@ -203,6 +209,7 @@
     if (mode.indexOf('venue:') === 0) return r.getAttribute('data-venue') === mode.slice(6) && rt !== '1';
     return rt !== '1';                                    // 'all' = everything except Not interested
   }
+  function closeMenu() { if (confmenu) confmenu.hidden = true; if (confwrap) confwrap.classList.remove('open'); }
   function apply(mode) {
     var n = 0;
     rows.forEach(function (r) {
@@ -210,16 +217,25 @@
       r.style.display = show ? '' : 'none';
       if (show) n++;
     });
-    [].slice.call(tabs.querySelectorAll('.tab')).forEach(function (t) {
+    var isVenue = mode.indexOf('venue:') === 0;
+    [].slice.call(tabs.querySelectorAll('.tab[data-mode]')).forEach(function (t) {
       t.classList.toggle('on', t.getAttribute('data-mode') === mode);
     });
+    if (confbtn) confbtn.classList.toggle('on', isVenue);      // highlight Conf when a venue filter is active
+    if (conflabel) { if (isVenue) conflabel.textContent = mode.slice(6); else conflabel.innerHTML = confLabelHTML; }
     Object.keys(empties).forEach(function (k) {
       if (empties[k]) empties[k].style.display = (mode === k && n === 0) ? 'block' : 'none';
     });
   }
-  [].slice.call(tabs.querySelectorAll('.tab')).forEach(function (t) {
-    t.addEventListener('click', function () { apply(t.getAttribute('data-mode')); });
+  [].slice.call(tabs.querySelectorAll('.tab[data-mode]')).forEach(function (t) {
+    t.addEventListener('click', function () { apply(t.getAttribute('data-mode')); closeMenu(); });
   });
+  if (confbtn) confbtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (confmenu) { confmenu.hidden = !confmenu.hidden; if (confwrap) confwrap.classList.toggle('open', !confmenu.hidden); }
+  });
+  document.addEventListener('click', function (e) { if (confwrap && !confwrap.contains(e.target)) closeMenu(); });
   apply('all');
+  closeMenu();
 })();
 

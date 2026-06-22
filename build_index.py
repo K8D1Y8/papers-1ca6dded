@@ -51,8 +51,15 @@ for it in items:
     if it["venue"] and it["venue"] not in venues:
         venues.append(it["venue"])
 venues.sort(key=lambda v: (_order.index(v) if v in _order else 99, v))
-venue_tabs = "".join(
-    f'\n    <button class="tab" data-mode="venue:{html.escape(v)}">{html.escape(v)}</button>' for v in venues)
+if venues:
+    _menu = "".join(
+        f'\n        <button class="tab" data-mode="venue:{html.escape(v)}">{html.escape(v)}</button>' for v in venues)
+    conf_html = ('\n    <div class="confwrap">'
+                 '\n      <button class="tab confbtn" type="button"><span class="conflabel"><span class="t-en">Conf</span><span class="t-ko">학회</span></span> <span class="caret">▾</span></button>'
+                 '\n      <div class="confmenu" hidden>' + _menu + '\n      </div>'
+                 '\n    </div>')
+else:
+    conf_html = ""
 
 def card(it):
     hasfull = bool(it["arxiv"]) and os.path.exists(os.path.join(REVIEWS, it["arxiv"] + ".html"))
@@ -99,7 +106,7 @@ doc = f"""<!DOCTYPE html>
   <div class="tabs">
     <button class="tab on" data-mode="all"><span class="t-en">All</span><span class="t-ko">전체</span></button>
     <button class="tab" data-mode="mustread"><span class="t-en">Must Read</span><span class="t-ko">머스트리드</span></button>
-    <button class="tab" data-mode="hidden"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></button>{venue_tabs}
+    <button class="tab" data-mode="hidden"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></button>{conf_html}
   </div>
   <p class="mr-empty" style="display:none"><span class="t-en">No Must-read papers yet — rate a paper <b>Must read</b>, or add its arXiv ID to mustread.md.</span><span class="t-ko">아직 머스트리드가 없어요 — 논문을 <b>꼭 다시 읽기</b>로 평가하거나 mustread.md에 arXiv ID를 추가하면 모입니다.</span></p>
   <p class="ni-empty" style="display:none"><span class="t-en">Nothing here — papers you rate <b>Not interested</b> are collected here and hidden from <b>All</b>.</span><span class="t-ko">아직 없어요 — <b>관심 없음</b>으로 평가한 논문이 여기 모이고 <b>전체</b> 탭에서는 숨겨집니다.</span></p>

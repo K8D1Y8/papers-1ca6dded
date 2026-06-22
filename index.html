@@ -24,10 +24,15 @@
     <button class="tab on" data-mode="all"><span class="t-en">All</span><span class="t-ko">전체</span></button>
     <button class="tab" data-mode="mustread"><span class="t-en">Must Read</span><span class="t-ko">머스트리드</span></button>
     <button class="tab" data-mode="hidden"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></button>
-    <button class="tab" data-mode="venue:ICLR&#x27;26">ICLR&#x27;26</button>
-    <button class="tab" data-mode="venue:ICML&#x27;26">ICML&#x27;26</button>
-    <button class="tab" data-mode="venue:NeurIPS&#x27;25">NeurIPS&#x27;25</button>
-    <button class="tab" data-mode="venue:AAAI&#x27;26">AAAI&#x27;26</button>
+    <div class="confwrap">
+      <button class="tab confbtn" type="button"><span class="conflabel"><span class="t-en">Conf</span><span class="t-ko">학회</span></span> <span class="caret">▾</span></button>
+      <div class="confmenu" hidden>
+        <button class="tab" data-mode="venue:ICLR&#x27;26">ICLR&#x27;26</button>
+        <button class="tab" data-mode="venue:ICML&#x27;26">ICML&#x27;26</button>
+        <button class="tab" data-mode="venue:NeurIPS&#x27;25">NeurIPS&#x27;25</button>
+        <button class="tab" data-mode="venue:AAAI&#x27;26">AAAI&#x27;26</button>
+      </div>
+    </div>
   </div>
   <p class="mr-empty" style="display:none"><span class="t-en">No Must-read papers yet — rate a paper <b>Must read</b>, or add its arXiv ID to mustread.md.</span><span class="t-ko">아직 머스트리드가 없어요 — 논문을 <b>꼭 다시 읽기</b>로 평가하거나 mustread.md에 arXiv ID를 추가하면 모입니다.</span></p>
   <p class="ni-empty" style="display:none"><span class="t-en">Nothing here — papers you rate <b>Not interested</b> are collected here and hidden from <b>All</b>.</span><span class="t-ko">아직 없어요 — <b>관심 없음</b>으로 평가한 논문이 여기 모이고 <b>전체</b> 탭에서는 숨겨집니다.</span></p>
