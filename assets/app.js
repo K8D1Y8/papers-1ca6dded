@@ -200,6 +200,7 @@
     var rt = rating(r.getAttribute('data-arxiv'));
     if (mode === 'mustread') return rt === '4' || r.getAttribute('data-full') === '1';
     if (mode === 'hidden') return rt === '1';            // "Not interested" bucket
+    if (mode.indexOf('venue:') === 0) return r.getAttribute('data-venue') === mode.slice(6) && rt !== '1';
     return rt !== '1';                                    // 'all' = everything except Not interested
   }
   function apply(mode) {
