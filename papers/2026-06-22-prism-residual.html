@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · PRISM: Sequence Modeling as Parallel Residual Iteration</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · Parallel Residual</span><span class="t-ko">⚡ Efficient Seq · Parallel Residual</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>PRISM: Sequence Modeling as Parallel Residual Iteration<br>
+      <span class="glow t-en">— Fake the multi-step solver, keep the parallel scan: Rank-1 → Rank-L without the serial chain</span>
+      <span class="glow t-ko">— 다단계 솔버를 '흉내'내되 병렬 스캔은 유지: 직렬 의존성 없이 Rank-1 → Rank-L</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Jie Jiang</b> <span class="t-en">et al. (11 authors)</span><span class="t-ko">외 10인</span></span>
+      <span>🏛 Tencent AMS · Peking University</span>
+      <span>🗓 2026.02.11</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.10796">arXiv:2602.10796</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Efficient sequence models are stuck on a <b>single-step, Rank-1 update</b> (DeltaNet, Mamba), while Test-Time Training (TTT) does real multi-step optimization but <b>breaks hardware parallelism</b> because gradients depend on the hidden state. PRISM <span class="hl">amortizes the multi-step solver into a parallelizable feed-forward operator</span>: a short convolution anchors the state interaction <i>without</i> reading <i>S<sub>t−1</sub></i>, and an unrolled residual loop builds a <b>Rank-L</b> injection. Result — quality on par with explicit solvers and deep Transformers, but <b>up to 174× higher throughput</b> than TTT.</p>
+    <p class="t-ko">효율적 시퀀스 모델은 <b>단일 스텝·Rank-1 업데이트</b>(DeltaNet, Mamba)에 갇혀 있고, Test-Time Training(TTT)은 진짜 다단계 최적화를 하지만 그래디언트가 hidden state에 의존해 <b>하드웨어 병렬성을 깨뜨린다</b>. PRISM은 <span class="hl">다단계 솔버를 병렬 가능한 feed-forward 연산자로 '상각(amortize)'</span>한다: short convolution이 <i>S<sub>t−1</sub></i>를 읽지 <i>않고</i> 상태 상호작용을 anchor하고, unrolled residual loop가 <b>Rank-L</b> 주입을 만든다. 결과 — 명시적 솔버·딥 트랜스포머 수준 품질에, TTT 대비 <b>최대 174× 높은 처리량</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The real frontier isn't "linear vs. attention" — it's "how deep an optimizer can you run while staying parallel."</p>
+    <p class="lead t-ko">진짜 격전지는 "선형 대 어텐션"이 아니라, "병렬을 유지하면서 얼마나 깊은 옵티마이저를 돌릴 수 있는가"다.</p>
+    <p class="t-en">Linear attention, SSMs and the delta-rule all share one ceiling: each new token is written into the state with a single Rank-1 outer product — one gradient step on a linear objective. That cannot do iterative error correction. TTT removes the ceiling by running multi-step gradient descent at inference, but the gradient ∇L depends on <i>S<sub>t−1</sub></i>, forcing a serial chain that kills the throughput advantage. PRISM's bet is that you don't need the <i>exact</i> state-dependent trajectory — you only need its <b>structure</b> (Rank-L accumulation + non-linear shaping), and that structure can be <b>distilled into a static, input-only policy</b> that a parallel prefix scan can still process.</p>
+    <p class="t-ko">선형 어텐션, SSM, 델타룰은 한 가지 천장을 공유한다: 새 토큰을 단일 Rank-1 외적(선형 목적함수에 대한 1회 그래디언트 스텝)으로만 상태에 쓴다. 반복적 오차 보정이 불가능하다. TTT는 추론 시 다단계 경사하강으로 이 천장을 없애지만, 그래디언트 ∇L이 <i>S<sub>t−1</sub></i>에 의존해 직렬 사슬을 강제하고 처리량 이점을 무너뜨린다. PRISM의 베팅은 <i>정확한</i> 상태 의존 궤적이 아니라 그 <b>구조</b>(Rank-L 누적 + 비선형 shaping)만 필요하며, 그 구조를 <b>입력만으로 결정되는 정적 정책</b>으로 증류하면 병렬 prefix scan이 여전히 처리할 수 있다는 것이다.</p>
+    <figure class="fig">
+      <img src="fig/2602.10796/fig1.png" alt="PRISM architecture: ShortConv anchor, unrolled residual solver in SRAM, parallel scan state update">
+      <figcaption class="t-en"><b>Figure 1.</b> The PRISM block. A ShortConv anchor produces the proxy <i>u<sub>t</sub> ≈ S<sub>t−1</sub>k<sub>t</sub></i> from input only; an unrolled GELU residual loop greedily subtracts errors to build a Rank-L injection <i>B<sub>t</sub></i>; the result feeds a decoupled linear recurrence whose forgetting operator <i>A<sub>t</sub></i> stays state-independent so the parallel scan survives.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> PRISM 블록. ShortConv anchor가 입력만으로 프록시 <i>u<sub>t</sub> ≈ S<sub>t−1</sub>k<sub>t</sub></i>를 만들고, unrolled GELU residual loop가 오차를 탐욕적으로 빼며 Rank-L 주입 <i>B<sub>t</sub></i>를 쌓는다. 이 결과가 decoupled 선형 recurrence로 들어가며, forgetting 연산자 <i>A<sub>t</sub></i>는 상태 독립이라 병렬 스캔이 유지된다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.10796</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">174×</div><div class="l"><span class="t-en">Throughput vs. explicit<br>optimization (TTT)</span><span class="t-ko">명시적 최적화(TTT)<br>대비 처리량</span></div></div>
+      <div class="stat"><div class="n">2.62</div><div class="l"><span class="t-en">PRISM Mean Rank<br>(best of all linear models)</span><span class="t-ko">PRISM 평균 순위<br>(전 선형 모델 중 1위)</span></div></div>
+      <div class="stat"><div class="n">Rank-L</div><div class="l"><span class="t-en">Injection rank<br>(vs. Rank-1 baseline)</span><span class="t-ko">주입 랭크<br>(Rank-1 대비)</span></div></div>
+      <div class="stat"><div class="n">57–61K</div><div class="l"><span class="t-en">PRISM tok/s, stable<br>2K→16K (TTT: 0.34K)</span><span class="t-ko">PRISM tok/s, 2K→16K<br>안정 (TTT: 0.34K)</span></div></div>
+      <div class="stat"><div class="n">3.8×</div><div class="l"><span class="t-en">Transformer++ slowdown<br>at 16K (PRISM: flat)</span><span class="t-ko">Transformer++ 16K<br>둔화 (PRISM: 평탄)</span></div></div>
+      <div class="stat"><div class="n">0.13B</div><div class="l"><span class="t-en">Model size · 1× H20 GPU<br>4 rec. benchmarks</span><span class="t-ko">모델 크기 · H20 1장<br>추천 벤치 4종</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — best linear model, Transformer-grade quality</span><span class="t-ko">결과 — 최고 선형 모델, 트랜스포머급 품질</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 excerpt.</b> Recommendation benchmarks (0.13B). AUC and NDCG@200 across two datasets; Mean Rank over all 4. PRISM tops every optimization-based linear baseline.</caption>
+        <caption class="t-ko"><b>Table 2 발췌.</b> 추천 벤치마크(0.13B). 두 데이터셋의 AUC·NDCG@200, 평균 순위는 4종 전체 기준. PRISM이 모든 최적화 기반 선형 baseline을 앞선다.</caption>
+        <thead><tr><th>Model</th><th>Books AUC</th><th>Movies AUC</th><th>Movies NDCG@200</th><th>Mean Rank</th></tr></thead>
+        <tbody>
+          <tr><td>GLA</td><td>0.8752</td><td>0.7478</td><td>0.0222</td><td>9.38</td></tr>
+          <tr><td>Mamba-2</td><td>0.8872</td><td>0.7713</td><td>0.0276</td><td>5.00</td></tr>
+          <tr><td>Gated DeltaNet</td><td>0.8844</td><td>0.7504</td><td>0.0253</td><td>5.12</td></tr>
+          <tr><td>TTT</td><td>0.8871</td><td>0.7591</td><td>0.0256</td><td>5.25</td></tr>
+          <tr><td>TITANS</td><td>0.8869</td><td>0.7652</td><td>0.0278</td><td>3.62</td></tr>
+          <tr><td><b>PRISM</b></td><td class="up">0.8888</td><td class="up">0.7727</td><td class="up">0.0289</td><td class="up">2.62</td></tr>
+          <tr><td>SASRec (Transformer)</td><td>0.8910</td><td>0.7677</td><td>0.0244</td><td>–</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">ShortConv anchor</span><span class="t-ko">ShortConv anchor</span></div>
+          <div class="sub"><span class="t-en">input only</span><span class="t-ko">입력만 사용</span></div>
+          <div class="latent">u<sub>t</sub> ≈ S<sub>t−1</sub>k<sub>t</sub></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Unrolled residual loop</span><span class="t-ko">Unrolled residual loop</span></div>
+          <div class="sub"><span class="t-en">GELU · subtract · repeat ×L</span><span class="t-ko">GELU·뺄셈·반복 ×L</span></div>
+          <div class="latent"><span class="t-en">build Rank-L B<sub>t</sub></span><span class="t-ko">Rank-L B<sub>t</sub> 생성</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Parallel scan</span><span class="t-ko">병렬 스캔</span></div>
+          <div class="sub"><span class="t-en">A<sub>t</sub> state-independent</span><span class="t-ko">A<sub>t</sub> 상태 독립</span></div>
+          <div class="latent"><span class="t-en">O(N) throughput</span><span class="t-ko">O(N) 처리량</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Anchor, don't recurse.</b> By proxying the state interaction from local input, the high-rank update becomes a pure function of the input — so it slots straight into a parallel prefix scan.</div>
+      <div class="cap t-ko"><b>재귀 대신 anchor.</b> 상태 상호작용을 로컬 입력으로 프록시하면 high-rank 업데이트가 입력만의 함수가 되고, 그대로 병렬 prefix scan에 끼워진다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas that make it work</span><span class="t-ko">작동을 가능케 한 두 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 분해</span>
+        <h3>Write-Forget Decoupling</h3>
+        <p class="t-en">A spectral perturbation analysis shows errors in the <span class="term">forgetting operator A<sub>t</sub></span> accumulate only at O(ln T) (O(1) on average), while errors in the <span class="term">injection B<sub>t</sub></span> accumulate at O(T). So PRISM cheaply linearizes A<sub>t</sub> (a Rank-1 I − βkk<sup>⊤</sup> decay) and spends <strong>all</strong> capacity on a high-rank, non-linear B<sub>t</sub>.</p>
+        <p class="t-ko">스펙트럼 섭동 분석 결과 <span class="term">forgetting 연산자 A<sub>t</sub></span>의 오차는 O(ln T)(평균 O(1))로만 쌓이는 반면, <span class="term">주입 B<sub>t</sub></span>의 오차는 O(T)로 쌓인다. 그래서 PRISM은 A<sub>t</sub>를 값싸게 선형화(Rank-1 I − βkk<sup>⊤</sup> 감쇠)하고 <strong>모든</strong> 표현력을 high-rank·비선형 B<sub>t</sub>에 쏟는다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 상각</span>
+        <h3>Input-Anchored Loop Unrolling</h3>
+        <p class="t-en">Replace the serial dependency on <span class="term">S<sub>t−1</sub></span> with a ShortConv proxy <span class="term">u<sub>t</sub></span>. An unrolled loop forms a Newton-like step δ<sup>(l)</sup>=GELU(p<sup>(l)</sup>⊙r<sup>(l)</sup>), subtracts it (r<sup>(l+1)</sup>=r<sup>(l)</sup>−δ<sup>(l)</sup>), and accumulates orthogonal Rank-1 terms into B<sub>t</sub> = Σ β<sup>(l)</sup>(δ<sup>(l)</sup>⊗k<sup>(l)</sup>).</p>
+        <p class="t-ko"><span class="term">S<sub>t−1</sub></span>에 대한 직렬 의존을 ShortConv 프록시 <span class="term">u<sub>t</sub></span>로 대체한다. unrolled loop가 뉴턴 스텝 δ<sup>(l)</sup>=GELU(p<sup>(l)</sup>⊙r<sup>(l)</sup>)을 만들고 이를 빼며(r<sup>(l+1)</sup>=r<sup>(l)</sup>−δ<sup>(l)</sup>) 직교 Rank-1 항을 B<sub>t</sub> = Σ β<sup>(l)</sup>(δ<sup>(l)</sup>⊗k<sup>(l)</sup>)로 누적한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Anchor the state interaction</span><span class="t-ko">상태 상호작용 anchor</span></b><span class="t-en">A short convolution over local input yields u<sub>t</sub> ≈ S<sub>t−1</sub>k<sub>t</sub>, giving state-independent access to the key interaction (error decays exponentially with the memory window).</span><span class="t-ko">로컬 입력에 대한 short convolution이 u<sub>t</sub> ≈ S<sub>t−1</sub>k<sub>t</sub>를 내어, key 상호작용에 상태 독립적으로 접근(오차는 메모리 윈도우에 따라 지수적으로 감소).</span></li>
+      <li><b><span class="t-en">Seed and refine the residual</span><span class="t-ko">잔차 초기화·정제</span></b><span class="t-en">Initialize r<sup>(1)</sup>=v<sub>t</sub>−u<sub>t</sub>, then iterate L times: gate by a learned gain predictor p (a proxy for σ′), GELU-shape it, and subtract — each pass captures complementary error.</span><span class="t-ko">r<sup>(1)</sup>=v<sub>t</sub>−u<sub>t</sub>로 초기화 후 L회 반복: 학습된 gain predictor p(σ′의 프록시)로 게이팅, GELU shaping, 뺄셈 — 매 회 보완적 오차를 포착.</span></li>
+      <li><b><span class="t-en">Accumulate Rank-L injection</span><span class="t-ko">Rank-L 주입 누적</span></b><span class="t-en">Sum the L orthogonal rank-1 components, each scaled by a confidence gate β<sup>(l)</sup>=W<sub>β</sub>u<sub>t</sub>, into the high-rank matrix B<sub>t</sub>.</span><span class="t-ko">각각 신뢰도 게이트 β<sup>(l)</sup>=W<sub>β</sub>u<sub>t</sub>로 스케일된 L개의 직교 rank-1 성분을 high-rank 행렬 B<sub>t</sub>로 합산.</span></li>
+      <li><b><span class="t-en">Inject into a decoupled recurrence</span><span class="t-ko">분리된 recurrence에 주입</span></b><span class="t-en">Update S<sub>t</sub> = α<sub>t</sub>S<sub>t−1</sub>(I − β<sup>(1)</sup>k<sup>(1)</sup>⊗k<sup>(1)</sup>) + B<sub>t</sub>. Because A<sub>t</sub> and B<sub>t</sub> are both input-only, a parallel scan computes the whole sequence in O(N).</span><span class="t-ko">S<sub>t</sub> = α<sub>t</sub>S<sub>t−1</sub>(I − β<sup>(1)</sup>k<sup>(1)</sup>⊗k<sup>(1)</sup>) + B<sub>t</sub>로 갱신. A<sub>t</sub>·B<sub>t</sub> 모두 입력만의 함수라 병렬 스캔이 전체 시퀀스를 O(N)에 계산.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>You can have depth and parallelism.</strong> Amortizing the solver's <em>structure</em> (not its exact trajectory) gets explicit-solver quality at 174× the throughput of TTT.</p><p class="t-ko"><strong>깊이와 병렬성을 동시에.</strong> 솔버의 <em>구조</em>(정확한 궤적이 아니라)만 상각하면 명시적 솔버 품질을 TTT 대비 174× 처리량으로 얻는다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Rank-1 is the real bottleneck.</strong> The ablation's biggest drop comes from collapsing L→1 (AUC 0.7134→0.6805) — solver depth, not non-linearity alone, is what matters.</p><p class="t-ko"><strong>진짜 병목은 Rank-1.</strong> 어블레이션 최대 하락이 L→1 축소에서 발생(AUC 0.7134→0.6805) — 비선형성보다 솔버 깊이가 핵심.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Decouple where errors are cheap.</strong> The A<sub>t</sub> O(ln T) vs B<sub>t</sub> O(T) asymmetry is a reusable design principle: linearize the forget gate, spend rank on the write.</p><p class="t-ko"><strong>오차가 싼 곳을 분리하라.</strong> A<sub>t</sub> O(ln T) 대 B<sub>t</sub> O(T) 비대칭은 재사용 가능한 설계 원칙: forget은 선형화, write에 랭크를 쓴다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>It's a drop-in linear layer.</strong> Built on Flash-Linear-Attention operators, PRISM sits in the 55–65K tok/s band with GLA/Mamba2/GDeltaNet — no exotic kernel.</p><p class="t-ko"><strong>그대로 끼우는 선형 레이어.</strong> Flash-Linear-Attention 연산자 위에 구현, GLA/Mamba2/GDeltaNet과 같은 55–65K tok/s 대역 — 특수 커널 불필요.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> Every empirical claim is on 0.13B models and <em>recommendation</em> benchmarks (Amazon/Yelp), not language modeling — and on AUC/NDCG the margins over Mamba-2/TITANS are tiny (e.g., Books AUC 0.8888 vs 0.8872). The "Rank-L accumulation" theory is the paper's headline, but with L fixed small and the gain σ′ merely <em>simulated</em> by a learned predictor, it's unclear whether PRISM truly approximates the ideal non-linear solver or just adds a well-tuned multi-branch convolutional FFN. No LM perplexity, no scale beyond 0.13B.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 모든 실증이 0.13B 모델과 <em>추천</em> 벤치마크(Amazon/Yelp)에 한정되고 언어모델링은 없으며, AUC/NDCG에서 Mamba-2·TITANS 대비 마진이 매우 작다(예: Books AUC 0.8888 vs 0.8872). "Rank-L 누적" 이론이 간판이지만, L이 작게 고정되고 gain σ′가 학습된 predictor로 단지 <em>모사(simulate)</em>될 뿐이라, PRISM이 정말 이상적 비선형 솔버를 근사하는지 아니면 잘 튜닝된 멀티브랜치 conv-FFN인지는 불분명. LM perplexity도, 0.13B 이상 스케일도 없다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.10796">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.10796">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.10796">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.10796">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

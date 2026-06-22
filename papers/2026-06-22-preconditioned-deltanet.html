@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Preconditioned DeltaNet: Curvature-aware Sequence Modeling for Linear Recurrences</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · DeltaNet</span><span class="t-ko">⚡ Efficient Seq · DeltaNet</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Preconditioned DeltaNet<br><span class="glow t-en">— Give the delta rule a second-order sense of curvature, almost for free</span><span class="glow t-ko">— 델타 규칙에 거의 공짜로 2차(곡률) 감각을 달아준다</span></h1>
+    <div class="meta">
+      <span>👥 <b>Neehal Tumma</b> <span class="t-en">et al.</span><span class="t-ko">외 2인</span></span>
+      <span>🏛 MIT · Liquid AI</span>
+      <span>🗓 2026.04.22</span>
+      <span>📄 <a href="https://arxiv.org/abs/2604.21100">arXiv:2604.21100</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Delta-rule recurrences (DeltaNet, GDN, KDA) are really doing online least-squares — but only a <b>first-order (gradient) step</b>, ignoring the loss <b>curvature</b>. This paper adds a cheap <span class="hl">diagonal preconditioner</span> on the write key that injects second-order information, recovering exact least-squares in theory and unifying linear attention with DeltaNet. The result: <b>consistent gains on recall + LM at 340M and 1B</b>, with only ~<b>10% throughput overhead</b> and <b>&gt;20% faster than MesaNet</b>.</p>
+    <p class="t-ko">델타 규칙 계열(DeltaNet, GDN, KDA)은 사실 온라인 최소제곱을 푸는데, <b>1차(그래디언트) 한 스텝</b>만 밟고 손실의 <b>곡률</b>은 무시한다. 이 논문은 write key에 값싼 <span class="hl">대각 전처리기(diagonal preconditioner)</span>를 붙여 2차 정보를 주입한다. 이론상 정확한 최소제곱 해를 복원하고, 선형 어텐션과 DeltaNet을 하나로 통합한다. 결과는 <b>340M·1B에서 recall·LM 일관된 향상</b>, 처리량 오버헤드는 단 ~<b>10%</b>, <b>MesaNet보다 20% 이상 빠름</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The bottleneck isn't more parameters — it's that linear recurrences only take a first-order step.</p>
+    <p class="lead t-ko">병목은 파라미터가 아니라, 선형 순환 모델이 1차 스텝만 밟는다는 데 있다.</p>
+    <p class="t-en">Under the Test-Time Regression (TTR) lens, a recurrent layer is silently learning a key→value linear map by online least squares. DeltaNet and its gated cousins implement this with a single <strong>SGD-style update</strong> — a first-order approximation that throws away the <strong>curvature</strong> (the key Gram matrix) of the regression. "Exact" solvers that keep the curvature, like Mesalayer and MesaNet, either lose parallelism or become numerically fragile. The authors thread the needle: keep the cheap delta-rule recurrence, but <strong>precondition the write key</strong> with a diagonal estimate of the inverse Gram. It is curvature-awareness without the cost of a full inverse.</p>
+    <p class="t-ko">Test-Time Regression(TTR) 관점에서 순환 레이어는 사실 key→value 선형 사상을 온라인 최소제곱으로 학습한다. DeltaNet과 게이트 변형들은 이를 <strong>SGD식 한 번의 업데이트</strong>로 구현하는데, 이는 회귀의 <strong>곡률</strong>(key Gram 행렬)을 버리는 1차 근사다. 곡률을 살리는 "정확한" 해법(Mesalayer, MesaNet)은 병렬성을 잃거나 수치적으로 불안정해진다. 저자들은 그 사이를 통과한다 — 값싼 델타 규칙 순환은 그대로 두되, <strong>write key를 역 Gram의 대각 추정치로 전처리</strong>한다. 전체 역행렬 없이 곡률 인식을 얻는 것.</p>
+    <figure class="fig">
+      <img src="fig/2604.21100/fig1.png" alt="Training throughput of preconditioned vs baseline recurrences and MesaNet">
+      <figcaption class="t-en"><b>Figure 3.</b> Training throughput (tokens/s, 8×H100, 340M) across batch×sequence-length settings. <b>PGDN / PKDA</b> sit just below their GDN/KDA baselines (~10% overhead) yet clearly above MesaNet — curvature awareness at near-baseline speed.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> 학습 처리량(tokens/s, 8×H100, 340M)을 배치×시퀀스 길이별로 측정. <b>PGDN / PKDA</b>는 GDN/KDA 기준선 바로 아래(~10% 오버헤드)지만 MesaNet보다는 확연히 위 — 거의 기준선 속도로 얻는 곡률 인식.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.21100</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">~10%</div><div class="l"><span class="t-en">Throughput overhead<br>(PGDN/PKDA vs GDN/KDA)</span><span class="t-ko">처리량 오버헤드<br>(PGDN/PKDA vs GDN/KDA)</span></div></div>
+      <div class="stat"><div class="n">&gt;20%</div><div class="l"><span class="t-en">Faster than MesaNet<br>(PGDN, 340M)</span><span class="t-ko">MesaNet 대비 빠름<br>(PGDN, 340M)</span></div></div>
+      <div class="stat"><div class="n">+1.40</div><div class="l"><span class="t-en">ICR avg gain, 340M<br>(PGDN 26.17 vs GDN 24.77)</span><span class="t-ko">ICR 평균 향상, 340M<br>(PGDN 26.17 vs GDN 24.77)</span></div></div>
+      <div class="stat"><div class="n">+1.12</div><div class="l"><span class="t-en">ICR avg gain, 1B<br>(PGDN 34.99 vs GDN 33.87)</span><span class="t-ko">ICR 평균 향상, 1B<br>(PGDN 34.99 vs GDN 33.87)</span></div></div>
+      <div class="stat"><div class="n">340M / 1B</div><div class="l"><span class="t-en">Pretraining scales<br>(15B / 50B tokens)</span><span class="t-ko">사전학습 규모<br>(15B / 50B 토큰)</span></div></div>
+      <div class="stat"><div class="n">diag</div><div class="l"><span class="t-en">Preconditioner form<br>(inverse Gram approx.)</span><span class="t-ko">전처리기 형태<br>(역 Gram 근사)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — preconditioning helps everywhere</span><span class="t-ko">결과 — 전처리는 어디서나 도움된다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Average accuracy (%, higher better). Each preconditioned model (P-) is compared to its own baseline. CS = commonsense-reasoning avg; ICR = in-context-retrieval avg (FDA/SWDE/SQuAD/TQA/DROP).</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> 평균 정확도(%, 높을수록 좋음). 각 전처리 모델(P-)을 자신의 기준선과 비교. CS = 상식추론 평균, ICR = 인컨텍스트 검색 평균(FDA/SWDE/SQuAD/TQA/DROP).</caption>
+        <thead><tr><th>Model</th><th>Scale</th><th>CS avg</th><th>ICR avg</th><th>Δ ICR</th></tr></thead>
+        <tbody>
+          <tr><td>DeltaNet</td><td>340M</td><td>47.41</td><td>22.59</td><td>—</td></tr>
+          <tr><td>P-DeltaNet</td><td>340M</td><td>47.96</td><td>23.84</td><td class="up">+1.25</td></tr>
+          <tr><td>GDN</td><td>340M</td><td>48.86</td><td>24.77</td><td>—</td></tr>
+          <tr><td>PGDN</td><td>340M</td><td>49.96</td><td>26.17</td><td class="up">+1.40</td></tr>
+          <tr><td>KDA</td><td>340M</td><td>49.12</td><td>25.88</td><td>—</td></tr>
+          <tr><td>PKDA</td><td>340M</td><td>49.89</td><td>26.76</td><td class="up">+0.88</td></tr>
+          <tr><td>GDN</td><td>1B</td><td>55.44</td><td>33.87</td><td>—</td></tr>
+          <tr><td>PGDN</td><td>1B</td><td>56.38</td><td>34.99</td><td class="up">+1.12</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Online least squares</span><span class="t-ko">온라인 최소제곱</span></div>
+          <div class="sub"><span class="t-en">key→value map S</span><span class="t-ko">key→value 사상 S</span></div>
+          <div class="latent"><span class="t-en">curvature = key Gram G</span><span class="t-ko">곡률 = key Gram G</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">DeltaNet step</span><span class="t-ko">DeltaNet 스텝</span></div>
+          <div class="sub"><span class="t-en">first-order SGD (no curvature)</span><span class="t-ko">1차 SGD (곡률 없음)</span></div>
+          <div class="latent"><span class="t-en">k̃ = k (raw write key)</span><span class="t-ko">k̃ = k (원본 write key)</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Preconditioned (PDN)</span><span class="t-ko">전처리 (PDN)</span></div>
+          <div class="sub"><span class="t-en">k̃ = P·k / (1+kᵀPk)</span><span class="t-ko">k̃ = P·k / (1+kᵀPk)</span></div>
+          <div class="latent"><span class="t-en">exact least squares (in theory)</span><span class="t-ko">정확한 최소제곱(이론상)</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Precondition the write key.</b> Multiply the key by a diagonal estimate P of the inverse Gram before the delta update — second-order information enters, the recurrence stays parallelizable.</div>
+      <div class="cap t-ko"><b>write key를 전처리한다.</b> 델타 업데이트 전에 key에 역 Gram의 대각 추정치 P를 곱한다 — 2차 정보가 들어오면서도 순환은 여전히 병렬화 가능.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: reframe the recurrence as preconditioned least squares</span><span class="t-ko">아이디어: 순환을 '전처리 최소제곱'으로 재정의</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 통합</span>
+        <h3>One theory, two operators</h3>
+        <p class="t-en">With the <em>exact</em> inverse key Gram as preconditioner, linear attention applied-to-query (ATQ) and DeltaNet applied-to-key (ATK) become <strong>provably equivalent</strong> (Theorem 3.1) — both recover the exact least-squares map. Preconditioning is the missing axis that unifies them.</p>
+        <p class="t-ko"><em>정확한</em> 역 key Gram을 전처리기로 쓰면, linear attention의 query 적용(ATQ)과 DeltaNet의 key 적용(ATK)이 <strong>증명상 동치</strong>(정리 3.1)가 된다 — 둘 다 정확한 최소제곱 사상을 복원. 전처리는 둘을 통합하는 빠진 축이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 근사</span>
+        <h3>Diagonal preconditioner</h3>
+        <p class="t-en">The exact inverse is sequential (Sherman–Morrison) and kills parallelism. So they keep only the <strong>diagonal</strong>: accumulate coordinate-wise squared keys (Aₜ = Aₜ₋₁ + k⊙k), like Adam's second moment. A pretrained DeltaNet's Gram is shown to be largely <strong>axis-aligned</strong>, justifying it — and it admits an efficient chunkwise prefix-sum form.</p>
+        <p class="t-ko">정확한 역행렬은 순차적(Sherman–Morrison)이라 병렬성을 죽인다. 그래서 <strong>대각</strong>만 남긴다 — 좌표별 key 제곱을 누적(Aₜ = Aₜ₋₁ + k⊙k), Adam의 2차 모멘트처럼. 사전학습된 DeltaNet의 Gram이 대체로 <strong>축 정렬</strong>임을 보여 정당화하고, 이는 효율적 청크 prefix-sum 형태를 허용한다.</p>
+      </div>
+    </div>
+    <figure class="fig">
+      <img src="fig/2604.21100/fig1.png" alt="Throughput comparison">
+      <figcaption class="t-en"><b>Figure 3 (again).</b> The efficiency payoff: PGDN/PKDA keep nearly baseline tokens/s while the exact-solver MesaNet lags — the whole point of the diagonal approximation.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3 (재인용).</b> 효율 이득: PGDN/PKDA는 거의 기준선 tokens/s를 유지하지만 정확 해법 MesaNet은 뒤처진다 — 대각 근사의 존재 이유.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.21100</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Read the recurrence as least squares</span><span class="t-ko">순환을 최소제곱으로 읽기</span></b><span class="t-en">View the delta update Sₜ = Sₜ₋₁ − βₜ(Sₜ₋₁kₜ − vₜ)kₜᵀ as one preconditioned SGD step on the key→value least-squares loss.</span><span class="t-ko">델타 업데이트 Sₜ = Sₜ₋₁ − βₜ(Sₜ₋₁kₜ − vₜ)kₜᵀ를 key→value 최소제곱 손실에 대한 전처리된 SGD 한 스텝으로 본다.</span></li>
+      <li><b><span class="t-en">Precondition the write key (ATK)</span><span class="t-ko">write key 전처리 (ATK)</span></b><span class="t-en">Replace the write key kₜ with k̃ₜ = Pₜ₋₁kₜ / (1 + kₜᵀPₜ₋₁kₜ). With exact P this gives the closed-form least-squares solution; the read key stays separate.</span><span class="t-ko">write key kₜ를 k̃ₜ = Pₜ₋₁kₜ / (1 + kₜᵀPₜ₋₁kₜ)로 교체. 정확한 P면 최소제곱 닫힌 해가 되고, read key는 별도로 유지된다.</span></li>
+      <li><b><span class="t-en">Approximate P diagonally</span><span class="t-ko">P를 대각으로 근사</span></b><span class="t-en">Track second moments Aₜ = αₜᴾAₜ₋₁ + βₜᴾ(k⊙k) and set P = Diag(A)⁻¹. Pass a stabilized, squashed transform Bₜ ∈ [1/x, x] (x ≤ 2 keeps transition eigenvalues ≤ 1) for trainability.</span><span class="t-ko">2차 모멘트 Aₜ = αₜᴾAₜ₋₁ + βₜᴾ(k⊙k)를 추적하고 P = Diag(A)⁻¹로 둔다. 학습 안정성을 위해 squash 변환 Bₜ ∈ [1/x, x](x ≤ 2면 전이 고유값 ≤ 1)를 전달한다.</span></li>
+      <li><b><span class="t-en">Fuse into chunkwise kernels</span><span class="t-ko">청크 커널로 융합</span></b><span class="t-en">Because P is diagonal and orthogonal to decay, plug it into existing DeltaNet/GDN/KDA chunkwise forms → PDN, PGDN, PKDA with custom Triton kernels at ~10% overhead.</span><span class="t-ko">P는 대각이고 decay와 직교하므로 기존 DeltaNet/GDN/KDA 청크 형태에 끼워넣는다 → 커스텀 Triton 커널로 PDN, PGDN, PKDA를 ~10% 오버헤드에 구현.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🧭</span><p class="t-en"><strong>Curvature is a free axis.</strong> Linear recurrences were leaving second-order information on the table; a diagonal preconditioner picks it up at ~10% cost.</p><p class="t-ko"><strong>곡률은 공짜 축이다.</strong> 선형 순환 모델은 2차 정보를 버려왔는데, 대각 전처리기가 ~10% 비용으로 이를 회수한다.</p></div>
+      <div class="t"><span class="ic">🔗</span><p class="t-en"><strong>One framework unifies two.</strong> Exact preconditioning makes linear attention and DeltaNet the same operator — a clean theoretical bridge.</p><p class="t-ko"><strong>하나의 틀이 둘을 통합.</strong> 정확한 전처리에서 linear attention과 DeltaNet은 동일 연산자가 된다 — 깔끔한 이론적 다리.</p></div>
+      <div class="t"><span class="ic">⚡</span><p class="t-en"><strong>Stays fast.</strong> Diagonal approx → chunkwise parallel → &gt;20% faster than MesaNet, the curvature-keeping baseline.</p><p class="t-ko"><strong>여전히 빠르다.</strong> 대각 근사 → 청크 병렬 → 곡률 유지 기준선 MesaNet보다 20% 이상 빠름.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Drop-in across the family.</strong> Same trick applies to DeltaNet, GDN, and KDA — preconditioning composes with decay and gain (the DGPS taxonomy).</p><p class="t-ko"><strong>계열 전반에 끼워넣기.</strong> 같은 트릭이 DeltaNet·GDN·KDA에 적용 — 전처리는 decay·gain과 조합된다(DGPS 분류).</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The wins are real but modest — roughly +1 point on retrieval/CS averages — and the diagonal preconditioner is only justified empirically by one pretrained DeltaNet checkpoint being "axis-aligned." If that axis-alignment is architecture- or training-specific, the diagonal approximation could collapse to noise. The exact-preconditioning equivalence (Theorem 3.1) also no longer holds once you diagonalize, so the theory motivates rather than guarantees the practical method. Scales stop at 1B/50B tokens.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 향상은 실재하나 소폭이다 — 검색·상식 평균에서 대략 +1점 — 그리고 대각 전처리기의 정당화는 사전학습된 DeltaNet 체크포인트 하나가 "축 정렬"이라는 경험적 관찰에 의존한다. 그 축 정렬이 아키텍처·학습 의존적이면 대각 근사는 잡음으로 무너질 수 있다. 또한 정확 전처리 동치(정리 3.1)는 대각화하는 순간 더는 성립하지 않으므로, 이론은 실제 방법을 보장이 아닌 동기 부여에 그친다. 규모도 1B/50B 토큰에서 멈춘다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2604.21100">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2604.21100">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2604.21100">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2604.21100">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

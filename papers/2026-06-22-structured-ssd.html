@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · On Structured State-Space Duality</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · SSD Theory</span><span class="t-ko">⚡ Efficient Seq · SSD Theory</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>On Structured State-Space Duality<br>
+      <span class="glow t-en">— Stretching the SSM↔attention bridge from one decay to many</span>
+      <span class="glow t-ko">— SSM↔어텐션 다리를 '하나의 감쇠'에서 '여러 감쇠'로 넓히다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Jerry Yao-Chieh Hu</b> <span class="t-en">et al. (Han Liu)</span><span class="t-ko">외 4인 (Han Liu)</span></span>
+      <span>🏛 Northwestern University · Ensemble AI · UC San Diego</span>
+      <span>🗓 2025.10.06</span>
+      <span>📄 <a href="https://arxiv.org/abs/2510.04944">arXiv:2510.04944</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Structured State-Space Duality (SSD, Dao &amp; Gu, ICML 2024) showed that an SSM with a <b>scalar-times-identity</b> state matrix is exactly the same function as <b>1-semiseparable masked attention</b> — solvable either in linear O(T) or quadratic O(T²) time. This note <span class="hl">generalizes that duality from the scalar case to general <b>diagonal</b> SSMs</span>, proves the richer model still trains at the <b>same optimal O(TN)</b> cost, gives a <b>necessary-and-sufficient condition</b> for an N-dim SSM to collapse to a single 1-SS attention head, and shows the bridge <b>cannot reach softmax attention</b> because its induced kernel is essentially full rank (rank explosion).</p>
+    <p class="t-ko">Structured State-Space Duality(SSD, Dao &amp; Gu, ICML 2024)는 <b>스칼라×단위행렬</b> 상태행렬을 가진 SSM이 <b>1-준분리(1-semiseparable) 마스크 어텐션</b>과 정확히 같은 함수임을 보였다 — 선형 O(T)로도, 이차 O(T²)로도 계산 가능. 이 노트는 <span class="hl">그 쌍대성을 스칼라에서 일반 <b>대각(diagonal)</b> SSM으로 확장</span>하고, 더 풍부한 모델이 여전히 <b>같은 최적 O(TN)</b> 비용으로 학습됨을 증명하며, N차원 SSM이 단일 1-SS 어텐션 헤드로 환원될 <b>필요충분조건</b>을 제시한다. 또한 이 다리가 <b>softmax 어텐션까지는 닿지 못함</b>(랭크 폭발로 사실상 full-rank)을 보인다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The duality is what lets one model be a fast RNN at inference and a parallel attention at training. Widening it = more expressive models for free.</p>
+    <p class="lead t-ko">이 쌍대성 덕분에 한 모델이 추론에선 빠른 RNN, 학습에선 병렬 어텐션이 된다. 그 범위를 넓힌다는 건 = 더 표현력 큰 모델을 공짜로 얻는다는 것.</p>
+    <p class="t-en">SSD is the theoretical engine behind Mamba-2: it proves a recurrent SSM and a masked-attention layer compute the <strong>identical function</strong>, so you train with the parallel O(T²) form and deploy with the linear O(T) form. But the original result only covers a <strong>single scalar decay</strong> per layer. This paper extends it to <strong>general diagonal</strong> state matrices — meaning N independent decay rates, so a layer can mix fast and slow timescales at once — and proves three structural facts: the diagonal model keeps the <strong>same O(TN) optimal training cost</strong>, the semiseparable rank of its attention kernel equals the number of <strong>distinct</strong> decay modes, and the whole duality <strong>breaks for softmax attention</strong>. The last point is a clean theoretical boundary: it explains why linear/SSM models and softmax Transformers are genuinely different beasts, not just two views of one thing.</p>
+    <p class="t-ko">SSD는 Mamba-2의 이론적 엔진이다 — 순환 SSM과 마스크 어텐션 레이어가 <strong>완전히 동일한 함수</strong>를 계산함을 증명해, 학습은 병렬 O(T²)로 하고 배포는 선형 O(T)로 한다. 그러나 원조 결과는 레이어당 <strong>단일 스칼라 감쇠</strong>만 다룬다. 이 논문은 이를 <strong>일반 대각</strong> 상태행렬로 확장한다 — N개의 독립적 감쇠율, 즉 한 레이어가 빠른·느린 시간척도를 동시에 섞을 수 있다. 그리고 세 가지 구조적 사실을 증명한다: 대각 모델도 <strong>같은 O(TN) 최적 학습 비용</strong>을 유지하고, 유도된 어텐션 커널의 준분리 랭크는 <strong>서로 다른</strong> 감쇠 모드의 수와 같으며, 쌍대성 전체가 <strong>softmax 어텐션에서는 깨진다</strong>. 마지막은 깔끔한 이론적 경계다 — 선형/SSM 모델과 softmax 트랜스포머가 한 사물의 두 시각이 아니라 본질적으로 다른 존재임을 설명한다.</p>
+    <figure class="fig">
+      <img src="fig/2510.04944/fig1.png" alt="WikiText-2 validation loss: Diagonal SSD-Mamba vs original Mamba over 10 epochs">
+      <figcaption class="t-en"><b>Figure (B.6).</b> WikiText-2 validation loss over 10 epochs (mean ± 1σ over 6 seeds). The diagonal SSD-Mamba variant (dark red) reaches a lower best val loss (9.7 vs 10.5) and avoids the late-epoch overfitting upturn of the original Mamba (gray).</figcaption>
+      <figcaption class="t-ko"><b>그림 (B.6).</b> WikiText-2 검증 손실, 10 에폭(6개 시드 평균 ± 1σ). 대각 SSD-Mamba(진한 빨강)는 더 낮은 최저 검증 손실(9.7 vs 10.5)에 도달하고, 원조 Mamba(회색)의 후반부 과적합 반등을 피한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2510.04944</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">&lt;10⁻¹⁴</div><div class="l"><span class="t-en">Max abs error: scalar SSM ≡ 1-SS attention<br>(1000 seeds, float64)</span><span class="t-ko">최대 절대오차: 스칼라 SSM ≡ 1-SS 어텐션<br>(시드 1000, float64)</span></div></div>
+      <div class="stat"><div class="n">O(TN)</div><div class="l"><span class="t-en">Diagonal SSD training cost<br>= scalar lower bound</span><span class="t-ko">대각 SSD 학습 비용<br>= 스칼라의 하한</span></div></div>
+      <div class="stat"><div class="n">O(T) vs O(T²)</div><div class="l"><span class="t-en">Recurrence vs attention runtime<br>(T up to 9,600, measured)</span><span class="t-ko">순환 vs 어텐션 런타임<br>(T 최대 9,600, 실측)</span></div></div>
+      <div class="stat"><div class="n">9.7 vs 10.5</div><div class="l"><span class="t-en">Best val loss: SSD-Mamba vs Mamba<br>(WikiText-2, 6 seeds)</span><span class="t-ko">최저 검증 손실: SSD-Mamba vs Mamba<br>(WikiText-2, 6 시드)</span></div></div>
+      <div class="stat"><div class="n">11.1% vs 9.5%</div><div class="l"><span class="t-en">Best val accuracy: SSD-Mamba vs Mamba<br>(next-token)</span><span class="t-ko">최고 검증 정확도: SSD-Mamba vs Mamba<br>(다음 토큰)</span></div></div>
+      <div class="stat"><div class="n">~10²</div><div class="l"><span class="t-en">Softmax rank gap T−rank(A)<br>at T ≈ 5,000 (i.e. ~full rank)</span><span class="t-ko">softmax 랭크 갭 T−rank(A)<br>T ≈ 5,000에서 (≈ full rank)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — rank tracks distinct decays, not state dim</span><span class="t-ko">결과 — 랭크는 상태차원이 아니라 '서로 다른 감쇠 수'를 따라간다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table (B.3).</b> Induced attention kernel rank vs SSM state dimension N. Semiseparable rank = number of <em>distinct</em> decay modes (duplicates add no rank). T=15, float64.</caption>
+        <caption class="t-ko"><b>표 (B.3).</b> 유도된 어텐션 커널 랭크 vs SSM 상태차원 N. 준분리 랭크 = <em>서로 다른</em> 감쇠 모드 수(중복은 랭크를 더하지 않음). T=15, float64.</caption>
+        <thead><tr><th><span class="t-en">Decays λ</span><span class="t-ko">감쇠 λ</span></th><th>N</th><th><span class="t-en">Generator rank</span><span class="t-ko">생성자 랭크</span></th><th><span class="t-en">Matrix rank(M)</span><span class="t-ko">행렬 랭크(M)</span></th></tr></thead>
+        <tbody>
+          <tr><td>(0.9)</td><td>1</td><td>1</td><td class="up">1</td></tr>
+          <tr><td>(0.5, 0.8)</td><td>2</td><td>2</td><td class="up">2</td></tr>
+          <tr><td>(0.7, 0.7)</td><td>2</td><td>1</td><td class="up">1</td></tr>
+          <tr><td>(0.4, 0.6, 0.9)</td><td>3</td><td>3</td><td class="up">3</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Scalar SSM</span><span class="t-ko">스칼라 SSM</span></div>
+          <div class="sub"><span class="t-en">A = a·I (one decay)</span><span class="t-ko">A = a·I (감쇠 하나)</span></div>
+          <div class="latent"><span class="t-en">⇄ 1-SS attention</span><span class="t-ko">⇄ 1-SS 어텐션</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Diagonal SSM</span><span class="t-ko">대각 SSM</span></div>
+          <div class="sub"><span class="t-en">A = diag(λ₁..λ_N)</span><span class="t-ko">A = diag(λ₁..λ_N)</span></div>
+          <div class="latent"><span class="t-en">⇄ sum of N 1-SS heads</span><span class="t-ko">⇄ N개 1-SS 헤드의 합</span></div>
+        </div>
+        <div class="flow">✗</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Softmax attention</span><span class="t-ko">Softmax 어텐션</span></div>
+          <div class="sub"><span class="t-en">QKᵀ → full rank</span><span class="t-ko">QKᵀ → full rank</span></div>
+          <div class="latent"><span class="t-en">no fixed low-rank SSM dual</span><span class="t-ko">고정 저랭크 SSM 쌍대 없음</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>One decay → many decays → none.</b> Each diagonal mode is its own 1-semiseparable head; sum N of them to get the diagonal SSM. Softmax has no fixed semiseparable rank, so the duality stops there.</div>
+      <div class="cap t-ko"><b>감쇠 하나 → 여러 개 → 닿지 못함.</b> 각 대각 모드는 그 자체로 하나의 1-준분리 헤드이고, N개를 합치면 대각 SSM이 된다. Softmax는 고정 준분리 랭크가 없어 쌍대성이 거기서 멈춘다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: generalize the bridge, then find its edge</span><span class="t-ko">아이디어: 다리를 일반화하고, 그 끝을 찾는다</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag"><span class="t-en">① Diagonal duality</span><span class="t-ko">① 대각 쌍대성</span></span>
+        <h3>Diagonal SSM ≡ Σ of 1-SS heads</h3>
+        <p class="t-en">Unrolling a diagonal SSM with A=diag(λ₁..λ_N) shows its output is exactly a <span class="term">sum of N one-semiseparable masked-attention heads</span>, each with its own geometric-decay mask λₙ^(t−s). This extends SSD from a single exponential to N separate timescales — and the induced kernel's semiseparable rank equals the number of <span class="term">distinct</span> decays (Theorem 4.1), still trainable in optimal <span class="term">O(TN)</span> time.</p>
+        <p class="t-ko">A=diag(λ₁..λ_N)인 대각 SSM을 펼치면, 그 출력이 정확히 <span class="term">N개의 1-준분리 마스크 어텐션 헤드의 합</span>임이 드러난다(각 헤드는 자신만의 기하감쇠 마스크 λₙ^(t−s)). SSD를 단일 지수에서 N개의 서로 다른 시간척도로 확장하며, 유도된 커널의 준분리 랭크는 <span class="term">서로 다른</span> 감쇠 수와 같다(정리 4.1). 여전히 최적 <span class="term">O(TN)</span> 시간에 학습 가능.</p>
+      </div>
+      <div class="m">
+        <span class="tag"><span class="t-en">② Where it breaks</span><span class="t-ko">② 깨지는 지점</span></span>
+        <h3>Softmax → rank explosion</h3>
+        <p class="t-en">For a duality to hold, the attention matrix must have <strong>bounded semiseparable rank</strong> (= small state dimension). The authors prove (and verify numerically) that a causal <span class="term">softmax</span> kernel from generic Q,K is <strong>effectively full rank</strong>: the gap T−rank(A) is only ~10² even at T≈5,000. So softmax attention has <strong>no fixed low-dimensional SSM dual</strong> — the bridge genuinely ends before standard Transformers.</p>
+        <p class="t-ko">쌍대성이 성립하려면 어텐션 행렬이 <strong>유계 준분리 랭크</strong>(=작은 상태차원)를 가져야 한다. 저자들은 일반 Q,K에서 나온 인과 <span class="term">softmax</span> 커널이 <strong>사실상 full rank</strong>임을 증명·수치검증한다 — 갭 T−rank(A)가 T≈5,000에서도 ~10²에 불과. 따라서 softmax 어텐션엔 <strong>고정 저차원 SSM 쌍대가 없으며</strong>, 다리는 표준 트랜스포머 앞에서 실제로 끝난다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Unroll the recurrence</span><span class="t-ko">순환식 펼치기</span></b><span class="t-en">Write the closed-form SSM output yₜ = Σ_{s≤t} cₜᵀ Aₜ⋯A_{s+1} bₛ xₛ as an explicit T×T attention matrix M with a 1-semiseparable causal mask — the same function, two algorithms.</span><span class="t-ko">SSM 닫힌 해 yₜ = Σ_{s≤t} cₜᵀ Aₜ⋯A_{s+1} bₛ xₛ를 1-준분리 인과 마스크를 가진 명시적 T×T 어텐션 행렬 M으로 쓴다 — 같은 함수, 두 알고리즘.</span></li>
+      <li><b><span class="t-en">Diagonalize A</span><span class="t-ko">A를 대각화</span></b><span class="t-en">Set A = diag(λ₁..λ_N). Each diagonal entry becomes an independent geometric-decay head; the SSM output is their weighted sum (Σ cₙbₙ λₙ^{t−s}).</span><span class="t-ko">A = diag(λ₁..λ_N)로 둔다. 각 대각 성분은 독립적인 기하감쇠 헤드가 되고, SSM 출력은 그것들의 가중합(Σ cₙbₙ λₙ^{t−s}).</span></li>
+      <li><b><span class="t-en">Prove rank = #distinct decays</span><span class="t-ko">랭크 = 서로 다른 감쇠 수 증명</span></b><span class="t-en">Via a Vandermonde generator matrix, show the kernel's semiseparable rank equals the count of distinct λₙ, ≤ N (duplicates collapse). This gives the necessary-and-sufficient condition for an N-SS matrix to have a 1-SS dual.</span><span class="t-ko">반데르몽드 생성자 행렬을 통해, 커널의 준분리 랭크가 서로 다른 λₙ 개수(≤N, 중복은 합쳐짐)와 같음을 보인다. 이것이 N-SS 행렬이 1-SS 쌍대를 가질 필요충분조건.</span></li>
+      <li><b><span class="t-en">Test the softmax boundary</span><span class="t-ko">softmax 경계 시험</span></b><span class="t-en">Build causal softmax kernels for T up to 5,120 and measure numerical rank — it stays ~full, proving no bounded-state SSM dual exists. Plus a synthetic mixture-of-decays + WikiText-2 sanity check that diagonal beats scalar.</span><span class="t-ko">T 최대 5,120까지 인과 softmax 커널을 만들어 수치 랭크를 측정 — 거의 full로 유지되어, 유계 상태 SSM 쌍대가 없음을 증명. 더해 합성 혼합감쇠 + WikiText-2로 대각이 스칼라를 능가함을 확인.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Richer dynamics, same cost.</strong> Diagonal SSMs give N independent timescales (fast + slow at once) yet still train at the scalar model's optimal O(TN) — expressiveness with no asymptotic penalty.</p><p class="t-ko"><strong>더 풍부한 동역학, 같은 비용.</strong> 대각 SSM은 N개의 독립 시간척도(빠름+느림 동시)를 주면서도 스칼라 모델의 최적 O(TN)로 학습된다 — 점근적 손해 없는 표현력.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Rank ≠ state dimension.</strong> What matters is the count of <em>distinct</em> decays — duplicated modes are wasted parameters. A practical lens for designing/pruning SSM state.</p><p class="t-ko"><strong>랭크 ≠ 상태차원.</strong> 중요한 건 <em>서로 다른</em> 감쇠의 수 — 중복 모드는 낭비된 파라미터. SSM 상태를 설계·가지치기하는 실용적 관점.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>The bridge has an edge.</strong> Softmax attention provably has no bounded-state SSM dual (rank explosion) — a clean reason linear/SSM models and Transformers are not interchangeable.</p><p class="t-ko"><strong>다리엔 끝이 있다.</strong> Softmax 어텐션은 유계 상태 SSM 쌍대를 갖지 못함이 증명됨(랭크 폭발) — 선형/SSM 모델과 트랜스포머가 호환 불가인 분명한 이유.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Self-contained theory toolkit.</strong> The strictly-causal N-SS ⇔ N-SSS proof is reusable for downstream duality results in hybrid attention-SSM architectures.</p><p class="t-ko"><strong>독립적인 이론 도구상자.</strong> 엄밀 인과 N-SS ⇔ N-SSS 증명은 attention-SSM 하이브리드 구조의 후속 쌍대성 결과에 재사용 가능.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> This is a theory <em>note</em>, and its empirics are deliberately tiny — d_model=64, d_state=16, 2 layers, ~5k WikiText-2 segments, word-level whitespace tokenizer, best val accuracy of just ~10%. The "SSD-Mamba beats Mamba" headline (9.7 vs 10.5 val loss) is in a regime so small it mostly reflects reduced overfitting, not a scaling claim; the diagonal-vs-scalar advantage is also shown only on a synthetic 4-mode decay toy. The real contribution is the math (diagonal SSD + the softmax impossibility), and much of the underlying N-SS ⇔ N-SSS equivalence already exists in the quasiseparable-matrix literature — the novelty is the SSM-attention framing, not brand-new structure.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이건 이론 <em>노트</em>이고, 실험은 의도적으로 매우 작다 — d_model=64, d_state=16, 2 레이어, WikiText-2 약 5천 세그먼트, 단어 단위 공백 토크나이저, 최고 검증 정확도 약 10%. "SSD-Mamba가 Mamba를 이긴다"는 헤드라인(검증 손실 9.7 vs 10.5)은 규모가 너무 작아 스케일링 주장이 아니라 과적합 감소를 주로 반영하며, 대각 vs 스칼라 우위도 합성 4-모드 감쇠 장난감에서만 보인다. 진짜 기여는 수학(대각 SSD + softmax 불가능성)이고, 기저의 N-SS ⇔ N-SSS 동치는 상당 부분 준분리(quasiseparable) 행렬 문헌에 이미 존재한다 — 새로움은 SSM-어텐션 프레이밍이지 완전히 새로운 구조가 아니다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2510.04944">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2510.04944">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2510.04944">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2510.04944">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

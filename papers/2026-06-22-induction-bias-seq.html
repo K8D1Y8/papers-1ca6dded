@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · On the "Induction Bias" in Sequence Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">⚡ Efficient Seq · Induction Bias</span><span class="t-ko">⚡ Efficient Seq · Induction Bias</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>On the "Induction Bias" in Sequence Models<br><span class="glow t-en">— Transformers don't share state-tracking circuits across lengths; RNNs do</span><span class="glow t-ko">— 트랜스포머는 길이별 상태추적 회로를 공유하지 않는다; RNN은 한다</span></h1>
+    <div class="meta">
+      <span>👥 <b>M. Reza Ebrahimi</b> <span class="t-en">et al.</span><span class="t-ko">외 3인</span></span>
+      <span>🏛 Qualcomm AI Research</span>
+      <span>🗓 2026.02</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.18333">arXiv:2602.18333</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">State-tracking failures of transformers are usually framed as an <b>out-of-distribution</b> (length-extrapolation) problem. This paper shows they are an <span class="hl">in-distribution data-efficiency problem too</span>: even on lengths seen in training, transformers need <b>orders of magnitude more samples</b> than RNNs. The cause is a missing <b>"induction bias"</b> — recurrent models reuse one step-update mechanism across all sequence lengths (sharing factor κ up to <b>35×</b>), while transformers learn isolated per-length circuits (κ ≈ 1, and as low as <b>0.28</b> = destructive interference). Verified across 200,000+ training runs.</p>
+    <p class="t-ko">트랜스포머의 상태추적 실패는 보통 <b>분포 밖</b>(길이 외삽) 문제로 다뤄진다. 이 논문은 그것이 <span class="hl">분포 안 데이터 효율 문제이기도</span> 함을 보인다: 학습에서 본 길이에서조차 트랜스포머는 RNN보다 <b>수십~수만 배 많은 샘플</b>을 요구한다. 원인은 빠진 <b>"귀납 편향(induction bias)"</b> — 순환 모델은 하나의 단계 갱신 메커니즘을 모든 길이에 재사용하지만(공유계수 κ 최대 <b>35배</b>), 트랜스포머는 길이별로 고립된 회로를 학습한다(κ ≈ 1, 심하면 <b>0.28</b> = 파괴적 간섭). 20만+ 학습 실행으로 검증.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The real cost of a transformer's weak state tracking isn't only failing on longer sequences — it's needing a mountain of data even for lengths it has already seen.</p>
+    <p class="lead t-ko">트랜스포머의 약한 상태추적이 치르는 진짜 비용은 "더 긴 시퀀스에서의 실패"만이 아니다 — 이미 본 길이에서조차 산더미 같은 데이터를 요구한다는 점이다.</p>
+    <p class="t-en">Prior work blamed transformer state-tracking limits on out-of-distribution length extrapolation. The authors argue that in practice OOD may not matter if you have enough data — so the sharper question is <strong>how much data is "enough"</strong>. By measuring the minimal sample size N* to reliably learn modular-addition (commutative) and S5 permutation (non-commutative) tasks, they find transformers' data appetite explodes with sequence length, while single-layer RNNs stay flat. The proposed explanation — an <strong>"induction bias"</strong> that encourages step-by-step state updates and weight sharing across lengths — gives a mechanistic story for why recurrent and dense-SSM models are far more data-efficient at state tracking, and even hints at why long-context transformers suffer "context rot".</p>
+    <p class="t-ko">기존 연구는 트랜스포머의 상태추적 한계를 분포 밖 길이 외삽 탓으로 돌렸다. 저자들은 데이터만 충분하면 OOD는 실무에서 문제가 안 될 수 있다고 보고, 더 날카로운 질문을 던진다 — <strong>"충분한" 데이터는 얼마인가</strong>. 모듈러 덧셈(교환)과 S5 순열(비교환) 과제를 신뢰성 있게 학습하는 데 필요한 최소 샘플 수 N*를 측정한 결과, 트랜스포머의 데이터 요구량은 시퀀스 길이에 따라 폭증하지만 단층 RNN은 평탄하게 유지된다. 제안된 설명인 <strong>"귀납 편향"</strong>(단계별 상태 갱신과 길이 간 가중치 공유를 유도)은 순환·dense-SSM 모델이 상태추적에서 왜 훨씬 데이터 효율적인지에 대한 메커니즘적 서사를 제공하며, 장문맥 트랜스포머가 겪는 "context rot"의 단서도 준다.</p>
+    <figure class="fig">
+      <img src="fig/2602.18333/fig1.png" alt="Sharing factor analysis across architectures and supervision regimes">
+      <figcaption class="t-en"><b>Figure 6.</b> Sample complexity of one jointly-trained model (red) vs. the sum of independently-trained per-length models (blue dashed), with sharing factor κ. Transformers and Mamba stay near κ≈1 (isolated per-length solutions); LSTM and Dense-SSM reach κ = 21–35 (one mechanism amortized across lengths).</figcaption>
+      <figcaption class="t-ko"><b>Figure 6.</b> 모든 길이를 함께 학습한 한 모델(빨강)과 길이별로 독립 학습한 모델들의 합(파란 점선)의 샘플 복잡도, 그리고 공유계수 κ. 트랜스포머·Mamba는 κ≈1에 머물고(길이별 고립 해법), LSTM·Dense-SSM은 κ = 21~35에 도달(하나의 메커니즘을 길이 전반에 분산 학습).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.18333</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">35.13</div><div class="l"><span class="t-en">Max sharing factor κ<br>(Dense-SSM, outcome, m=5)</span><span class="t-ko">최대 공유계수 κ<br>(Dense-SSM, outcome, m=5)</span></div></div>
+      <div class="stat"><div class="n">0.28</div><div class="l"><span class="t-en">Min κ — destructive interference<br>(Transformer + CoT, m=5)</span><span class="t-ko">최소 κ — 파괴적 간섭<br>(Transformer + CoT, m=5)</span></div></div>
+      <div class="stat"><div class="n">2 vs 2M</div><div class="l"><span class="t-en">N* gap: LSTM ACoT vs<br>Transformer at m=5, L=20</span><span class="t-ko">N* 격차: LSTM ACoT vs<br>Transformer (m=5, L=20)</span></div></div>
+      <div class="stat"><div class="n">1.7K → 2M</div><div class="l"><span class="t-en">Transformer N*: CoT vs ACoT<br>(same task, m=5, L=20)</span><span class="t-ko">트랜스포머 N*: CoT vs ACoT<br>(동일 과제, m=5, L=20)</span></div></div>
+      <div class="stat"><div class="n">200,000+</div><div class="l"><span class="t-en">Total training runs<br>(excl. development)</span><span class="t-ko">총 학습 실행 수<br>(개발용 제외)</span></div></div>
+      <div class="stat"><div class="n">250k</div><div class="l"><span class="t-en">Optimization steps<br>budget per run</span><span class="t-ko">실행당 최적화<br>스텝 예산</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — N* explodes for transformers, stays flat for RNNs</span><span class="t-ko">결과 — N*가 트랜스포머는 폭증, RNN은 평탄</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Minimal samples N* to learn parity (m=2), Fixed length distribution, each model's preferred supervision (Transformer = CoT, LSTM = ACoT). Lower is better; growth with length is the story.</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> 패리티(m=2) 학습에 필요한 최소 샘플 N*, Fixed 길이 분포, 각 모델의 선호 supervision(Transformer = CoT, LSTM = ACoT). 낮을수록 좋음; 길이에 따른 증가가 핵심.</caption>
+        <thead><tr><th>Length L</th><th>5</th><th>10</th><th>20</th><th>30</th></tr></thead>
+        <tbody>
+          <tr><td>Transformer · CoT</td><td>10</td><td>16</td><td>19</td><td>20</td></tr>
+          <tr><td>LSTM · ACoT</td><td>4</td><td>6</td><td class="up">2</td><td class="up">2</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="margin-top:10px">Parity is easy for both, but note the trend: the LSTM needs <b>fewer</b> samples as sequences get longer (2 at L=20/30), because longer sequences pack more aligned supervision into one example. For harder moduli the gap blows open — at m=5, L=20 the transformer needs <b>1.7K</b> (CoT) and a single-layer LSTM with ACoT learns parity from as few as <b>2</b> samples.</p>
+    <p class="t-ko" style="margin-top:10px">패리티는 둘 다 쉽지만 추세를 보라: LSTM은 시퀀스가 길어질수록 <b>더 적은</b> 샘플을 요구한다(L=20/30에서 2). 긴 시퀀스가 한 예제 안에 더 많은 정렬 supervision을 담기 때문이다. 더 어려운 모듈러스에서는 격차가 벌어진다 — m=5, L=20에서 트랜스포머는 <b>1.7K</b>(CoT), 단층 LSTM은 ACoT로 단 <b>2</b> 샘플에서 패리티를 학습한다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">RNN / SSM</span><span class="t-ko">RNN / SSM</span></div>
+          <div class="sub"><span class="t-en">h_t = f(h_{t-1}, x_t)</span><span class="t-ko">h_t = f(h_{t-1}, x_t)</span></div>
+          <div class="latent"><span class="t-en">one step-update, reused at every length</span><span class="t-ko">하나의 단계 갱신, 모든 길이에서 재사용</span></div>
+        </div>
+        <div class="flow">⇒</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">"Induction bias"</span><span class="t-ko">"귀납 편향"</span></div>
+          <div class="sub"><span class="t-en">weight sharing across L</span><span class="t-ko">길이 L 전반의 가중치 공유</span></div>
+          <div class="latent"><span class="t-en">κ ≫ 1 → data amortized</span><span class="t-ko">κ ≫ 1 → 데이터 분산 학습</span></div>
+        </div>
+        <div class="flow">vs</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Transformer</span><span class="t-ko">트랜스포머</span></div>
+          <div class="sub"><span class="t-en">parallel "associative scan"</span><span class="t-ko">병렬 "associative scan"</span></div>
+          <div class="latent"><span class="t-en">κ ≈ 1 (or 0.28) → isolated circuits</span><span class="t-ko">κ ≈ 1 (혹은 0.28) → 고립 회로</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>The bias is structural.</b> Recurrence forces the same update to fire at step 1 and step 30, so data at any length trains the shared mechanism. Attention can solve each length with a separate parallel circuit — and those circuits even <b>compete</b> for capacity (κ &lt; 1).</div>
+      <div class="cap t-ko"><b>이 편향은 구조적이다.</b> 순환은 같은 갱신을 1번째와 30번째 스텝에서 모두 발화시키므로, 어떤 길이의 데이터든 공유 메커니즘을 학습시킨다. 어텐션은 각 길이를 별도 병렬 회로로 풀 수 있고, 그 회로들은 용량을 두고 <b>경쟁</b>하기까지 한다(κ &lt; 1).</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: state tracking is a weight-sharing problem</span><span class="t-ko">아이디어: 상태추적은 곧 가중치 공유 문제</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 측정</span>
+        <h3>Sharing Factor κ</h3>
+        <p class="t-en">Define <span class="term">κ = (Σ N*_n) / N*_joint</span>: the cost of training one model on all lengths vs. summing independent per-length models. <span class="term">κ &gt; 1</span> = mechanism sharing (data spent on length 5 also helps length 30); <span class="term">κ ≈ 1</span> = length-specific solutions; <span class="term">κ &lt; 1</span> = destructive interference, where mixing lengths is worse than training each alone.</p>
+        <p class="t-ko"><span class="term">κ = (Σ N*_n) / N*_joint</span>로 정의: 모든 길이를 한 모델로 학습한 비용 대 길이별 독립 모델의 합. <span class="term">κ &gt; 1</span> = 메커니즘 공유(길이 5에 쓴 데이터가 길이 30에도 기여); <span class="term">κ ≈ 1</span> = 길이별 전용 해법; <span class="term">κ &lt; 1</span> = 파괴적 간섭, 길이를 섞는 게 따로 학습보다 나쁨.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 정렬 supervision</span>
+        <h3>Outcome / CoT / ACoT</h3>
+        <p class="t-en">Three label formats expose different amounts of process signal. <span class="term">Outcome</span> gives only the final answer; <span class="term">CoT</span> appends partial sums autoregressively after the input; <span class="term">ACoT</span> emits each partial sum aligned to its input token — matching an RNN's hidden-state evolution. Transformers love CoT (self-attention to own outputs); RNNs love ACoT (per-step alignment) and choke on CoT (recall bottleneck).</p>
+        <p class="t-ko">세 라벨 형식이 서로 다른 양의 과정 신호를 노출한다. <span class="term">Outcome</span>는 최종 답만; <span class="term">CoT</span>는 입력 뒤에 부분합을 자기회귀로 덧붙임; <span class="term">ACoT</span>는 각 부분합을 해당 입력 토큰에 정렬해 출력 — RNN의 은닉 상태 진화와 일치. 트랜스포머는 CoT를 선호(자기 출력에 어텐션), RNN은 ACoT를 선호(스텝별 정렬)하고 CoT에서는 막힌다(recall 병목).</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Pick canonical state-tracking tasks</span><span class="t-ko">표준 상태추적 과제 선택</span></b><span class="t-en">Modular addition mod m (commutative, cyclic group) as the main task; S5 permutation composition (non-commutative) in the appendix to ground the claims beyond commutative operations.</span><span class="t-ko">모듈러 덧셈 mod m(교환·순환군)을 주 과제로; S5 순열 합성(비교환)을 부록에 두어 교환 연산 너머로 주장을 일반화.</span></li>
+      <li><b><span class="t-en">Measure N* by binary–geometric search</span><span class="t-ko">이진–기하 탐색으로 N* 측정</span></b><span class="t-en">For each (m, L, format, length-distribution, model), search the minimal dataset size where some config among 3 LRs × 5 seeds drives validation loss below ϵ = 10⁻⁴ (or hits perfect accuracy).</span><span class="t-ko">각 (m, L, 형식, 길이분포, 모델)마다 3 LR × 5 시드 중 한 설정이 검증 손실을 ϵ = 10⁻⁴ 아래로(또는 완벽 정확도) 내리는 최소 데이터 크기를 탐색.</span></li>
+      <li><b><span class="t-en">Compare four architectures</span><span class="t-ko">네 아키텍처 비교</span></b><span class="t-en">6-layer GPT-2 transformer (d=256), single-layer LSTM (d=768), single-layer Dense-SSM / bilinear RNN h_t = A_{x_t} h_{t-1} (d=256), plus Mamba (6-layer) for the sharing analysis.</span><span class="t-ko">6층 GPT-2 트랜스포머(d=256), 단층 LSTM(d=768), 단층 Dense-SSM / bilinear RNN h_t = A_{x_t} h_{t-1}(d=256), 공유 분석엔 Mamba(6층) 추가.</span></li>
+      <li><b><span class="t-en">Compute κ and correlate with OOD</span><span class="t-ko">κ 계산 후 OOD와 상관</span></b><span class="t-en">Compare joint vs. per-length N* to get κ, then check Table 2: high κ tracks strong length generalization at 2× training length — in-distribution sharing and OOD generalization are the same coin.</span><span class="t-ko">joint 대 길이별 N*로 κ를 구한 뒤 Table 2 확인: 높은 κ는 학습 길이 2배에서의 강한 길이 일반화와 일치 — 분포 안 공유와 OOD 일반화는 동전의 양면.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Transformer state tracking is a data problem, not just a length problem.</strong> Even in-distribution, sample needs scale steeply with length — a concrete cost behind "context rot" in long-context models.</p><p class="t-ko"><strong>트랜스포머 상태추적은 길이 문제만이 아니라 데이터 문제다.</strong> 분포 안에서도 샘플 요구가 길이에 가파르게 증가 — 장문맥 모델의 "context rot" 뒤에 있는 구체적 비용.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Recurrence buys weight sharing for free.</strong> The same step-update fires at every position, so RNNs/SSMs amortize learning across lengths (κ up to 35×) — a structural advantage attention lacks.</p><p class="t-ko"><strong>순환은 가중치 공유를 공짜로 준다.</strong> 같은 단계 갱신이 모든 위치에서 발화하므로 RNN/SSM은 길이 전반에 학습을 분산한다(κ 최대 35배) — 어텐션엔 없는 구조적 이점.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Match supervision to architecture.</strong> Use CoT for transformers, aligned-CoT for recurrent models. The wrong format can cost 1000× more data on the identical task.</p><p class="t-ko"><strong>supervision을 아키텍처에 맞춰라.</strong> 트랜스포머엔 CoT, 순환 모델엔 aligned-CoT. 형식을 잘못 고르면 같은 과제에 1000배의 데이터가 든다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>κ predicts OOD generalization.</strong> A cheap in-distribution metric (sharing factor) forecasts length extrapolation — a useful design signal for hybrid attention-SSM architectures.</p><p class="t-ko"><strong>κ가 OOD 일반화를 예측한다.</strong> 값싼 분포 안 지표(공유계수)가 길이 외삽을 예고 — 어텐션-SSM 하이브리드 설계에 유용한 신호.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The evidence is entirely from small synthetic algebraic tasks (modular addition, S5) with tiny single-layer recurrent models vs. a 6-layer transformer. Whether the "induction bias" advantage survives at LLM scale — where transformers have depth, far more parameters, and messy natural-language state tracking rather than clean group operations — is asserted by analogy ("context rot") but not directly demonstrated. The architecture comparison is also not strictly compute- or parameter-matched.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 증거가 전적으로 작은 합성 대수 과제(모듈러 덧셈, S5)와 작은 단층 순환 모델 대 6층 트랜스포머에서 나온다. "귀납 편향" 이점이 LLM 규모 — 트랜스포머가 깊이·훨씬 많은 파라미터·깔끔한 군 연산이 아닌 지저분한 자연어 상태추적을 다루는 — 에서도 살아남는지는 유추("context rot")로 주장될 뿐 직접 입증되지 않았다. 아키텍처 비교도 연산량·파라미터가 엄밀히 맞춰져 있지 않다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.18333">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.18333">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.18333">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.18333">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Efficient Sequence Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Efficient Sequence Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
