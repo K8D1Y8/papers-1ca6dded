@@ -225,7 +225,11 @@ mark.unote{background:linear-gradient(transparent 56%,#ffe39a 0);border-radius:2
 .colhead{font-family:var(--sans);font-weight:800;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--clay-deep);
   background:var(--clay-tint);border-radius:10px;padding:10px 12px}
 .colhead .ct{opacity:.65;font-weight:700;margin-left:7px}
-.colcards{display:flex;flex-direction:column;gap:10px}
+.colcards{display:flex;flex-direction:column;gap:8px}
+/* column view = title only (hide date, Full Review chip, sub-line, arrow) */
+.board .d,.board .sub,.board .go{display:none}
+.board .rowwrap{padding:12px 14px}
+.board .ti{font-size:15.5px;-webkit-line-clamp:3}
 @media(min-width:900px){ .topcol{flex:1 1 0;max-width:none} }
 .mr-empty{color:var(--muted);font-size:13.5px;padding:16px 2px;line-height:1.55}
 .rowwrap{position:relative;display:flex;align-items:center;gap:15px;background:var(--card);border:1px solid var(--line);
