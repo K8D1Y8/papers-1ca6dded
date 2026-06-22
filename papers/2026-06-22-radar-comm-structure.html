@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · RADAR: Redundancy-Aware Diffusion for Multi-Agent Communication Structure Generation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · Comm Structure</span><span class="t-ko">🤝 Multi-Agent · Comm Structure</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>RADAR: Redundancy-Aware Diffusion for Multi-Agent Communication Structure Generation<br><span class="glow t-en">— Don't prune after the fact: grow a low-redundancy topology step by step</span><span class="glow t-ko">— 사후에 가지치지 말고, 저(低)중복 구조를 한 단계씩 키워라</span></h1>
+    <div class="meta">
+      <span>👥 <b>Zhen Zhang</b> <span class="t-en">et al.</span><span class="t-ko">외 5인</span></span>
+      <span>🏛 Nanjing University</span>
+      <span>🗓 2026.06.01</span>
+      <span>📄 <a href="https://arxiv.org/abs/2605.09907">arXiv:2605.09907</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Most LLM multi-agent systems use a <b>fixed or one-step-generated communication topology</b>, which wastes tokens on easy tasks and underperforms on hard ones. RADAR reframes topology design as a <span class="hl">step-by-step conditional graph-diffusion process guided by "effective size"</span> — a classical measure of how non-redundant a node's neighborhood is. Across six benchmarks it raises average accuracy to <b>90.32%</b> (best of all baselines) while cutting GSM8K token cost to <b>4.2×10⁶ — about half of G-Designer</b>, and stays nearly intact under prompt attacks.</p>
+    <p class="t-ko">대부분의 LLM 멀티에이전트 시스템은 <b>고정되거나 한 번에 생성되는 통신 토폴로지</b>를 써서, 쉬운 작업엔 토큰을 낭비하고 어려운 작업엔 성능이 부족하다. RADAR는 토폴로지 설계를 <span class="hl">"effective size(유효 크기)"로 안내되는 단계별 조건부 그래프 확산 과정</span>으로 재정의한다 — 노드 이웃이 얼마나 비(非)중복적인지를 재는 고전적 지표다. 6개 벤치마크에서 평균 정확도를 <b>90.32%</b>(전 베이스라인 중 최고)로 끌어올리면서, GSM8K 토큰 비용은 <b>4.2×10⁶ — G-Designer의 약 절반</b>으로 줄이고, 프롬프트 공격에도 거의 그대로 버틴다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The real lever in multi-agent collaboration is not "how many agents talk" but "how non-redundant their connections are."</p>
+    <p class="lead t-ko">멀티에이전트 협업의 진짜 지렛대는 "몇 명이 대화하느냐"가 아니라 "그 연결이 얼마나 비중복적이냐"다.</p>
+    <p class="t-en">A multi-agent system is a directed graph: nodes are agents, edges carry information. Prior work either hand-crafts the graph (chain, star, tree, full-mesh) or learns it in a <strong>single step</strong> from the task description, then optionally <strong>prunes</strong> edges afterward (post hoc). The authors argue this is backwards — complex topologies cost <strong>2–11.8× more tokens</strong> than a simple chain, and post-hoc pruning can only make local edits, never redesign from scratch. RADAR instead grows the graph from an empty one, reasoning about redundancy <strong>during construction</strong> (ad hoc), and conditions each step on the actual query so easy tasks get sparse graphs and hard tasks get richer ones.</p>
+    <p class="t-ko">멀티에이전트 시스템은 방향 그래프다: 노드는 에이전트, 엣지는 정보를 나른다. 기존 연구는 그래프를 손으로 설계(체인·스타·트리·완전연결)하거나 작업 설명으로부터 <strong>한 번에</strong> 학습한 뒤, 사후에 엣지를 <strong>가지치기</strong>(post hoc)했다. 저자들은 이게 거꾸로라고 본다 — 복잡한 토폴로지는 단순 체인보다 토큰을 <strong>2~11.8배</strong> 더 쓰고, 사후 가지치기는 국소 수정만 가능할 뿐 처음부터 재설계하지 못한다. RADAR는 대신 빈 그래프에서 출발해 <strong>생성 중에</strong> 중복을 고려(ad hoc)하며 키우고, 각 단계를 실제 질의에 조건화해 쉬운 작업엔 희소한, 어려운 작업엔 풍부한 그래프를 만든다.</p>
+    <figure class="fig">
+      <img src="fig/2605.09907/fig1.png" alt="RADAR 프레임워크 개요: 입력 → 베이스라인 데이터셋 → 확산 학습 → 반복 디노이징 추론">
+      <figcaption class="t-en"><b>Figure 2.</b> RADAR overview — task inputs (query, candidate agents, tools) build a baseline-topology dataset, which trains a conditional graph-diffusion model; at inference an empty graph is iteratively denoised into a query-adaptive, low-redundancy topology.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> RADAR 개요 — 작업 입력(질의·후보 에이전트·도구)으로 베이스라인 토폴로지 데이터셋을 만들고 조건부 그래프 확산 모델을 학습한다. 추론 시 빈 그래프를 반복 디노이징해 질의 적응형 저중복 토폴로지로 합성한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2605.09907</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">90.32%</div><div class="l"><span class="t-en">RADAR avg. accuracy<br>(6 benchmarks, best)</span><span class="t-ko">RADAR 평균 정확도<br>(6개 벤치, 최고)</span></div></div>
+      <div class="stat"><div class="n">+1.75%</div><div class="l"><span class="t-en">Avg. gain vs. strongest<br>baseline (ARG-Designer)</span><span class="t-ko">최강 베이스라인 대비<br>평균 향상 (ARG-Designer)</span></div></div>
+      <div class="stat"><div class="n">4.2×10⁶</div><div class="l"><span class="t-en">GSM8K tokens — most<br>efficient, ~½ of G-Designer</span><span class="t-ko">GSM8K 토큰 — 최저,<br>G-Designer의 약 ½</span></div></div>
+      <div class="stat"><div class="n">+6.59%</div><div class="l"><span class="t-en">Max gain over Vanilla<br>single agent (SVAMP)</span><span class="t-ko">단일 에이전트 대비<br>최대 향상 (SVAMP)</span></div></div>
+      <div class="stat"><div class="n">~0</div><div class="l"><span class="t-en">Accuracy drop under<br>prompt attack (MMLU)</span><span class="t-ko">프롬프트 공격 시<br>정확도 하락 (MMLU)</span></div></div>
+      <div class="stat"><div class="n">6</div><div class="l"><span class="t-en">Benchmarks · 5 agents<br>· gpt-4o-mini</span><span class="t-ko">벤치마크 · 5 에이전트<br>· gpt-4o-mini</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — best accuracy on every benchmark</span><span class="t-ko">결과 — 모든 벤치마크에서 최고 정확도</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt.</b> Accuracy (%) with five gpt-4o-mini agents. RADAR is best on all six; Δ = (RADAR − Vanilla single agent).</caption>
+        <caption class="t-ko"><b>Table 1 발췌.</b> gpt-4o-mini 5 에이전트 정확도(%). RADAR가 6개 모두 최고; Δ = (RADAR − Vanilla 단일 에이전트).</caption>
+        <thead><tr><th>Benchmark</th><th>Vanilla</th><th>ARG-Designer</th><th>RADAR</th><th>Δ vs Vanilla</th></tr></thead>
+        <tbody>
+          <tr><td>MMLU</td><td>78.54</td><td>79.10</td><td>83.66</td><td class="up">+5.12</td></tr>
+          <tr><td>GSM8K</td><td>87.45</td><td>91.25</td><td>92.51</td><td class="up">+5.06</td></tr>
+          <tr><td>MultiArith</td><td>96.85</td><td>98.55</td><td>98.81</td><td class="up">+1.96</td></tr>
+          <tr><td>SVAMP</td><td>86.67</td><td>92.21</td><td>93.26</td><td class="up">+6.59</td></tr>
+          <tr><td>AQuA</td><td>78.92</td><td>81.10</td><td>82.84</td><td class="up">+3.92</td></tr>
+          <tr><td>HumanEval</td><td>87.08</td><td>89.19</td><td>91.28</td><td class="up">+4.20</td></tr>
+          <tr><td><b>Avg.</b></td><td><b>85.92</b></td><td><b>88.57</b></td><td><b>90.32</b></td><td class="up"><b>+4.40</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Empty graph</span><span class="t-ko">빈 그래프</span></div>
+          <div class="sub"><span class="t-en">+ query Q, candidate agents</span><span class="t-ko">+ 질의 Q, 후보 에이전트</span></div>
+          <div class="latent"><span class="t-en">start from nothing</span><span class="t-ko">무에서 시작</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Iterative denoising</span><span class="t-ko">반복 디노이징</span></div>
+          <div class="sub"><span class="t-en">add node + edges, guided by effective size φ</span><span class="t-ko">유효크기 φ로 노드·엣지 추가</span></div>
+          <div class="latent"><span class="t-en">redundancy checked each step</span><span class="t-ko">매 단계 중복 점검</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Final topology</span><span class="t-ko">최종 토폴로지</span></div>
+          <div class="sub"><span class="t-en">sparse for easy, rich for hard</span><span class="t-ko">쉬우면 희소·어려우면 풍부</span></div>
+          <div class="latent"><span class="t-en">+acc, −tokens</span><span class="t-ko">정확도↑ 토큰↓</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Grow, don't prune</b> — the graph is synthesized one node at a time, and each addition is scored by effective size so that highly-interconnected (redundant) neighbors are discounted before they are ever wired in.</div>
+      <div class="cap t-ko"><b>가지치기 말고 키우기</b> — 그래프를 한 노드씩 합성하며, 추가마다 effective size로 점수를 매겨 서로 강하게 얽힌(중복) 이웃을 연결되기 전에 미리 깎아낸다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: bake redundancy control into generation</span><span class="t-ko">아이디어: 중복 제어를 생성 과정에 내장</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 중복의 정량화</span>
+        <h3>Effective Size (φ)</h3>
+        <p class="t-en">Borrowed from social-network theory (Burt, 1992): a node's <span class="term">effective size</span> is its number of neighbors minus the redundancy among them. RADAR adapts it to directed agent graphs, discounting neighbors that share the same role and are interconnected — so a high φ means an agent receives <strong>diverse, complementary</strong> information, not echoes of the same view.</p>
+        <p class="t-ko">사회망 이론(Burt, 1992)에서 차용: 노드의 <span class="term">effective size</span>는 이웃 수에서 이웃 간 중복을 뺀 값이다. RADAR는 이를 방향 에이전트 그래프에 맞춰, 같은 역할이면서 서로 연결된 이웃을 깎는다 — φ가 높다는 건 그 에이전트가 같은 견해의 메아리가 아니라 <strong>다양하고 상보적인</strong> 정보를 받는다는 뜻.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 단계별 생성</span>
+        <h3><span class="t-en">Ordering + denoising nets</span><span class="t-ko">순서망 + 디노이징망</span></h3>
+        <p class="t-en">An <span class="term">RGCN ordering network</span> (trained by REINFORCE) decides which node to reveal next; a <span class="term">GAT denoising network</span> reconstructs that node and its edges, both conditioned on φ and the query Q. A policy-gradient utility term feeds back actual task accuracy, so generation is steered toward <strong>structures that work</strong>, not just plausible ones.</p>
+        <p class="t-ko"><span class="term">RGCN 순서망</span>(REINFORCE로 학습)이 다음에 드러낼 노드를 정하고, <span class="term">GAT 디노이징망</span>이 그 노드와 엣지를 복원한다 — 둘 다 φ와 질의 Q에 조건화. 정책경사 utility 항이 실제 작업 정확도를 되먹여, 그럴듯한 구조가 아니라 <strong>실제로 작동하는 구조</strong> 쪽으로 생성을 이끈다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Build a seed dataset</span><span class="t-ko">씨앗 데이터셋 구축</span></b><span class="t-en">Instantiate diverse baseline topologies (fully connected, mesh, star, layered, random) with 3–4 agents, assign random roles, and label each by whether it solves sampled training queries — only 50 queries per dataset.</span><span class="t-ko">다양한 베이스라인 토폴로지(완전연결·메시·스타·계층·랜덤)를 3~4 에이전트로 만들고 역할을 무작위 배정해, 샘플 질의를 푸는지로 라벨링 — 데이터셋당 단 50개 질의.</span></li>
+      <li><b><span class="t-en">Train diffusion with φ</span><span class="t-ko">φ로 확산 학습</span></b><span class="t-en">Train the GAT denoising network (NLL lower bound) and the RGCN ordering network (REINFORCE), both conditioned on effective size φ and query Q, to reverse the node-masking diffusion.</span><span class="t-ko">GAT 디노이징망(NLL 하한)과 RGCN 순서망(REINFORCE)을 유효크기 φ와 질의 Q에 조건화해, 노드 마스킹 확산을 역으로 복원하도록 학습.</span></li>
+      <li><b><span class="t-en">Add a utility signal</span><span class="t-ko">유틸리티 신호 추가</span></b><span class="t-en">Since accuracy is non-differentiable, a policy-gradient estimator periodically scores a subset of generated graphs by real task utility u(G) and back-props that reward into the denoiser.</span><span class="t-ko">정확도는 미분 불가하므로, 정책경사 추정기가 생성 그래프 일부를 실제 utility u(G)로 주기적으로 평가해 그 보상을 디노이저에 역전파.</span></li>
+      <li><b><span class="t-en">Generate per query</span><span class="t-ko">질의별 생성</span></b><span class="t-en">At inference, encode the query (all-MiniLM-L6-v2, 384-dim), then iteratively denoise an empty graph into a 5-agent, low-redundancy topology tailored to that query → best accuracy on all 6 benchmarks with the lowest token cost.</span><span class="t-ko">추론 시 질의를 인코딩(all-MiniLM-L6-v2, 384차원)한 뒤, 빈 그래프를 반복 디노이징해 그 질의 맞춤 5에이전트 저중복 토폴로지 생성 → 6개 벤치 최고 정확도 + 최저 토큰.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🌱</span><p class="t-en"><strong>Ad hoc beats post hoc.</strong> Building redundancy awareness <em>into</em> generation, instead of pruning after, lets RADAR redesign topologies from scratch — best accuracy on all six benchmarks.</p><p class="t-ko"><strong>사후보다 생성 중이 낫다.</strong> 중복 인식을 사후 가지치기가 아니라 생성 <em>안</em>에 넣어, RADAR는 토폴로지를 처음부터 재설계 — 6개 벤치 전부 최고 정확도.</p></div>
+      <div class="t"><span class="ic">💸</span><p class="t-en"><strong>Accuracy and cost together.</strong> On GSM8K it is both the most accurate and the most token-efficient (~½ of G-Designer) — efficiency need not be traded for performance.</p><p class="t-ko"><strong>정확도와 비용을 동시에.</strong> GSM8K에서 가장 정확하면서 가장 토큰 효율적(G-Designer의 약 ½) — 효율과 성능을 맞바꿀 필요가 없다.</p></div>
+      <div class="t"><span class="ic">🛡</span><p class="t-en"><strong>Robust by structure.</strong> When two of five agents are turned into liars, RADAR's accuracy barely moves — diverse, non-redundant wiring resists a single bad source.</p><p class="t-ko"><strong>구조로 강건.</strong> 5명 중 2명을 거짓말쟁이로 바꿔도 RADAR 정확도는 거의 안 흔들린다 — 다양·비중복 연결이 단일 오염원에 강하다.</p></div>
+      <div class="t"><span class="ic">📐</span><p class="t-en"><strong>A classic graph metric, repurposed.</strong> Effective size — a 1992 social-network idea — turns out to be a clean inductive bias for LLM agent topologies.</p><p class="t-ko"><strong>고전 그래프 지표의 재활용.</strong> 1992년 사회망 개념인 effective size가 LLM 에이전트 토폴로지의 깔끔한 귀납 편향으로 드러난다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> Almost everything is measured on gpt-4o-mini with five homogeneous agents, training on just 50 queries per dataset. The average edge over the strongest learning baseline is only <b>+1.75%</b>, and the headline token win is shown clearly only on GSM8K — whether the redundancy gains hold for heterogeneous models, larger agent counts, or genuinely open-ended tasks (vs. these mostly closed-form QA/math/code benchmarks) is untested.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 거의 모든 평가가 gpt-4o-mini · 동질 5에이전트 · 데이터셋당 50개 질의 학습에 국한된다. 최강 학습 베이스라인 대비 평균 우위는 <b>+1.75%</b>에 그치고, 대표적 토큰 절감은 GSM8K에서만 뚜렷하다 — 이질 모델·더 많은 에이전트·진짜 개방형 과제(대체로 정답이 닫힌 QA/수학/코드 벤치가 아닌)에서도 중복 감소 이득이 유지되는지는 검증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2605.09907">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2605.09907">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2605.09907">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2605.09907">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

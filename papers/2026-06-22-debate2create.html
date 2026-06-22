@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Debate2Create: Robot Co-design via Multi-Agent LLM Debate</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · LLM Debate</span><span class="t-ko">🤝 Multi-Agent · LLM Debate</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Debate2Create: Robot Co-design via Multi-Agent LLM Debate<br><span class="glow t-en">— Let a design agent and a control agent argue, then let physics judge</span><span class="glow t-ko">— 설계 에이전트와 제어 에이전트가 논쟁하게 하고, 판정은 물리 시뮬레이터에 맡겨라</span></h1>
+    <div class="meta">
+      <span>👥 <b>Kevin Qiu</b> <span class="t-en">& Marek Cygan</span><span class="t-ko">외 1인</span></span>
+      <span>🏛 University of Warsaw · IDEAS NCBR · Nomagic</span>
+      <span>🗓 2026.02.24</span>
+      <span>📄 <a href="https://arxiv.org/abs/2510.25850">arXiv:2510.25850</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">A robot's <b>body</b> and its <b>reward</b> are coupled, but most pipelines optimize them separately. <span class="hl">Debate2Create (D2C)</span> turns joint morphology-reward search into a <b>structured LLM debate</b>: a design agent proposes a body (thesis), a control agent critiques it and writes reward code (antithesis), the design is revised (synthesis), and a panel of <b>4 pluralistic judges</b> gives multi-objective feedback. Every choice is grounded in <b>physics simulation</b>, not LLM rhetoric. Across 5 MuJoCo tasks, D2C reaches <b>3.2× the default Ant score and ~9× on Swimmer</b>, beating prior LLM and black-box baselines, and iterative debate adds <b>18–35%</b> over compute-matched zero-shot.</p>
+    <p class="t-ko">로봇의 <b>몸체</b>와 <b>보상</b>은 서로 얽혀 있지만, 대부분의 파이프라인은 둘을 따로 최적화한다. <span class="hl">Debate2Create(D2C)</span>는 몸체-보상 공동 탐색을 <b>구조화된 LLM 논쟁</b>으로 바꾼다: 설계 에이전트가 몸체를 제안하고(정), 제어 에이전트가 비판하며 보상 코드를 작성하고(반), 설계가 수정된다(합). 여기에 <b>4명의 다원적 판정관(judge)</b>이 다목적 피드백을 준다. 모든 결정은 LLM의 말솜씨가 아니라 <b>물리 시뮬레이션</b>에 근거한다. 5개 MuJoCo 과제에서 D2C는 <b>기본 Ant 대비 3.2배, Swimmer에서 약 9배</b> 점수를 달성해 기존 LLM·블랙박스 베이스라인을 능가하고, 반복 논쟁은 동일 연산량의 zero-shot 대비 <b>18~35%</b>를 더 얻는다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Co-design is hard because body and controller are non-linearly coupled — and single-agent LLMs reuse familiar patterns exactly where diversity is needed.</p>
+    <p class="lead t-ko">공동설계가 어려운 이유는 몸체와 제어기가 비선형적으로 얽혀 있기 때문이며, 단일 에이전트 LLM은 다양성이 가장 필요한 지점에서 익숙한 패턴만 반복한다.</p>
+    <p class="t-en">Lengthen a leg and the optimal gait changes; add an energy penalty and an agile body crawls. Optimizing morphology under a fixed reward yields fragile bodies; tuning reward for a fixed body caps performance. D2C reframes this as a <strong>multi-agent communication problem</strong>: instead of one model generating everything, <strong>role-separated agents debate</strong> — proposing, critiquing, and revising — so controllability flaws are caught <em>before</em> expensive simulation. Crucially, the "judgment" that ends each round is not an LLM verdict but the <strong>simulator's task score</strong>, keeping the debate honest.</p>
+    <p class="t-ko">다리를 늘이면 최적 보행이 바뀌고, 에너지 페널티를 더하면 민첩하던 몸이 기어 다닌다. 고정 보상 아래 몸체만 최적화하면 취약한 몸이 나오고, 고정 몸체에 맞춰 보상만 조정하면 성능 한계가 생긴다. D2C는 이를 <strong>멀티에이전트 통신 문제</strong>로 재정의한다 — 한 모델이 전부 생성하는 대신 <strong>역할이 분리된 에이전트들이 논쟁</strong>(제안·비판·수정)하여, 비싼 시뮬레이션 <em>이전에</em> 제어 가능성 결함을 잡아낸다. 핵심은 매 라운드를 끝내는 "판정"이 LLM의 평결이 아니라 <strong>시뮬레이터 과제 점수</strong>라는 점으로, 논쟁이 거짓되지 않게 한다.</p>
+    <figure class="fig">
+      <img src="fig/2510.25850/fig1.png" alt="Default-normalized scores: D2C vs Eureka, Bayesian Opt, RoboMoRe across 5 MuJoCo tasks">
+      <figcaption class="t-en"><b>Figure 2.</b> Default-normalized scores across five MuJoCo tasks (mean ± std). D2C (red) consistently beats Eureka, Bayesian Optimization, and RoboMoRe under matched RL budgets, with the largest gains on Ant (3.2×) and Swimmer (~9×; note the broken y-axis).</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 5개 MuJoCo 과제의 Default 정규화 점수(평균 ± 표준편차). D2C(빨강)는 동일 RL 예산에서 Eureka·Bayesian Optimization·RoboMoRe를 일관되게 능가하며, Ant(3.2배)와 Swimmer(약 9배; y축이 끊겨 있음)에서 최대 이득을 보인다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2510.25850</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">3.2×</div><div class="l"><span class="t-en">Default Ant score<br>(47084 vs 14886)</span><span class="t-ko">기본 Ant 대비 점수<br>(47084 vs 14886)</span></div></div>
+      <div class="stat"><div class="n">~9×</div><div class="l"><span class="t-en">Swimmer gain<br>(8639 vs 926)</span><span class="t-ko">Swimmer 이득<br>(8639 vs 926)</span></div></div>
+      <div class="stat"><div class="n">18–35%</div><div class="l"><span class="t-en">Debate vs zero-shot<br>(mean ~24%)</span><span class="t-ko">논쟁 vs zero-shot<br>(평균 약 24%)</span></div></div>
+      <div class="stat"><div class="n">4 / 5</div><div class="l"><span class="t-en">Tasks where D2C reward<br>transfers to default body</span><span class="t-ko">D2C 보상이 기본 몸체로<br>전이된 과제</span></div></div>
+      <div class="stat"><div class="n">4</div><div class="l"><span class="t-en">Pluralistic judges<br>(speed · stability · efficiency · novelty)</span><span class="t-ko">다원적 판정관<br>(속도·안정성·효율·참신성)</span></div></div>
+      <div class="stat"><div class="n">80</div><div class="l"><span class="t-en">Policies trained / seed<br>(5 rounds × 16 candidates)</span><span class="t-ko">시드당 학습 정책<br>(5라운드 × 16후보)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — co-design beats decoupled search</span><span class="t-ko">결과 — 공동설계가 분리 탐색을 능가</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Task score S on five MuJoCo tasks (mean ± std over 5 final seeds). Rows vary the source of morphology and reward; "D2C / D2C" is full co-design.</caption>
+        <caption class="t-ko"><b>Table 1.</b> 5개 MuJoCo 과제의 과제 점수 S(최종 5시드 평균 ± 표준편차). 행은 몸체·보상의 출처를 달리하며, "D2C / D2C"가 완전한 공동설계다.</caption>
+        <thead><tr><th>Morphology / Reward</th><th>Ant</th><th>Swimmer</th><th>Walker2D</th><th>Hopper</th></tr></thead>
+        <tbody>
+          <tr><td>Default / Default</td><td>14886</td><td>926</td><td>9596</td><td>4183</td></tr>
+          <tr><td>Default / D2C</td><td>17402</td><td>904</td><td>11027</td><td>5383</td></tr>
+          <tr><td>D2C / D2C</td><td class="up">47084</td><td class="up">8639</td><td class="up">13062</td><td class="up">6257</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Design agent</span><span class="t-ko">설계 에이전트</span></div>
+          <div class="sub"><span class="t-en">thesis: edit body m</span><span class="t-ko">정: 몸체 m 수정</span></div>
+          <div class="latent"><span class="t-en">proposes morphology</span><span class="t-ko">형태 제안</span></div>
+        </div>
+        <div class="flow">⇄</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Control agent</span><span class="t-ko">제어 에이전트</span></div>
+          <div class="sub"><span class="t-en">antithesis + reward code r</span><span class="t-ko">반: 비판 + 보상 코드 r</span></div>
+          <div class="latent"><span class="t-en">critique → synthesis</span><span class="t-ko">비판 → 합</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Physics + 4 judges</span><span class="t-ko">물리 + 4 판정관</span></div>
+          <div class="sub"><span class="t-en">train in Brax, score S</span><span class="t-ko">Brax 학습, 점수 S</span></div>
+          <div class="latent"><span class="t-en">hall-of-fame archive</span><span class="t-ko">명예의 전당 아카이브</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Argue, simulate, archive, repeat</b> — each round the best design–reward pair is stored in a hall-of-fame that conditions the next debate; selection is decided by the simulator score S, judges only steer exploration.</div>
+      <div class="cap t-ko"><b>논쟁→시뮬레이션→보관→반복</b> — 매 라운드 최고의 설계-보상 쌍을 명예의 전당에 저장해 다음 논쟁의 맥락으로 삼는다. 선택은 시뮬레이터 점수 S가 결정하며, 판정관은 탐색 방향만 조종한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: structured debate as the search operator</span><span class="t-ko">아이디어: 탐색 연산자로서의 구조화된 논쟁</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 정-반-합</span>
+        <h3>Thesis–Antithesis–Synthesis</h3>
+        <p class="t-en">Two <span class="term">role-separated agents</span> (design vs. control, both GPT-5.2) run a Hegelian loop: propose a body, critique it, revise it. Critiquing <strong>before</strong> simulation prunes unstable designs cheaply. Each round samples multiple design × reward variants, yielding <span class="term">16 synthesis candidates</span>.</p>
+        <p class="t-ko">두 개의 <span class="term">역할 분리 에이전트</span>(설계 vs 제어, 둘 다 GPT-5.2)가 헤겔식 루프를 돈다: 몸체 제안 → 비판 → 수정. 시뮬레이션 <strong>이전</strong>에 비판함으로써 불안정한 설계를 저렴하게 걸러낸다. 매 라운드 다수의 설계 × 보상 조합을 샘플해 <span class="term">16개 합(synthesis) 후보</span>를 만든다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 다원적 판정</span>
+        <h3>Pluralistic judges + archive</h3>
+        <p class="t-en">A panel of <span class="term">four judges</span> — speed, stability, efficiency, novelty — gives multi-objective critique that steers away from narrow optima (ablations show higher <strong>Pareto hypervolume</strong>). A <span class="term">hall-of-fame archive</span> of top pairs survives bad rounds, making D2C robust to individual LLM failures.</p>
+        <p class="t-ko"><span class="term">네 명의 판정관</span>(속도·안정성·효율·참신성)이 다목적 비판을 제공해 좁은 최적점에서 벗어나게 한다(어블레이션에서 <strong>Pareto 초부피</strong> 증가 확인). 상위 쌍을 보관하는 <span class="term">명예의 전당 아카이브</span> 덕분에 나쁜 라운드를 견디고, 개별 LLM 실패에도 강건하다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Propose (thesis)</span><span class="t-ko">제안 (정)</span></b><span class="t-en">The design agent, given the current body, task, recent metrics, and an archive digest, edits exposed morphology parameters with a short rationale.</span><span class="t-ko">설계 에이전트는 현재 몸체·과제·최근 지표·아카이브 요약을 받아, 노출된 형태 파라미터를 수정하고 짧은 근거를 단다.</span></li>
+      <li><b><span class="t-en">Critique + reward (antithesis)</span><span class="t-ko">비판 + 보상 (반)</span></b><span class="t-en">The control agent flags controllability risks, then writes a reward function r tailored to the revised body m′ as a code snippet (Eureka-style template).</span><span class="t-ko">제어 에이전트가 제어 가능성 위험을 지적한 뒤, 수정된 몸체 m′에 맞춘 보상 함수 r을 코드 스니펫으로 작성한다(Eureka식 템플릿).</span></li>
+      <li><b><span class="t-en">Simulate & judge</span><span class="t-ko">시뮬레이션 & 판정</span></b><span class="t-en">Each (m, r) pair trains a policy in Brax under a fixed RL budget; the four judges reason over metrics for the top candidate to give multi-objective feedback.</span><span class="t-ko">각 (m, r) 쌍은 고정 RL 예산으로 Brax에서 정책을 학습하고, 네 판정관이 최고 후보의 지표를 추론해 다목적 피드백을 준다.</span></li>
+      <li><b><span class="t-en">Archive & repeat</span><span class="t-ko">보관 & 반복</span></b><span class="t-en">Winners ranked by simulator score S enter the hall-of-fame; after K=5 rounds the best stored pair is returned. ~$0.50 LLM cost/round; RL dominates wall-clock.</span><span class="t-ko">시뮬레이터 점수 S로 순위 매긴 승자가 명예의 전당에 들어가고, K=5 라운드 후 최고 저장 쌍을 반환한다. 라운드당 LLM 비용 약 $0.50, 벽시계 시간은 RL이 지배한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Debate is a real search operator.</strong> Under identical candidate budgets, iterative critique-then-revise beats one-shot generation by 18–35% — the gains come from the protocol, not extra compute.</p><p class="t-ko"><strong>논쟁은 진짜 탐색 연산자다.</strong> 동일한 후보 예산에서 반복적 비판-수정이 단발 생성을 18~35% 능가 — 이득은 추가 연산이 아니라 프로토콜에서 나온다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Ground the judgment in physics.</strong> Unlike LLM-judge debate, D2C lets the simulator score decide winners; judges only shape exploration, so persuasiveness can't override empirical performance.</p><p class="t-ko"><strong>판정을 물리에 근거시켜라.</strong> LLM 판정 논쟁과 달리 D2C는 시뮬레이터 점수로 승자를 정하고, 판정관은 탐색만 조형한다. 그래서 말솜씨가 실증 성능을 뒤집을 수 없다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Co-design discovers transferable rewards.</strong> D2C rewards improve even the default body on 4/5 tasks, suggesting the shaping captures locomotion principles, not morphology-specific hacks.</p><p class="t-ko"><strong>공동설계는 전이 가능한 보상을 발견한다.</strong> D2C 보상은 4/5 과제에서 기본 몸체까지 향상시켜, 형태 특화 꼼수가 아니라 보행 원리를 포착함을 시사한다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Robust to weak LLMs.</strong> GPT-5-nano/mini/5.2 all reach 3.18–3.60× on Ant (p&gt;0.19); the archive absorbs failures, though small models waste compute (49.2% vs 15.8% degenerate candidates).</p><p class="t-ko"><strong>약한 LLM에도 강건.</strong> GPT-5-nano/mini/5.2 모두 Ant에서 3.18~3.60배 달성(p&gt;0.19). 아카이브가 실패를 흡수하지만, 작은 모델은 연산을 낭비한다(퇴화 후보 49.2% vs 15.8%).</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline gains lean heavily on two outlier tasks — Ant (3.2×) and especially Swimmer (~9×, where morphology change alone yields ~10× and reward barely helps). On the three bipedal tasks (HalfCheetah, Hopper, Walker2D) gains shrink to 1.3–1.5×, and on Swimmer the D2C reward on a default body is actually <em>worse</em> than default (904 vs 926). So "debate" may matter most exactly where a single good morphology edit would have sufficed.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 수치는 두 이상치 과제에 크게 의존한다 — Ant(3.2배)와 특히 Swimmer(약 9배, 여기선 형태 변경만으로 약 10배가 나오고 보상은 거의 무의미). 세 이족 과제(HalfCheetah·Hopper·Walker2D)에서는 이득이 1.3~1.5배로 줄고, Swimmer에서 기본 몸체에 D2C 보상을 쓰면 오히려 기본보다 <em>나빠진다</em>(904 vs 926). 즉 "논쟁"의 효용은, 좋은 형태 수정 하나면 충분했을 지점에서 가장 크게 보일 수 있다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2510.25850">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2510.25850">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2510.25850">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2510.25850">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

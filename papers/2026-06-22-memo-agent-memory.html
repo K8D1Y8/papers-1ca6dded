@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · MEMO: Memory-Augmented Model Context Optimization for Robust Multi-Turn Multi-Agent LLM Games</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · Agent Memory</span><span class="t-ko">🤝 Multi-Agent · Agent Memory</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>MEMO: Memory-Augmented Model Context Optimization for Robust Multi-Turn Multi-Agent LLM Games<br>
+      <span class="glow t-en">— Don't retrain the model; grow a memory of what wins, and replay it</span>
+      <span class="glow t-ko">— 모델을 다시 학습하지 말고, '무엇이 이기는지' 기억을 키워 재사용하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Yunfei Xie</b> <span class="t-en">et al. (12 authors)</span><span class="t-ko">외 11인</span></span>
+      <span>🏛 Rice · UT Austin · Princeton · A*STAR</span>
+      <span>🗓 2026.03</span>
+      <span>📄 <a href="https://arxiv.org/abs/2603.09022">arXiv:2603.09022</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Multi-turn, multi-agent LLM games are notoriously <b>unstable to evaluate</b> — tiny early-turn deviations compound and rankings flip run to run. MEMO fixes this <span class="hl">without touching model weights</span>: a self-play loop that optimizes the <b>inference-time context</b>, distills lessons from trajectories into a <b>persistent memory bank</b>, and replays rare states. It lifts GPT-4o-mini's mean win rate from <b>25.1% → 49.5%</b>, cuts run-to-run variance (RSE) from <b>44.9% → 6.4%</b>, and does it with <b>~19× fewer games</b> than RL.</p>
+    <p class="t-ko">다중 턴·다중 에이전트 LLM 게임은 <b>평가가 악명 높게 불안정</b>하다 — 초반의 작은 편차가 누적되며 실행마다 순위가 뒤집힌다. MEMO는 <span class="hl">모델 가중치를 건드리지 않고</span> 이를 해결한다: 추론 시점의 <b>컨텍스트</b>를 자기대국(self-play)으로 최적화하고, 궤적에서 얻은 교훈을 <b>영속 메모리 뱅크</b>에 정제·축적하며, 드문 상태를 재현(replay)한다. GPT-4o-mini의 평균 승률을 <b>25.1% → 49.5%</b>로 올리고, 실행 간 분산(RSE)을 <b>44.9% → 6.4%</b>로 줄이며, RL 대비 <b>약 19배 적은 게임</b>으로 달성한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">In path-dependent games, the bottleneck is not the model — it's that the same model behaves differently every run.</p>
+    <p class="lead t-ko">경로 의존적 게임에서 병목은 모델이 아니라, 같은 모델이 실행마다 다르게 행동한다는 점이다.</p>
+    <p class="t-en">As LLMs saturate static benchmarks, evaluation is shifting to multi-turn, multi-agent <strong>games</strong> that demand long-horizon planning, negotiation, and bluffing. But these settings are <strong>high-variance</strong>: small early deviations compound, one agent's inconsistency perturbs others, and stochastic decoding flips comparative rankings. Existing fixes fall short — static prompting (CoT/ToT) can't adapt, automatic prompt optimization has <strong>no persistent memory</strong> and re-searches every run, and RL needs huge sample budgets and is unstable under sparse end-game rewards. MEMO reframes the inference-time <strong>context as the optimizable, memory-bearing object</strong>, so insights accumulate instead of being thrown away.</p>
+    <p class="t-ko">LLM이 정적 벤치마크를 포화시키면서, 평가는 장기 계획·협상·블러핑이 필요한 다중 턴·다중 에이전트 <strong>게임</strong>으로 옮겨가고 있다. 그러나 이 환경은 <strong>분산이 크다</strong>: 초반 편차가 누적되고, 한 에이전트의 비일관성이 다른 에이전트를 교란하며, 확률적 디코딩이 비교 순위를 뒤집는다. 기존 해법은 부족하다 — 정적 프롬프트(CoT/ToT)는 적응 못 하고, 자동 프롬프트 최적화는 <strong>영속 메모리가 없어</strong> 매 실행마다 다시 탐색하며, RL은 막대한 샘플 예산이 필요하고 희소 보상에서 불안정하다. MEMO는 추론 시점 <strong>컨텍스트를 최적화 가능하고 기억을 담는 객체</strong>로 재정의해, 통찰이 버려지지 않고 축적되게 한다.</p>
+    <figure class="fig">
+      <img src="fig/2603.09022/fig1.png" alt="Cross-model transfer of MEMO-learned context to Grok-4 and Gemini-2.5-Flash-Lite">
+      <figcaption class="t-en"><b>Figure.</b> Cross-model transfer — a context optimized on GPT-4o-mini, applied zero-shot to a stronger (Grok-4-fast) and a weaker (Gemini-2.5-Flash-Lite) model. The weaker model improves broadly (e.g., KuhnPoker 50.0% → 60.7%); the stronger model is mixed and can regress where it was already strong.</figcaption>
+      <figcaption class="t-ko"><b>그림.</b> 모델 간 전이 — GPT-4o-mini에서 최적화한 컨텍스트를 더 강한 모델(Grok-4-fast)과 더 약한 모델(Gemini-2.5-Flash-Lite)에 제로샷 적용. 약한 모델은 전반적으로 향상되고(예: KuhnPoker 50.0% → 60.7%), 강한 모델은 결과가 엇갈리며 이미 강했던 영역에서는 오히려 퇴보할 수 있다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2603.09022</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">25.1→49.5%</div><div class="l"><span class="t-en">Mean win rate<br>(GPT-4o-mini)</span><span class="t-ko">평균 승률<br>(GPT-4o-mini)</span></div></div>
+      <div class="stat"><div class="n">20.9→44.3%</div><div class="l"><span class="t-en">Mean win rate<br>(Qwen-2.5-7B)</span><span class="t-ko">평균 승률<br>(Qwen-2.5-7B)</span></div></div>
+      <div class="stat"><div class="n">44.9→6.4%</div><div class="l"><span class="t-en">Run-to-run variance<br>RSE (GPT-4o-mini)</span><span class="t-ko">실행 간 분산<br>RSE (GPT-4o-mini)</span></div></div>
+      <div class="stat"><div class="n">~19×</div><div class="l"><span class="t-en">Fewer games than RL<br>(2,000 vs 38,000)</span><span class="t-ko">RL 대비 게임 수<br>(2,000 vs 38,000)</span></div></div>
+      <div class="stat"><div class="n">~1/4</div><div class="l"><span class="t-en">Output tokens vs MIPRO<br>(91K vs 354K)</span><span class="t-ko">출력 토큰(MIPRO 대비)<br>(91K vs 354K)</span></div></div>
+      <div class="stat"><div class="n">5</div><div class="l"><span class="t-en">Games · 2 base models<br>(TextArena · SPIN-Bench)</span><span class="t-ko">게임 · 2개 기반 모델<br>(TextArena · SPIN-Bench)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — ablating MEMO's parts</span><span class="t-ko">결과 — MEMO 구성요소 분해</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table (ablation).</b> Mean win rate as components are added. Memory (retention) is the dominant factor; structured exploration + replay stack on top. Δ = gain over prompt-optimization-only.</caption>
+        <caption class="t-ko"><b>표 (제거 실험).</b> 구성요소를 더해가며 본 평균 승률. 메모리(retention)가 지배적 요인이며, 구조적 탐색 + 재현이 그 위에 누적된다. Δ = 프롬프트 최적화 단독 대비 향상.</caption>
+        <thead><tr><th>Configuration</th><th>Win rate</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>Prompt optimization only</td><td>23.8%</td><td>—</td></tr>
+          <tr><td>+ Tournament (exploration only)</td><td>27.1%</td><td class="up">+3.3</td></tr>
+          <tr><td>+ Memory only (retention)</td><td>34.2%</td><td class="up">+10.4</td></tr>
+          <tr><td>+ Tournament + Memory</td><td>48.1%</td><td class="up">+24.3</td></tr>
+          <tr><td>+ Prioritized Replay (full MEMO)</td><td>50.2%</td><td class="up">+26.4</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Self-play tournament</span><span class="t-ko">자기대국 토너먼트</span></div>
+          <div class="sub"><span class="t-en">N=8 candidate contexts</span><span class="t-ko">후보 컨텍스트 N=8개</span></div>
+          <div class="latent"><span class="t-en">TrueSkill μ−κσ select</span><span class="t-ko">TrueSkill μ−κσ 선별</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Reflect → Memory bank</span><span class="t-ko">반성 → 메모리 뱅크</span></div>
+          <div class="sub"><span class="t-en">distill typed insights</span><span class="t-ko">유형화된 통찰 정제</span></div>
+          <div class="latent"><span class="t-en">add / edit / remove</span><span class="t-ko">추가 / 수정 / 삭제</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Next generation</span><span class="t-ko">다음 세대</span></div>
+          <div class="sub"><span class="t-en">memory-augmented proposals</span><span class="t-ko">메모리 증강 제안</span></div>
+          <div class="latent"><span class="t-en">+ prioritized replay</span><span class="t-ko">+ 우선순위 재현</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>A learning loop without weight updates</b> — play, distill what worked into a persistent memory, then inject those priors back into the context for the next generation while replaying rare states.</div>
+      <div class="cap t-ko"><b>가중치 갱신 없는 학습 루프</b> — 대국하고, 효과적인 것을 영속 메모리에 정제해 담은 뒤, 그 사전지식을 다음 세대 컨텍스트에 다시 주입하면서 드문 상태를 재현한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: context as a memory-bearing, optimizable object</span><span class="t-ko">아이디어: 기억을 담는 최적화 객체로서의 컨텍스트</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① Retention</span>
+        <h3>Persistent Memory Bank</h3>
+        <p class="t-en">After each generation, the LLM reflects over sampled trajectories and extracts <span class="term">typed insights</span> (rule clarifications, legality constraints, strategic priors). These merge into a shared bank via <span class="term">add / edit / remove</span> operations, so knowledge grows and self-corrects across generations instead of being discarded.</p>
+        <p class="t-ko">각 세대 후, LLM은 샘플된 궤적을 반성하며 <span class="term">유형화된 통찰</span>(규칙 명확화, 합법성 제약, 전략적 사전지식)을 추출한다. 이는 <span class="term">추가 / 수정 / 삭제</span> 연산으로 공유 뱅크에 병합되어, 지식이 버려지지 않고 세대를 거쳐 성장·자기수정된다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② Exploration</span>
+        <h3>Tournament + Prioritized Replay</h3>
+        <p class="t-en">Candidate contexts compete in self-play; <span class="term">TrueSkill</span> rates each by a conservative lower bound μ−κσ to reward reliable wins, not lucky ones. A replay buffer revisits rare or decisive states via <span class="term">inverse-frequency priority</span>, feeding the memory high-signal, transferable lessons.</p>
+        <p class="t-ko">후보 컨텍스트들이 자기대국으로 경쟁하고, <span class="term">TrueSkill</span>이 보수적 하한 μ−κσ로 각각을 평가해 운이 아닌 안정적 승리를 보상한다. 재현 버퍼는 <span class="term">역빈도 우선순위</span>로 드물거나 결정적인 상태를 다시 방문해, 신호가 강하고 전이 가능한 교훈을 메모리에 공급한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Run a self-play tournament</span><span class="t-ko">자기대국 토너먼트 실행</span></b><span class="t-en">Maintain N=8 candidate contexts (prompt + memory subset). Evaluate each in self-play vs. a default-prompt baseline, swapping roles to remove first-move bias.</span><span class="t-ko">N=8개 후보 컨텍스트(프롬프트 + 메모리 부분집합)를 유지하고, 기본 프롬프트 baseline과의 자기대국으로 평가하되 선공 편향 제거를 위해 역할을 교대한다.</span></li>
+      <li><b><span class="t-en">Rate with TrueSkill, keep the robust ones</span><span class="t-ko">TrueSkill로 평가, 견고한 것만 유지</span></b><span class="t-en">Score each context by S(c)=μ−κσ (κ=1) so high-uncertainty winners are penalized; discard low scorers and keep a persistent pool of the best.</span><span class="t-ko">각 컨텍스트를 S(c)=μ−κσ(κ=1)로 채점해 불확실성 큰 승자에 페널티를 주고, 저득점은 버리고 최고들을 영속 풀에 유지한다.</span></li>
+      <li><b><span class="t-en">Reflect and update the memory bank</span><span class="t-ko">반성하고 메모리 뱅크 갱신</span></b><span class="t-en">Sample completed trajectories, distill typed insights, and merge them into B_mem via add/edit/remove to refine and self-correct accumulated knowledge.</span><span class="t-ko">완료된 궤적을 샘플링해 유형화된 통찰을 정제하고, add/edit/remove로 B_mem에 병합하여 축적 지식을 정제·자기수정한다.</span></li>
+      <li><b><span class="t-en">Repopulate next generation + replay</span><span class="t-ko">다음 세대 재구성 + 재현</span></b><span class="t-en">Refill to N via random + memory-augmented proposals (π=0.75 carry memory), and with gate β=0.4 start some games from prioritized rare prefixes. After G=5 generations (~2,000 games), output the top context.</span><span class="t-ko">무작위 + 메모리 증강 제안으로 N개로 채우고(π=0.75는 메모리 운반), 게이트 β=0.4로 일부 게임을 우선순위 높은 드문 접두에서 시작한다. G=5세대(~2,000게임) 후 최상위 컨텍스트를 출력한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Memory beats retraining here.</strong> ~2× mean win rate and a 7× drop in run-to-run variance — without a single weight update, and with ~19× fewer games than RL.</p><p class="t-ko"><strong>여기선 기억이 재학습을 이긴다.</strong> 가중치 갱신 없이, RL 대비 ~19배 적은 게임으로 평균 승률 약 2배·실행 간 분산 7배 감소.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Persistence is the lever.</strong> Memory-only (+10.4%) dwarfs exploration-only (+3.3%); the win comes from <em>not throwing insights away</em>, which is exactly what prior prompt optimizers do.</p><p class="t-ko"><strong>핵심 지렛대는 영속성.</strong> 메모리 단독(+10.4%)이 탐색 단독(+3.3%)을 압도 — 승부는 <em>통찰을 버리지 않는</em> 데서 나며, 이는 기존 프롬프트 최적화가 못 하던 점이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Stable evaluation is a result, not just a means.</strong> Cutting RSE to 6.4% makes model rankings reproducible — useful for the whole field, not just MEMO.</p><p class="t-ko"><strong>안정적 평가는 수단이 아니라 결과.</strong> RSE를 6.4%로 줄이면 모델 순위가 재현 가능해진다 — MEMO만이 아니라 분야 전체에 유용하다.</p></div>
+      <div class="t"><span class="ic">🔁</span><p class="t-en"><strong>Transfer is conditional.</strong> Learned context helps weaker models broadly but can <em>hurt</em> a stronger model where it's already good — heuristics interfere.</p><p class="t-ko"><strong>전이는 조건부.</strong> 학습된 컨텍스트는 약한 모델을 폭넓게 돕지만, 이미 잘하는 강한 모델에선 <em>해가 될</em> 수 있다 — 휴리스틱이 간섭한다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The "improvement" partly is an opponent-pool artifact — win rates are measured against a fixed set of judges/opponents, and the optimized context is shaped by self-play against the <em>same base model</em>. The negative cross-model transfer (Briscola −8.0%, KuhnPoker −6.0% on Grok-4) hints that MEMO may be learning opponent-/model-specific exploits as much as general strategy, so a 49.5% mean win rate should not be read as "general game competence."</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> "향상"은 부분적으로 상대 풀(opponent pool)의 산물이다 — 승률은 고정된 심판/상대 집합에 대해 측정되고, 최적화된 컨텍스트는 <em>같은 기반 모델</em>과의 자기대국으로 형성된다. 모델 간 음의 전이(Grok-4에서 Briscola −8.0%, KuhnPoker −6.0%)는 MEMO가 일반 전략만큼이나 상대·모델 특화 익스플로잇을 학습할 수 있음을 시사한다. 따라서 49.5%의 평균 승률을 "일반적 게임 역량"으로 읽어선 안 된다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2603.09022">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2603.09022">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2603.09022">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2603.09022">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Agent Primitives: Reuseable Latent Building Blocks for Multi-Agent Systems</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · Latent Primitives</span><span class="t-ko">🤝 Multi-Agent · Latent Primitives</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Agent Primitives: Reuseable Latent Building Blocks for Multi-Agent Systems<br>
+      <span class="glow t-en">— Stop hand-crafting agent teams: compose three latent blocks that talk through KV-cache</span>
+      <span class="glow t-ko">— 에이전트 팀을 손으로 짜지 말라: KV-cache로 소통하는 세 개의 잠재 블록을 조립하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Haibo Jin</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 UIUC (Univ. of Illinois Urbana-Champaign)</span>
+      <span>🗓 2026.02.04</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.03695">arXiv:2602.03695</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Most multi-agent systems (MAS) are <b>hand-built for one task</b> and talk in <b>natural language</b>, which degrades over long, multi-stage exchanges. This paper argues every MAS reduces to a few recurring computation patterns and distills them into <span class="hl">three reusable latent primitives — Review, Voting &amp; Selection, Planning &amp; Execution</span> — whose agents coordinate entirely through <b>KV-cache</b> instead of text. An LLM "Organizer" auto-composes them per query. Result: <b>+12.0–16.5%</b> accuracy over single-agent, <b>3×–4×</b> fewer tokens than text MAS, and stability where prior latent MAS collapses.</p>
+    <p class="t-ko">대부분의 멀티에이전트 시스템(MAS)은 <b>하나의 과제용으로 손수 설계</b>되고 <b>자연어</b>로 소통하는데, 길고 다단계인 교환에서 정보가 열화된다. 이 논문은 모든 MAS가 몇 가지 반복되는 계산 패턴으로 환원된다고 보고, 이를 <span class="hl">재사용 가능한 세 개의 잠재 프리미티브 — Review, Voting &amp; Selection, Planning &amp; Execution</span> — 로 추출한다. 이 블록 내부의 에이전트들은 텍스트가 아니라 <b>KV-cache</b>로 협응하며, LLM "Organizer"가 질의마다 자동 조립한다. 결과: 단일 에이전트 대비 정확도 <b>+12.0~16.5%</b>, 텍스트 MAS 대비 토큰 <b>3~4배</b> 절감, 기존 latent MAS가 무너지는 곳에서도 안정적.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">MAS design has no "standard library" — every team is rebuilt from scratch, and the wires between agents are brittle natural-language strings.</p>
+    <p class="lead t-ko">MAS 설계에는 "표준 라이브러리"가 없다 — 매번 팀을 처음부터 다시 짜고, 에이전트 사이의 배선은 깨지기 쉬운 자연어 문자열이다.</p>
+    <p class="t-en">Frameworks like MetaGPT or ChatDev hard-code roles and protocols, so complexity scales with every new task instead of being amortized. Worse, agents talk in text: in stress tests, natural-language coordination dropped to <strong>15.6% instruction compliance</strong> under long-context injection, and accuracy fell from <strong>100% to 40%</strong> with 25 injected noise sentences. The authors reframe MAS the way deep learning reframed networks — as a <strong>composition of a few reusable blocks</strong> — and replace the text wires with direct <strong>KV-cache</strong> hand-off, which held <strong>73.3% compliance / 77% accuracy</strong> under the same stress.</p>
+    <p class="t-ko">MetaGPT·ChatDev 같은 프레임워크는 역할과 프로토콜을 하드코딩해, 새 과제마다 복잡도가 누적될 뿐 분산되지 않는다. 게다가 에이전트는 텍스트로 대화한다: 스트레스 테스트에서 자연어 협응은 long-context 주입 시 <strong>지시 준수율 15.6%</strong>로 떨어지고, 잡음 문장 25개를 넣자 정확도가 <strong>100%→40%</strong>로 붕괴했다. 저자들은 딥러닝이 신경망을 재정의했듯 MAS를 <strong>몇 개의 재사용 블록의 조합</strong>으로 재정의하고, 텍스트 배선을 직접 <strong>KV-cache</strong> 전달로 대체한다 — 같은 스트레스에서 <strong>준수율 73.3% / 정확도 77%</strong> 유지.</p>
+    <figure class="fig">
+      <img src="fig/2602.03695/fig1.png" alt="Agent Primitives overview: Organizer composes Review, Voting and Selection, Planning and Execution primitives that communicate via KV-cache">
+      <figcaption class="t-en"><b>Figure 1.</b> An Organizer maps each query to a composition of three primitives — <b>(b) Review</b>, <b>(c) Voting &amp; Selection</b>, <b>(d) Planning &amp; Execution</b>. Inside and across primitives, agents exchange information as <b>KV-cache</b> rather than decoded text.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> Organizer가 각 질의를 세 프리미티브의 조합으로 매핑한다 — <b>(b) Review</b>, <b>(c) Voting &amp; Selection</b>, <b>(d) Planning &amp; Execution</b>. 프리미티브 내부·간에서 에이전트는 디코딩된 텍스트가 아니라 <b>KV-cache</b>로 정보를 주고받는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.03695</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+12.0–16.5%</div><div class="l"><span class="t-en">Avg accuracy gain<br>vs. single-agent baseline</span><span class="t-ko">평균 정확도 상승<br>단일 에이전트 대비</span></div></div>
+      <div class="stat"><div class="n">3×–4×</div><div class="l"><span class="t-en">Fewer tokens<br>vs. text-based MAS</span><span class="t-ko">토큰 절감<br>텍스트 MAS 대비</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">Reusable latent<br>primitives</span><span class="t-ko">재사용 잠재<br>프리미티브 개수</span></div></div>
+      <div class="stat"><div class="n">+3.5–7.0%</div><div class="l"><span class="t-en">Composition gain over<br>strongest single primitive</span><span class="t-ko">최강 단일 프리미티브 대비<br>조합 추가 이득</span></div></div>
+      <div class="stat"><div class="n">1.3×–1.6×</div><div class="l"><span class="t-en">Latency overhead vs.<br>single-agent (text MAS: 4–6×)</span><span class="t-ko">단일 대비 지연 오버헤드<br>(텍스트 MAS: 4~6×)</span></div></div>
+      <div class="stat"><div class="n">8 · 5</div><div class="l"><span class="t-en">Benchmarks · LLM<br>backbones evaluated</span><span class="t-ko">벤치마크 · 평가한<br>LLM 백본 수</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — vs. existing MAS on Llama-3-70B</span><span class="t-ko">결과 — Llama-3-70B에서 기존 MAS와 비교</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Selected results.</b> Accuracy (%). Primitives-based MAS vs. representative prior methods; GPQA is the standout. Single-agent gains and stress-test compliance shown alongside.</caption>
+        <caption class="t-ko"><b>주요 결과.</b> 정확도(%). 프리미티브 기반 MAS vs. 대표 선행 기법; GPQA가 두드러진다. 단일 에이전트 이득·스트레스 준수율도 함께 표기.</caption>
+        <thead><tr><th>Metric / Benchmark</th><th><span class="t-en">Prior MAS</span><span class="t-ko">기존 MAS</span></th><th><span class="t-en">Primitives</span><span class="t-ko">프리미티브</span></th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>GPQA (Llama-3-70B)</td><td>33.6–40.2</td><td>53.2</td><td class="up">+13.0~19.6</td></tr>
+          <tr><td><span class="t-en">Qwen3-8B avg acc</span><span class="t-ko">Qwen3-8B 평균</span></td><td>58.8</td><td>75.3</td><td class="up">+16.5</td></tr>
+          <tr><td><span class="t-en">NL coord. compliance</span><span class="t-ko">자연어 협응 준수율</span></td><td>15.6</td><td>73.3</td><td class="up">+57.7</td></tr>
+          <tr><td><span class="t-en">Acc. under 25 noise sents</span><span class="t-ko">잡음 25문장 정확도</span></td><td>40</td><td>77</td><td class="up">+37</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Query</span><span class="t-ko">질의</span></div>
+          <div class="sub"><span class="t-en">Organizer + Knowledge Pool</span><span class="t-ko">Organizer + Knowledge Pool</span></div>
+          <div class="latent"><span class="t-en">pick &amp; order primitives</span><span class="t-ko">프리미티브 선택·순서</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">3 Latent Primitives</span><span class="t-ko">3개 잠재 프리미티브</span></div>
+          <div class="sub"><span class="t-en">Review · Vote · Plan-Exec</span><span class="t-ko">Review · Vote · Plan-Exec</span></div>
+          <div class="latent"><span class="t-en">talk via KV-cache (+RoPE re-index)</span><span class="t-ko">KV-cache로 통신 (+RoPE 재색인)</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Answer</span><span class="t-ko">해답</span></div>
+          <div class="sub"><span class="t-en">standard LLM interface</span><span class="t-ko">표준 LLM 인터페이스</span></div>
+          <div class="latent"><span class="t-en">+12–16% acc, 3–4× fewer tokens</span><span class="t-ko">+12~16% 정확도, 토큰 3~4× 절감</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Compose, don't craft</b> — the same three primitives, wired with latent KV-cache, externally behave like an ordinary multi-agent system.</div>
+      <div class="cap t-ko"><b>설계가 아니라 조립</b> — 동일한 세 프리미티브를 잠재 KV-cache로 배선하면, 겉으로는 평범한 멀티에이전트 시스템처럼 동작한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core idea: blocks + latent wires</span><span class="t-ko">핵심 아이디어: 블록 + 잠재 배선</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 재사용 블록</span>
+        <h3>Three Agent Primitives</h3>
+        <p class="t-en"><strong>Review</strong> = latent self-critique loop (Solver↔Critic). <strong>Voting &amp; Selection</strong> = a consensus operator over parallel latent candidates (many Solvers + Selector). <strong>Planning &amp; Execution</strong> = a latent decomposition operator (Planner→Executor). Each exposes the same external interface as a normal LLM agent, so they snap together.</p>
+        <p class="t-ko"><strong>Review</strong> = 잠재 자기비판 루프(Solver↔Critic). <strong>Voting &amp; Selection</strong> = 병렬 잠재 후보에 대한 합의 연산자(다수 Solver + Selector). <strong>Planning &amp; Execution</strong> = 잠재 분해 연산자(Planner→Executor). 각 블록은 일반 LLM 에이전트와 동일한 외부 인터페이스를 노출해 서로 끼워 맞춰진다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 잠재 통신</span>
+        <h3>KV-cache hand-off + KV PoPE</h3>
+        <p class="t-en">Agent A's final KV-cache is concatenated onto agent B's system KV-cache; B decodes conditioned on it, with <strong>no text decoded in between</strong>. The trick is <strong>KV PoPE</strong>: re-index A's KV by B's system-prompt length so RoPE positions stay valid. Ablating this re-indexing is catastrophic — HumanEval+ on LLaMA crashes from <strong>85.3% to 31.1%</strong>.</p>
+        <p class="t-ko">에이전트 A의 최종 KV-cache를 B의 시스템 KV-cache에 이어 붙이면, B는 <strong>중간에 텍스트를 디코딩하지 않고</strong> 그 위에서 추론한다. 핵심은 <strong>KV PoPE</strong>: A의 KV를 B의 시스템 프롬프트 길이만큼 재색인해 RoPE 위치를 유지한다. 이 재색인을 제거하면 치명적 — LLaMA의 HumanEval+가 <strong>85.3%→31.1%</strong>로 붕괴.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Organizer reads the query</span><span class="t-ko">Organizer가 질의를 읽는다</span></b><span class="t-en">An LLM (GPT-5.2 / Claude-4 in experiments) maps the query to a primitive-composition plan, guided by a lightweight Knowledge Pool of previously effective MAS structures.</span><span class="t-ko">LLM(실험에서는 GPT-5.2 / Claude-4)이 질의를 프리미티브 조합 계획으로 매핑하며, 과거에 효과적이었던 MAS 구조의 경량 Knowledge Pool이 이를 안내한다.</span></li>
+      <li><b><span class="t-en">Instantiate primitives</span><span class="t-ko">프리미티브 인스턴스화</span></b><span class="t-en">Selected blocks (Review / Voting / Planning) are placed in order; each runs its internal Solver/Critic/Selector/Planner/Executor agents.</span><span class="t-ko">선택된 블록(Review / Voting / Planning)을 순서대로 배치하고, 각 블록이 내부 Solver/Critic/Selector/Planner/Executor 에이전트를 실행한다.</span></li>
+      <li><b><span class="t-en">Communicate via KV-cache</span><span class="t-ko">KV-cache로 통신</span></b><span class="t-en">Within and across blocks, an agent's KV-cache is concatenated onto the next agent's, re-indexed by KV PoPE so RoPE positions stay valid — no text round-trip.</span><span class="t-ko">블록 내부·간에서 에이전트의 KV-cache를 다음 에이전트에 이어붙이고 KV PoPE로 재색인해 RoPE 위치를 유지 — 텍스트 왕복 없음.</span></li>
+      <li><b><span class="t-en">Emit a single answer</span><span class="t-ko">단일 해답 출력</span></b><span class="t-en">The final block decodes one answer through a standard LLM interface, so the whole system is a drop-in replacement for a text MAS — but cheaper and steadier.</span><span class="t-ko">마지막 블록이 표준 LLM 인터페이스로 단일 해답을 디코딩하므로, 전체 시스템이 텍스트 MAS의 대체재가 된다 — 더 싸고 더 안정적으로.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>An "assembly language" for agents.</strong> Three reusable latent blocks replace bespoke agent teams, amortizing design cost across tasks instead of paying it each time.</p><p class="t-ko"><strong>에이전트를 위한 "어셈블리 언어".</strong> 세 개의 재사용 잠재 블록이 맞춤형 에이전트 팀을 대체해, 설계 비용을 매번 치르지 않고 과제 전반에 분산한다.</p></div>
+      <div class="t"><span class="ic">🔌</span><p class="t-en"><strong>Latent wires beat text wires.</strong> KV-cache hand-off keeps coordination robust under noise/long context where natural language degrades — and cuts tokens 3–4×.</p><p class="t-ko"><strong>잠재 배선 &gt; 텍스트 배선.</strong> KV-cache 전달은 자연어가 열화되는 잡음·long context에서도 협응을 견고하게 유지하며 토큰을 3~4배 줄인다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>RoPE re-indexing is load-bearing.</strong> KV PoPE isn't a detail — removing it collapses LLaMA accuracy by ~54 points, the difference between working and not.</p><p class="t-ko"><strong>RoPE 재색인이 핵심 기둥.</strong> KV PoPE는 사소한 디테일이 아니다 — 제거 시 LLaMA 정확도가 약 54점 붕괴, 작동 여부를 가른다.</p></div>
+      <div class="t"><span class="ic">🤖</span><p class="t-en"><strong>Auto-composition works.</strong> An LLM Organizer + Knowledge Pool beats random structure selection by 5–12.4%, so MAS design can be automated, not hand-tuned.</p><p class="t-ko"><strong>자동 조립이 통한다.</strong> LLM Organizer + Knowledge Pool은 무작위 구조 선택보다 5~12.4% 높아, MAS 설계를 수작업 대신 자동화할 수 있다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> KV-cache hand-off assumes agents <b>share model parameters and positional encoding</b> — so the elegant latent wiring only works among <b>homogeneous</b> agents of the same model family. The much-touted reusability is also bounded by exactly three hand-picked primitives chosen by the authors; whether they truly span the space of useful MAS computation (or just the benchmarks tested) is asserted, not proven, and the Organizer itself leans on a closed frontier model (GPT-5.2 / Claude-4).</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> KV-cache 전달은 에이전트가 <b>모델 파라미터와 위치 인코딩을 공유</b>한다고 가정한다 — 즉 이 우아한 잠재 배선은 같은 모델 계열의 <b>동질(homogeneous)</b> 에이전트 사이에서만 작동한다. 강조되는 재사용성도 저자가 손수 고른 정확히 세 개의 프리미티브에 묶여 있으며, 이것이 유용한 MAS 계산 공간을 진짜로 포괄하는지(아니면 테스트한 벤치마크만 포괄하는지)는 증명이 아니라 주장이다. Organizer 자체도 폐쇄형 프런티어 모델(GPT-5.2 / Claude-4)에 의존한다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.03695">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.03695">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.03695">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.03695">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

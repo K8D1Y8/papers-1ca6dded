@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · LRAgent: Efficient KV Cache Sharing for Multi-LoRA LLM Agents</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🤝 Multi-Agent · KV Sharing</span><span class="t-ko">🤝 Multi-Agent · KV Sharing</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>LRAgent: Efficient KV Cache Sharing for Multi-LoRA LLM Agents<br>
+      <span class="glow t-en">— Share the backbone, keep only the low-rank difference</span>
+      <span class="glow t-ko">— 백본은 공유하고, 저랭크 차이만 남겨라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Hyesung Jeon</b> <span class="t-en">, Hyeongju Ha, Jae-Joon Kim</span><span class="t-ko">, Hyeongju Ha, Jae-Joon Kim</span></span>
+      <span>🏛 Seoul National University</span>
+      <span>🗓 2026.02.03</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.01053">arXiv:2602.01053</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">In multi-LoRA agent systems, every agent shares the same pretrained backbone yet independently rebuilds and stores its own KV cache for the same long, tool-augmented trajectory — pure redundancy. LRAgent observes that across agents the <b>base cache is ~97% identical</b> while only the tiny LoRA adapter outputs differ. So it <span class="hl">shares the base cache, stores the adapter part in its native low-rank form, and reconstructs it at runtime with a custom <b>Flash-LoRA-Attention</b> kernel.</span> Result: up to <b>2.46× throughput</b> and <b>4.44× faster time-to-first-token</b>, with accuracy within <b>1.5%</b> of the non-shared baseline.</p>
+    <p class="t-ko">multi-LoRA 에이전트 시스템에서는 모든 에이전트가 같은 사전학습 백본을 공유하면서도, 동일한 긴 tool 궤적에 대해 각자 KV 캐시를 따로 만들고 저장한다 — 순전한 중복이다. LRAgent는 에이전트 간 <b>base 캐시가 약 97% 동일</b>하고 작은 LoRA 어댑터 출력만 다르다는 점을 관찰한다. 그래서 <span class="hl">base 캐시는 공유하고, 어댑터 부분은 본래의 저랭크 형태로 저장한 뒤 런타임에 전용 <b>Flash-LoRA-Attention</b> 커널로 복원한다.</span> 결과: 최대 <b>2.46× 처리량</b>, <b>4.44× 빠른 TTFT</b>, 정확도는 non-shared 대비 <b>1.5%</b> 이내.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">If agents differ only by a low-rank adapter, their KV caches should differ only by a low-rank amount — so don't pay full price N times.</p>
+    <p class="lead t-ko">에이전트가 저랭크 어댑터만큼만 다르다면, KV 캐시도 저랭크만큼만 달라야 한다 — 그러니 N번 풀 비용을 낼 이유가 없다.</p>
+    <p class="t-en">Multi-LLM agent systems assign specialized roles (plan / action / reflection) to agents that share one frozen backbone and differ only through lightweight LoRA adapters. Over long, tool-augmented trajectories each agent independently prefills and stores a full KV cache for the <strong>same shared context</strong> — wasting both memory and compute. Naively sharing one cache for everyone is tempting, but the authors show the adapter-induced differences, though tiny in magnitude, are exactly what preserves each agent's role, so full sharing hurts accuracy. LRAgent threads the needle by <strong>decomposing the cache into a shared base part and an agent-specific low-rank part</strong>.</p>
+    <p class="t-ko">multi-LLM 에이전트 시스템은 하나의 고정 백본을 공유하고 가벼운 LoRA 어댑터로만 구분되는 에이전트들에게 plan/action/reflection 같은 전문 역할을 맡긴다. 긴 tool 궤적 동안 각 에이전트는 <strong>동일한 공유 컨텍스트</strong>에 대해 KV 캐시를 따로 prefill·저장하며 메모리·연산을 낭비한다. 모두에게 캐시 하나를 통째로 공유하면 간단하지만, 저자들은 어댑터로 인한 차이가 크기는 작아도 각 에이전트의 역할을 보존하는 핵심임을 보인다 — 그래서 full sharing은 정확도를 해친다. LRAgent는 <strong>캐시를 공유 base 부분과 에이전트별 저랭크 부분으로 분해</strong>해 이 딜레마를 푼다.</p>
+    <figure class="fig">
+      <img src="fig/2602.01053/fig1.png" alt="Non-Shared vs BaseShared vs BaseLRShared cache reuse across plan/action/reflection agents">
+      <figcaption class="t-en"><b>Figure 2.</b> Three caching schemes. (a) Non-Shared: every agent re-prefills the whole trajectory. (b) BaseShared: agents reuse one base cache and store only a small LR cache. (c) BaseLRShared: with a shared down-projection A, even the LR cache is shared, so previously seen context is skipped entirely.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 세 가지 캐싱 방식. (a) Non-Shared: 모든 에이전트가 전체 궤적을 다시 prefill. (b) BaseShared: 하나의 base 캐시를 재사용하고 작은 LR 캐시만 저장. (c) BaseLRShared: down-projection A를 공유하면 LR 캐시까지 공유돼, 이미 본 컨텍스트는 통째로 skip된다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.01053</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.97</div><div class="l"><span class="t-en">Base-cache cosine sim<br>across agents (LLaMA-3.1-8B)</span><span class="t-ko">에이전트 간 base 캐시<br>코사인 유사도 (LLaMA-3.1-8B)</span></div></div>
+      <div class="stat"><div class="n">0.05</div><div class="l"><span class="t-en">Adapter-output cosine sim<br>(carries the role-specific info)</span><span class="t-ko">어댑터 출력 코사인 유사도<br>(역할 정보를 담음)</span></div></div>
+      <div class="stat"><div class="n">2.46×</div><div class="l"><span class="t-en">Throughput gain<br>(BaseLRShared vs Non-Shared)</span><span class="t-ko">처리량 향상<br>(BaseLRShared vs Non-Shared)</span></div></div>
+      <div class="stat"><div class="n">4.44×</div><div class="l"><span class="t-en">TTFT reduction<br>(BaseLRShared vs Non-Shared)</span><span class="t-ko">TTFT 단축<br>(BaseLRShared vs Non-Shared)</span></div></div>
+      <div class="stat"><div class="n">≤1.5%</div><div class="l"><span class="t-en">Max accuracy drop<br>vs Non-Shared</span><span class="t-ko">최대 정확도 하락<br>Non-Shared 대비</span></div></div>
+      <div class="stat"><div class="n">~1/3</div><div class="l"><span class="t-en">KV cache memory<br>vs Non-Shared</span><span class="t-ko">KV 캐시 메모리<br>Non-Shared 대비</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — efficiency near FullShared, accuracy near Non-Shared</span><span class="t-ko">결과 — 효율은 FullShared급, 정확도는 Non-Shared급</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table summary.</b> Max accuracy drop and peak efficiency vs the Non-Shared baseline. LRAgent (BaseShared / BaseLRShared) keeps accuracy high while approaching FullShared speed.</caption>
+        <caption class="t-ko"><b>표 요약.</b> Non-Shared 기준 최대 정확도 하락과 최고 효율. LRAgent(BaseShared / BaseLRShared)는 정확도를 지키면서 FullShared 속도에 근접한다.</caption>
+        <thead><tr><th>Method</th><th>Max acc. drop</th><th>Throughput</th><th>TTFT</th></tr></thead>
+        <tbody>
+          <tr><td>Non-Shared</td><td>— (baseline)</td><td>1.00×</td><td>1.00×</td></tr>
+          <tr><td>FullShared</td><td>5.3%</td><td>highest</td><td>highest</td></tr>
+          <tr><td>DroidSpeak</td><td>2.6%</td><td>1.36×</td><td>1.56×</td></tr>
+          <tr><td>BaseShared</td><td class="up">0.7%</td><td>1.42×</td><td>1.63×</td></tr>
+          <tr><td>BaseLRShared</td><td class="up">1.5%</td><td class="up">2.46×</td><td class="up">4.44×</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">Plan / Act / Ref</div>
+          <div class="sub"><span class="t-en">same backbone W₀</span><span class="t-ko">같은 백본 W₀</span></div>
+          <div class="latent"><span class="t-en">cache = W₀ part + LoRA part</span><span class="t-ko">캐시 = W₀ 부분 + LoRA 부분</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Decompose</span><span class="t-ko">분해</span></div>
+          <div class="sub"><span class="t-en">share base · keep LR cache</span><span class="t-ko">base 공유 · LR 캐시만 보관</span></div>
+          <div class="latent"><span class="t-en">~97% identical → reuse</span><span class="t-ko">~97% 동일 → 재사용</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">Flash-LoRA-Attn</div>
+          <div class="sub"><span class="t-en">reconstruct on the fly</span><span class="t-ko">실시간 복원</span></div>
+          <div class="latent"><span class="t-en">2.46× tput · acc preserved</span><span class="t-ko">2.46× 처리량 · 정확도 유지</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Pay full price once, then reuse</b> — store the shared base cache plus a compact low-rank adapter cache; expand it only inside attention, never to full dimension.</div>
+      <div class="cap t-ko"><b>풀 비용은 한 번만, 이후엔 재사용</b> — 공유 base 캐시 + 압축된 저랭크 어댑터 캐시를 저장하고, 어텐션 내부에서만 펼쳐 full 차원으로는 절대 materialize하지 않는다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea: a cache that is "shared base + low-rank difference"</span><span class="t-ko">아이디어: '공유 base + 저랭크 차이'인 캐시</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 분해 + 공유</span>
+        <h3>BaseShared</h3>
+        <p class="t-en">Split the value cache into a <span class="term">base component (X·W₀)</span> shared by all agents and an <span class="term">adapter component (X·ΔW)</span>. The first agent materializes the base cache once; others reuse it. The adapter part is stored in its native low-rank form <span class="term">X·A</span> (the "LR cache") instead of full dimension — cutting total KV memory to about 1/N + r/d_out.</p>
+        <p class="t-ko">value 캐시를 모든 에이전트가 공유하는 <span class="term">base 성분(X·W₀)</span>과 <span class="term">어댑터 성분(X·ΔW)</span>으로 분해한다. 첫 에이전트가 base 캐시를 한 번 만들면 나머지는 재사용한다. 어댑터 부분은 full 차원 대신 본래의 저랭크 형태 <span class="term">X·A</span>("LR 캐시")로 저장 — 총 KV 메모리를 약 1/N + r/d_out로 줄인다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 계산까지 공유</span>
+        <h3>BaseLRShared + Flash-LoRA-Attention</h3>
+        <p class="t-en">With a <span class="term">shared down-projection A</span> (shared-A LoRA), the LR cache itself becomes ~identical across agents, so a single LR cache is kept and previously-seen context is skipped — no N redundant prefills. <span class="term">Flash-LoRA-Attention</span> reorders attention to O = P·V_base + (P·V_lr)·B, expanding by the up-projection B only after accumulation, so cost scales with rank r, not d_out.</p>
+        <p class="t-ko"><span class="term">down-projection A를 공유</span>(shared-A LoRA)하면 LR 캐시 자체가 에이전트 간 거의 동일해져, LR 캐시 하나만 유지하고 이미 본 컨텍스트는 skip — N번의 중복 prefill이 사라진다. <span class="term">Flash-LoRA-Attention</span>은 어텐션을 O = P·V_base + (P·V_lr)·B로 재배열해 up-projection B를 누적 이후에만 적용 — 비용이 d_out이 아닌 rank r에 비례한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Observe the structure</span><span class="t-ko">구조 관찰</span></b><span class="t-en">For the same context, the base cache is ~0.97 cosine-similar across agents while adapter outputs are ~0.05 (decorrelated, role-specific). Key caches are >0.98 similar, so they can be fully shared.</span><span class="t-ko">같은 컨텍스트에서 base 캐시는 에이전트 간 코사인 ~0.97로 유사하고 어댑터 출력은 ~0.05(역할별로 탈상관). key 캐시는 >0.98 유사해 완전 공유 가능하다.</span></li>
+      <li><b><span class="t-en">Decompose and store low-rank</span><span class="t-ko">분해 후 저랭크 저장</span></b><span class="t-en">Share one base value cache + fully shared key cache; store each agent's adapter contribution only as the intermediate X·A (LR cache), never expanded to full size in memory.</span><span class="t-ko">하나의 base value 캐시 + 완전 공유 key 캐시를 두고, 각 에이전트의 어댑터 기여는 중간 활성 X·A(LR 캐시)로만 저장 — 메모리에서 full 크기로 펼치지 않는다.</span></li>
+      <li><b><span class="t-en">Share A to skip recompute</span><span class="t-ko">A 공유로 재계산 skip</span></b><span class="t-en">Adopt shared-A multi-LoRA so the LR cache is common; a new agent computes activations only for newly appended tokens, dropping complexity from O(N·L²·d) toward O(L²·d).</span><span class="t-ko">shared-A multi-LoRA를 채택해 LR 캐시를 공통화 — 새 에이전트는 새로 붙은 토큰만 계산, 복잡도가 O(N·L²·d)에서 O(L²·d)로 낮아진다.</span></li>
+      <li><b><span class="t-en">Reconstruct in the kernel</span><span class="t-ko">커널에서 복원</span></b><span class="t-en">Flash-LoRA-Attention extends FlashAttention with a low-rank accumulator for P·V_lr, applying the up-projection B after accumulation — yielding 1.24–1.35× extra throughput on top of cache sharing.</span><span class="t-ko">Flash-LoRA-Attention은 FlashAttention에 P·V_lr용 저랭크 누산기를 추가하고 up-projection B를 누적 후 적용 — 캐시 공유 위에 1.24~1.35× 추가 처리량을 얻는다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Match the cache to the architecture.</strong> Because agents differ only by low-rank adapters, the right unit of sharing is "base + low-rank delta" — giving FullShared-level speed without FullShared's accuracy hit.</p><p class="t-ko"><strong>캐시를 아키텍처에 맞춰라.</strong> 에이전트가 저랭크 어댑터만큼만 다르므로, 올바른 공유 단위는 "base + 저랭크 델타" — FullShared의 정확도 손실 없이 FullShared급 속도를 낸다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Small differences are load-bearing.</strong> Adapter outputs are ~0.05-similar and small in magnitude, yet dropping them (FullShared) costs up to 5.3% accuracy — they encode the role.</p><p class="t-ko"><strong>작은 차이가 역할을 떠받친다.</strong> 어댑터 출력은 유사도 ~0.05에 크기도 작지만, 이를 버리면(FullShared) 정확도가 최대 5.3% 떨어진다 — 역할을 인코딩하기 때문.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>The kernel matters as much as the scheme.</strong> Flash-LoRA-Attention makes low-rank reconstruction nearly free, turning a clever decomposition into real wall-clock gains (2.46× / 4.44×).</p><p class="t-ko"><strong>스킴만큼 커널도 중요하다.</strong> Flash-LoRA-Attention이 저랭크 복원을 거의 공짜로 만들어, 영리한 분해를 실제 속도 이득(2.46× / 4.44×)으로 바꾼다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The biggest win (BaseLRShared) is unlocked only by the <b>shared-A</b> constraint, which forces all agents to use the same LoRA down-projection. That is a real modeling restriction — it works on AutoAct plan/action/reflection agents with two 8B models on HotpotQA/ScienceQA, but whether shared-A holds for more divergent roles, larger adapter ranks, or heterogeneous backbones is untested. The efficiency headline also assumes a controlled, fixed sequence-length trace; on real HotpotQA trajectories end-to-end latency depends on accuracy-driven trajectory length, so the clean 2.46×/4.44× should be read as intrinsic, not guaranteed end-to-end.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 가장 큰 이득(BaseLRShared)은 모든 에이전트가 같은 LoRA down-projection을 쓰도록 강제하는 <b>shared-A</b> 제약에서만 열린다. 이는 실제 모델링 제한이다 — HotpotQA/ScienceQA에서 8B 모델 2종의 AutoAct plan/action/reflection 에이전트에는 통하지만, 더 이질적인 역할·큰 어댑터 rank·이종 백본에서도 shared-A가 성립하는지는 미검증. 효율 수치 역시 통제된 고정 시퀀스 길이 trace를 가정하며, 실제 HotpotQA 궤적의 end-to-end 지연은 정확도가 좌우하는 궤적 길이에 의존하므로, 깔끔한 2.46×/4.44×는 end-to-end 보장이 아닌 본질적 효율로 읽어야 한다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.01053">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.01053">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.01053">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.01053">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICML 2026 · Multi-Agent &amp; Latent Communication</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICML 2026 · Multi-Agent &amp; Latent Communication</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
