@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Horizon Imagination: Efficient On-Policy Rollout in Diffusion World Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · Efficient Rollout</span><span class="t-ko">🌍 World Model · Efficient Rollout</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Horizon Imagination: Efficient On-Policy Rollout in Diffusion World Models<br>
+      <span class="glow t-en">— Denoise the future in parallel, not one frame at a time</span>
+      <span class="glow t-ko">— 미래를 한 프레임씩이 아니라 병렬로 디노이징하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Lior Cohen</b> <span class="t-en">et al.</span><span class="t-ko">외 4인</span></span>
+      <span>🏛 Technion · Microsoft Research</span>
+      <span>🗓 2026.02.08</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.08032">arXiv:2602.08032</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Diffusion world models generate gorgeous imagined rollouts, but training a policy in them is brutally slow because each future frame is produced by a multi-step denoiser, <b>one frame after another</b>. <span class="hl">Horizon Imagination (HI) denoises many future frames in parallel</span>, adds a <b>stable discrete-action sampler</b> so actions don't flip-flop on still-noisy frames, and a <b>Horizon schedule</b> that lets you set the denoising budget and the effective horizon independently. Result: on Atari 100K and Craftium it keeps control performance with <b>half the denoising budget (B=16 vs 32)</b>, even with <b>sub-frame budgets</b> (fewer steps than frames).</p>
+    <p class="t-ko">디퓨전 월드모델은 멋진 상상 rollout을 만들지만, 그 안에서 정책을 학습시키는 건 끔찍하게 느리다 — 미래 프레임마다 다단계 디노이저를 거치며 <b>한 프레임씩 순차적으로</b> 생성하기 때문이다. <span class="hl">Horizon Imagination(HI)은 여러 미래 프레임을 병렬로 디노이징</span>하고, 아직 noisy한 프레임 위에서 행동이 요동치지 않도록 <b>안정적 이산 행동 샘플러</b>를, 그리고 디노이징 예산과 유효 horizon을 독립적으로 설정하는 <b>Horizon 스케줄</b>을 더한다. 결과: Atari 100K·Craftium에서 <b>디노이징 예산 절반(B=16 vs 32)</b>으로도, 심지어 <b>sub-frame 예산</b>(프레임 수보다 적은 스텝)으로도 제어 성능을 유지.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The bottleneck of diffusion world models isn't fidelity — it's the sequential, step-by-step cost of imagining the future.</p>
+    <p class="lead t-ko">디퓨전 월드모델의 병목은 화질이 아니라, 미래를 상상하는 순차적·단계별 비용이다.</p>
+    <p class="t-en">Model-based RL trains a controller inside an imagined world to save real samples. Diffusion world models make that imagined world vivid, but generating each frame needs a costly multi-step denoising pass, and standard imagination is <strong>sequential</strong>: generate a frame, pick an action, generate the next frame, repeat. That sequential dependency is the real wall to deployable, lightweight controllers. HI reframes imagination itself: denoise a whole window of future frames <strong>at once</strong>, conditioning each action on the partially-denoised frames as they sharpen. The catch is stability — when frames are still noisy the policy's distribution shifts, and naive resampling makes the imagined actions jitter, poisoning training. HI's two ingredients (a consistency-preserving action sampler and a budget-vs-horizon decoupled schedule) are what make parallel imagination actually trainable.</p>
+    <p class="t-ko">모델 기반 RL은 실제 샘플을 아끼려고 상상된 세계 안에서 컨트롤러를 학습한다. 디퓨전 월드모델은 그 상상 세계를 생생하게 만들지만, 프레임마다 값비싼 다단계 디노이징이 필요하고 표준 상상은 <strong>순차적</strong>이다 — 프레임 생성 → 행동 선택 → 다음 프레임 생성 → 반복. 이 순차 의존성이 배포 가능한 경량 컨트롤러의 진짜 벽이다. HI는 상상 과정 자체를 재정의한다: 미래 프레임 전체 윈도우를 <strong>한꺼번에</strong> 디노이징하면서, 프레임이 선명해질수록 각 행동을 부분 디노이즈된 프레임에 조건화한다. 문제는 안정성 — 프레임이 아직 noisy하면 정책 분포가 흔들리고, 순진한 재샘플링은 상상 행동을 진동시켜 학습을 망친다. HI의 두 재료(일관성 유지 행동 샘플러 + 예산·horizon 분리 스케줄)가 병렬 상상을 실제로 학습 가능하게 만든다.</p>
+    <figure class="fig">
+      <img src="fig/2602.08032/fig1.png" alt="Horizon schedule vs Pyramidal schedule denoising-time matrix">
+      <figcaption class="t-en"><b>Figure 2.</b> The Horizon schedule (top) vs. the Pyramidal schedule (bottom), shown as a frame × denoising-step grid (color = noise level). Horizon fixes the decay horizon (ν=3), so the schedule stays consistent across budgets; in Pyramidal the decay horizon drifts with the budget because the two are entangled, hurting generation quality at higher budgets.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> Horizon 스케줄(위) vs. Pyramidal 스케줄(아래) — 프레임 × 디노이징 스텝 격자(색 = 노이즈 수준). Horizon은 decay horizon(ν=3)을 고정해 예산이 달라져도 스케줄이 일관적이다. Pyramidal은 둘이 얽혀 있어 예산에 따라 decay horizon이 표류하고, 높은 예산에서 생성 품질이 나빠진다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.08032</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">B=16</div><div class="l"><span class="t-en">Denoising budget that matches<br>the B=32 baseline (half)</span><span class="t-ko">B=32 베이스라인과 동등한<br>디노이징 예산 (절반)</span></div></div>
+      <div class="stat"><div class="n">27→19h</div><div class="l"><span class="t-en">Atari training time<br>cut by halving the budget</span><span class="t-ko">예산 절반으로 줄인<br>Atari 학습 시간</span></div></div>
+      <div class="stat"><div class="n">≤1</div><div class="l"><span class="t-en">Avg. action changes over 16<br>denoising steps (stable sampler)</span><span class="t-ko">16 디노이징 스텝당 평균<br>행동 변경 (안정 샘플러)</span></div></div>
+      <div class="stat"><div class="n">ν=4</div><div class="l"><span class="t-en">Decay horizon used for the<br>main parallel HI configs</span><span class="t-ko">주요 병렬 HI 설정에 쓰인<br>decay horizon</span></div></div>
+      <div class="stat"><div class="n">16×</div><div class="l"><span class="t-en">Budget that sub-frame parallel<br>variants can match on FVD</span><span class="t-ko">sub-frame 병렬 변형이 FVD에서<br>따라잡은 예산 배율</span></div></div>
+      <div class="stat"><div class="n">2</div><div class="l"><span class="t-en">Benchmarks · Atari 100K<br>and Craftium</span><span class="t-ko">벤치마크 · Atari 100K<br>와 Craftium</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — half the budget, same control</span><span class="t-ko">결과 — 예산 절반, 동일 제어</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Summary of reported findings.</b> Configs given as (decay horizon ν, denoising budget B). The autoregressive baseline is (ν=1, B=32).</caption>
+        <caption class="t-ko"><b>보고된 결과 요약.</b> 설정은 (decay horizon ν, 디노이징 예산 B)로 표기. 자기회귀 베이스라인은 (ν=1, B=32).</caption>
+        <thead><tr><th><span class="t-en">Config</span><span class="t-ko">설정</span></th><th><span class="t-en">Mode</span><span class="t-ko">방식</span></th><th><span class="t-en">Control</span><span class="t-ko">제어</span></th><th><span class="t-en">Cost / note</span><span class="t-ko">비용 / 비고</span></th></tr></thead>
+        <tbody>
+          <tr><td>ν=1, B=32</td><td><span class="t-en">autoregressive</span><span class="t-ko">자기회귀</span></td><td><span class="t-en">baseline</span><span class="t-ko">기준</span></td><td>~27h (Atari)</td></tr>
+          <tr><td>ν=4, B=32</td><td><span class="t-en">parallel</span><span class="t-ko">병렬</span></td><td class="up"><span class="t-en">matches; best on ChopTree</span><span class="t-ko">동등; ChopTree 최고</span></td><td><span class="t-en">complex envs benefit</span><span class="t-ko">복잡 환경에 유리</span></td></tr>
+          <tr><td>ν=4, B=16</td><td><span class="t-en">parallel</span><span class="t-ko">병렬</span></td><td class="up"><span class="t-en">matches baseline</span><span class="t-ko">기준과 동등</span></td><td class="up">~19h (Atari)</td></tr>
+          <tr><td><span class="t-en">naive sampling</span><span class="t-ko">순진 샘플링</span></td><td><span class="t-en">ablation</span><span class="t-ko">제거실험</span></td><td><span class="t-en">collapses (Boxing, Gopher)</span><span class="t-ko">붕괴 (Boxing, Gopher)</span></td><td><span class="t-en">action jitter</span><span class="t-ko">행동 진동</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Sequential</span><span class="t-ko">순차</span></div>
+          <div class="sub"><span class="t-en">frame → action → frame</span><span class="t-ko">프레임 → 행동 → 프레임</span></div>
+          <div class="latent"><span class="t-en">multi-step denoise ×each frame</span><span class="t-ko">프레임마다 다단계 디노이즈</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Horizon Imagination</span><span class="t-ko">Horizon Imagination</span></div>
+          <div class="sub"><span class="t-en">denoise a window in parallel</span><span class="t-ko">윈도우를 병렬 디노이즈</span></div>
+          <div class="latent"><span class="t-en">stable action + Horizon schedule</span><span class="t-ko">안정 행동 + Horizon 스케줄</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Controller</span><span class="t-ko">컨트롤러</span></div>
+          <div class="sub"><span class="t-en">trained on all noise levels</span><span class="t-ko">전 노이즈 수준에서 학습</span></div>
+          <div class="latent"><span class="t-en">same return, half budget</span><span class="t-ko">동일 리턴, 절반 예산</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Parallel where it's cheap, stable where it's risky</b> — denoise the future window at once, but pin the action with a consistency-preserving sampler so it only changes when the policy genuinely changes.</div>
+      <div class="cap t-ko"><b>저렴한 곳은 병렬, 위험한 곳은 안정</b> — 미래 윈도우를 한 번에 디노이징하되, 정책이 실제로 바뀔 때만 행동이 바뀌도록 일관성 유지 샘플러로 행동을 고정한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: make parallel imagination both fast and stable</span><span class="t-ko">아이디어: 병렬 상상을 빠르고도 안정적으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 안정 행동</span>
+        <h3>Stable discrete-action sampling</h3>
+        <p class="t-en">During parallel denoising, the policy is queried on still-noisy frames, so its distribution drifts step to step. Naive resampling makes actions flip constantly. HI uses a <span class="term">single shared uniform sample ω + a fixed action permutation ρ</span>, so the chosen action stays put <strong>unless</strong> the policy distribution actually changes (Proposition 1) — at most ~1 change over 16 steps vs. flips on most steps for naive.</p>
+        <p class="t-ko">병렬 디노이징 중 정책은 아직 noisy한 프레임 위에서 질의되므로 분포가 스텝마다 표류한다. 순진한 재샘플링은 행동을 끊임없이 뒤집는다. HI는 <span class="term">하나의 공유 균등 샘플 ω + 고정된 행동 순열 ρ</span>를 써서, 정책 분포가 실제로 바뀌지 <strong>않는 한</strong> 선택된 행동이 그대로 유지된다(Proposition 1) — 순진 방식이 대부분 스텝에서 바뀌는 반면 16스텝당 최대 약 1회.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 예산·horizon 분리</span>
+        <h3>The Horizon schedule</h3>
+        <p class="t-en">Prior schedules (e.g. Pyramidal) tangle the <span class="term">denoising budget B</span> with the <span class="term">effective horizon</span> over which denoising decays, so quality degrades at higher budgets. HI's schedule is a matrix of denoising times with a separate <span class="term">decay-horizon ν</span>, decoupling the two and enabling <strong>sub-frame budgets</strong> (B &lt; number of frames) — fewer denoising steps than frames generated.</p>
+        <p class="t-ko">기존 스케줄(예: Pyramidal)은 <span class="term">디노이징 예산 B</span>와 디노이징이 감쇠하는 <span class="term">유효 horizon</span>을 얽어버려 높은 예산에서 품질이 떨어진다. HI의 스케줄은 별도의 <span class="term">decay-horizon ν</span>를 가진 디노이징 시각 행렬로, 둘을 분리해 <strong>sub-frame 예산</strong>(B &lt; 프레임 수)을 가능케 한다 — 생성 프레임 수보다 적은 디노이징 스텝.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Encode + rectified-flow denoiser</span><span class="t-ko">인코딩 + rectified-flow 디노이저</span></b><span class="t-en">A tanh-bounded tokenizer maps observations to latents; a causal DiT denoiser trained with a 1-Rectified-Flow objective predicts all latents in a segment in one parallel, causal forward pass.</span><span class="t-ko">tanh로 제한된 토크나이저가 관측을 latent으로 매핑; 1-Rectified-Flow 목적으로 학습된 causal DiT 디노이저가 한 세그먼트의 모든 latent을 단일 병렬·인과 forward로 예측.</span></li>
+      <li><b><span class="t-en">Denoise a window in parallel</span><span class="t-ko">윈도우를 병렬 디노이즈</span></b><span class="t-en">Imagination denoises multiple future frames simultaneously; near-future frames sharpen first, and the policy is queried before each denoising step on the current (partly noisy) frames.</span><span class="t-ko">상상은 여러 미래 프레임을 동시에 디노이징; 가까운 미래가 먼저 선명해지고, 각 디노이징 스텝 전에 현재(부분 noisy) 프레임 위에서 정책을 질의.</span></li>
+      <li><b><span class="t-en">Pin actions with the stable sampler</span><span class="t-ko">안정 샘플러로 행동 고정</span></b><span class="t-en">Shared ω + permutation ρ keep each action fixed unless its policy distribution genuinely shifts, removing the jitter that otherwise destabilizes the rollout and policy training.</span><span class="t-ko">공유 ω + 순열 ρ가 정책 분포가 실제로 바뀌지 않는 한 각 행동을 고정해, rollout과 정책 학습을 불안정하게 하는 진동을 제거.</span></li>
+      <li><b><span class="t-en">Train actor-critic on all noise levels</span><span class="t-ko">전 노이즈 수준에서 actor-critic 학습</span></b><span class="t-en">The critic regresses λ-returns in symlog space on clean inputs; the actor is trained with REINFORCE across imagined frames at every noise level, with EMA advantage scaling.</span><span class="t-ko">critic은 clean 입력에서 symlog 공간의 λ-리턴을 회귀; actor는 모든 노이즈 수준의 상상 프레임에 걸쳐 REINFORCE로 학습하고 advantage를 EMA로 스케일.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Parallelism is the win.</strong> Denoising the future window at once cuts the denoising budget in half (B=16 vs 32) while holding control performance — and sub-frame budgets push it further.</p><p class="t-ko"><strong>병렬화가 핵심.</strong> 미래 윈도우를 한 번에 디노이징하면 제어 성능을 유지한 채 디노이징 예산을 절반(B=16 vs 32)으로 줄인다 — sub-frame 예산은 더 멀리 간다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Stability is non-negotiable.</strong> Swap the stable sampler for naive resampling and returns collapse on Boxing/Gopher — the action-consistency trick is what makes parallel imagination trainable, not a nicety.</p><p class="t-ko"><strong>안정성은 타협 불가.</strong> 안정 샘플러를 순진 재샘플링으로 바꾸면 Boxing/Gopher에서 리턴이 붕괴한다 — 행동 일관성 트릭이 병렬 상상을 학습 가능하게 만드는 핵심이지 장식이 아니다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Decouple budget from horizon.</strong> Treating denoising budget and effective horizon as separate knobs (ν) gives clean resource control and avoids the high-budget degradation of entangled schedules.</p><p class="t-ko"><strong>예산과 horizon을 분리하라.</strong> 디노이징 예산과 유효 horizon을 별개 노브(ν)로 다루면 깔끔한 자원 제어가 가능하고, 얽힌 스케줄의 고예산 품질 저하를 피한다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Drop-in friendly.</strong> The schedule and sampler are training-agnostic and work with any world model that supports per-observation time conditioning.</p><p class="t-ko"><strong>얹기 쉬움.</strong> 스케줄과 샘플러는 학습 방식과 무관하며, 관측별 시간 조건화를 지원하는 어떤 월드모델에도 적용된다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The gains are demonstrated only on discrete-action, image-based benchmarks (Atari 100K, Craftium) and the "half budget" claim measures denoising steps, not wall-clock — the actual training time drop was 27h→19h (~30%), not 2×, since other stages are unaffected. Continuous actions, larger backbones, and whether sub-frame budgets hold up in harder real-world control remain untested.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이득은 이산 행동·이미지 기반 벤치마크(Atari 100K, Craftium)에서만 입증됐고, "예산 절반"은 wall-clock이 아니라 디노이징 스텝 기준이다 — 실제 학습 시간 감소는 다른 단계가 영향을 안 받아 27h→19h(약 30%)지 2배가 아니다. 연속 행동, 더 큰 백본, 그리고 sub-frame 예산이 더 어려운 실세계 제어에서도 버티는지는 미검증.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.08032">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.08032">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.08032">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.08032">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Shared / Multi-Agent World Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

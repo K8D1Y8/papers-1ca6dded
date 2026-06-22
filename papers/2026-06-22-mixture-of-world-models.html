@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Mixture-of-World Models: Scaling Multi-Task Reinforcement Learning with Modular Latent Dynamics</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · Modular Dynamics</span><span class="t-ko">🌍 World Model · Modular Dynamics</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Mixture-of-World Models: Scaling Multi-Task Reinforcement Learning with Modular Latent Dynamics<br>
+      <span class="glow t-en">— One world model, 26 games &amp; 50 robot tasks — split the dynamics into experts</span>
+      <span class="glow t-ko">— 하나의 월드모델로 26개 게임·50개 로봇 과제 — 동역학을 전문가로 쪼개라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Boxuan Zhang</b> <span class="t-en">et al.</span><span class="t-ko">외 6인</span></span>
+      <span>🏛 Beijing Institute of Technology · Jiangxing Intelligence</span>
+      <span>🗓 2026.02.01</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.01270">arXiv:2602.01270</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">A single monolithic world model chokes when tasks differ wildly in both pixels and physics. <b>Mixture-of-World Models (MoW)</b> splits the model into <span class="hl">task-clustered VAEs + a Transformer dynamics model with task-routed experts on a shared backbone</span>. One agent trained once over <b>26 Atari games</b> hits <b>110.4%</b> human-normalized score — matching STORM's 26-model ensemble (114.2%) with <b>50% fewer parameters</b> — and sets a new visual-MTRL state of the art on <b>Meta-World (74.5%)</b>.</p>
+    <p class="t-ko">하나의 단일 월드모델은 과제마다 픽셀과 물리가 크게 다르면 무너진다. <b>Mixture-of-World Models(MoW)</b>는 모델을 <span class="hl">과제별로 군집화한 VAE + 공유 백본 위에서 과제 라우팅되는 전문가(Expert) Transformer 동역학 모델</span>로 쪼갠다. <b>26개 Atari 게임</b>을 한 번에 학습한 단일 에이전트가 인간정규화 점수 <b>110.4%</b>를 달성 — STORM의 26개 모델 앙상블(114.2%)에 필적하면서 <b>파라미터는 50% 절감</b> — 그리고 <b>Meta-World(74.5%)</b>에서 시각 MTRL 새 SOTA를 세운다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Model-based RL is sample-efficient — but only when one model can actually capture the world. Across many visual tasks, "one world" stops fitting.</p>
+    <p class="lead t-ko">모델 기반 RL은 표본 효율이 좋지만, 그건 하나의 모델이 세계를 실제로 담아낼 수 있을 때 얘기다. 다양한 시각 과제로 가면 "하나의 세계"는 더 이상 맞지 않는다.</p>
+    <p class="t-en">World models (Dreamer, STORM, IRIS) learn a compact latent of the environment and let the agent train in imagination, which is far more sample-efficient than model-free RL. But these are built for <strong>one task</strong>. Scale to many visual tasks and a single VAE + single dynamics Transformer must reconcile clashing pixels and clashing physics at once — reconstruction degrades, imagination breaks, and the authors show a multi-task STORM baseline simply <strong>fails to train</strong>. MoW's bet: keep the imagination paradigm, but make the model <strong>modular</strong> so capacity scales with task diversity instead of collapsing.</p>
+    <p class="t-ko">월드모델(Dreamer, STORM, IRIS)은 환경의 압축 잠재를 학습해 에이전트를 상상(imagination) 속에서 훈련시키며, 모델프리 RL보다 표본 효율이 훨씬 높다. 그러나 이들은 <strong>단일 과제용</strong>이다. 여러 시각 과제로 확장하면 하나의 VAE + 하나의 동역학 Transformer가 충돌하는 픽셀과 충돌하는 물리를 동시에 화해시켜야 하고 — 복원이 망가지고 상상이 깨진다. 실제로 저자들은 멀티태스크 STORM 베이스라인이 <strong>학습 자체에 실패</strong>함을 보인다. MoW의 베팅: 상상 패러다임은 유지하되 모델을 <strong>모듈화</strong>해, 용량이 붕괴되지 않고 과제 다양성에 따라 늘어나게 한다.</p>
+    <figure class="fig">
+      <img src="fig/2602.01270/fig1.png" alt="MoW architecture: modular VAEs feed a Transformer dynamics model with task-routed experts and a shared transformer">
+      <figcaption class="t-en"><b>Figure 1.</b> MoW architecture. Left: per-cluster VAEs (Enc/Dec) encode observations into latents that, with the agent action and task embedding, feed Transformer blocks predicting next latent ẑ, reward r̂, continuation ĉ. Right (zoom): a task-level router activates a TopK subset of expert Transformers, whose outputs are fused by a shared Transformer into the hidden state hₜ.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> MoW 구조. 좌: 군집별 VAE(Enc/Dec)가 관측을 잠재로 인코딩하고, 행동·과제 임베딩과 함께 Transformer 블록에 들어가 다음 잠재 ẑ, 보상 r̂, 지속 ĉ를 예측. 우(확대): 과제 단위 라우터가 전문가 Transformer의 TopK 부분집합을 활성화하고, 그 출력을 공유 Transformer가 융합해 은닉상태 hₜ를 만든다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.01270</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">110.4%</div><div class="l"><span class="t-en">Mean human-normalized score<br>(1 agent · 26 Atari 100k games)</span><span class="t-ko">평균 인간정규화 점수<br>(단일 에이전트 · 26개 Atari 100k)</span></div></div>
+      <div class="stat"><div class="n">114.2%</div><div class="l"><span class="t-en">STORM ensemble<br>(26 task-specific models)</span><span class="t-ko">STORM 앙상블<br>(과제별 26개 모델)</span></div></div>
+      <div class="stat"><div class="n">−50%</div><div class="l"><span class="t-en">Parameters vs. STORM<br>(972.5 MB vs 1977.5 MB)</span><span class="t-ko">STORM 대비 파라미터<br>(972.5 MB vs 1977.5 MB)</span></div></div>
+      <div class="stat"><div class="n">74.5%</div><div class="l"><span class="t-en">Meta-World success rate<br>(50 tasks, new SOTA)</span><span class="t-ko">Meta-World 성공률<br>(50개 과제, 새 SOTA)</span></div></div>
+      <div class="stat"><div class="n">300k</div><div class="l"><span class="t-en">Env steps per task<br>(15M total, vs 20–100M baselines)</span><span class="t-ko">과제당 환경 스텝<br>(총 15M, 베이스라인 20–100M)</span></div></div>
+      <div class="stat"><div class="n">3 → 12</div><div class="l"><span class="t-en">Experts scaled<br>= substantial score gains</span><span class="t-ko">전문가 수 확장<br>= 큰 점수 향상</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — one model rivals an ensemble &amp; state-based baselines</span><span class="t-ko">결과 — 단일 모델이 앙상블·상태기반 베이스라인에 필적</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table (headline numbers).</b> MoW vs. representative baselines on the two benchmarks. Atari = mean human-normalized score over 26 games; Meta-World = average success rate over 50 tasks.</caption>
+        <caption class="t-ko"><b>표 (대표 수치).</b> 두 벤치마크에서 MoW 대 대표 베이스라인. Atari=26개 게임 평균 인간정규화 점수, Meta-World=50개 과제 평균 성공률.</caption>
+        <thead><tr><th>Benchmark</th><th>Method</th><th>Score</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td>Atari 100k</td><td>MoW (single)</td><td class="up">110.4%</td><td>972.5 MB</td></tr>
+          <tr><td>Atari 100k</td><td>STORM (26-model ensemble)</td><td>114.2%</td><td>1977.5 MB</td></tr>
+          <tr><td>Meta-World</td><td>MoW (visual)</td><td class="up">74.5%</td><td>15M steps</td></tr>
+          <tr><td>Meta-World</td><td>TD-MPC2 (visual)</td><td>25.3%</td><td>same env</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Observation oₜ</span><span class="t-ko">관측 oₜ</span></div>
+          <div class="sub"><span class="t-en">clustered VAE</span><span class="t-ko">군집화된 VAE</span></div>
+          <div class="latent"><span class="t-en">task-adaptive latent zₜ</span><span class="t-ko">과제 적응 잠재 zₜ</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Router (TopK)</span><span class="t-ko">라우터 (TopK)</span></div>
+          <div class="sub"><span class="t-en">task embedding eₖ picks experts</span><span class="t-ko">과제 임베딩 eₖ로 전문가 선택</span></div>
+          <div class="latent"><span class="t-en">experts + shared backbone</span><span class="t-ko">전문가 + 공유 백본</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Imagination</span><span class="t-ko">상상(Imagination)</span></div>
+          <div class="sub"><span class="t-en">predict ẑ, r̂, ĉ, task k̂</span><span class="t-ko">ẑ, r̂, ĉ, 과제 k̂ 예측</span></div>
+          <div class="latent"><span class="t-en">actor-critic learns in latent</span><span class="t-ko">행위자-비평가가 잠재에서 학습</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Modular by design</b> — gradient-based clustering decides which tasks share a VAE/critic; a task-level router (not token-level) keeps each task's dynamics learned by a consistent expert set.</div>
+      <div class="cap t-ko"><b>설계부터 모듈식</b> — 그래디언트 기반 군집화가 어떤 과제가 VAE/critic을 공유할지 정하고, (토큰 단위가 아닌) 과제 단위 라우터가 각 과제의 동역학을 일관된 전문가 집합으로 학습시킨다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core idea: specialize where tasks conflict, share where they agree</span><span class="t-ko">핵심 아이디어: 과제가 충돌하는 곳은 전문화, 합의하는 곳은 공유</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 지각(Perception)</span>
+        <h3>Modular VAEs</h3>
+        <p class="t-en">Instead of one encoder for all pixels, MoW uses <span class="term">N task-clustered categorical VAEs</span>, each conditioned on a unit-norm task embedding eₖ. Tasks are grouped by a <strong>gradient-based clustering</strong> warmup so visually similar tasks share an encoder/decoder, preserving high reconstruction fidelity needed for latent imagination.</p>
+        <p class="t-ko">모든 픽셀에 단일 인코더를 쓰는 대신, MoW는 <span class="term">N개의 과제 군집화 범주형 VAE</span>를 쓰고 각각을 단위노름 과제 임베딩 eₖ로 조건화한다. 과제는 <strong>그래디언트 기반 군집화</strong> 워밍업으로 묶여, 시각적으로 비슷한 과제끼리 인코더/디코더를 공유 — 잠재 상상에 필요한 높은 복원 충실도를 지킨다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 동역학(Dynamics)</span>
+        <h3>Routed experts + shared backbone</h3>
+        <p class="t-en">The dynamics Transformer is hybrid: a <span class="term">task-level router</span> activates a TopK set of expert Transformers (annealed-temperature softmax), then a <strong>shared Transformer fuses them</strong>. Experts specialize per-task physics; the shared backbone carries common knowledge. A <span class="term">balance loss</span> prevents expert collapse; a <span class="term">harmonious loss</span> rescales conflicting per-task gradients.</p>
+        <p class="t-ko">동역학 Transformer는 하이브리드다: <span class="term">과제 단위 라우터</span>가 전문가 Transformer의 TopK 집합을 활성화(softmax 온도 어닐링)하고, 이어 <strong>공유 Transformer가 이를 융합</strong>한다. 전문가는 과제별 물리를, 공유 백본은 공통 지식을 담당. <span class="term">balance loss</span>로 전문가 붕괴를 막고, <span class="term">harmonious loss</span>로 충돌하는 과제별 그래디언트 스케일을 보정한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Warmup &amp; cluster</span><span class="t-ko">워밍업과 군집화</span></b><span class="t-en">Random rollouts fill per-task replay buffers; a single VAE-predictor stack is pretrained, then per-task gradient vectors are k-means clustered to decide which tasks share VAE / predictor / critic modules.</span><span class="t-ko">무작위 롤아웃으로 과제별 리플레이 버퍼를 채우고 단일 VAE-예측기 스택을 사전학습한 뒤, 과제별 그래디언트 벡터를 k-means로 군집화해 어떤 과제가 VAE/예측기/critic 모듈을 공유할지 정한다.</span></li>
+      <li><b><span class="t-en">Encode per cluster</span><span class="t-ko">군집별 인코딩</span></b><span class="t-en">Each observation is compressed by its cluster's categorical VAE into a stochastic latent zₜ, conditioned on the task embedding eₖ.</span><span class="t-ko">각 관측은 해당 군집의 범주형 VAE가 확률적 잠재 zₜ로 압축하며, 과제 임베딩 eₖ로 조건화된다.</span></li>
+      <li><b><span class="t-en">Route &amp; predict dynamics</span><span class="t-ko">라우팅과 동역학 예측</span></b><span class="t-en">The router picks TopK experts from eₖ; experts + shared Transformer produce hₜ, and heads predict next-latent ẑ, reward, continuation, and an auxiliary task index k̂ (for task-discriminative features).</span><span class="t-ko">라우터가 eₖ로 TopK 전문가를 선택, 전문가+공유 Transformer가 hₜ를 만들고, 헤드가 다음 잠재 ẑ·보상·지속과 보조 과제 인덱스 k̂(과제 변별 특징용)를 예측한다.</span></li>
+      <li><b><span class="t-en">Learn in imagination</span><span class="t-ko">상상 속 학습</span></b><span class="t-en">A shared actor and per-cluster critics train entirely on imagined latent rollouts (KV-cached for speed), using λ-returns — no extra real-environment interaction for policy learning.</span><span class="t-ko">공유 행위자와 군집별 critic이 상상된 잠재 롤아웃(속도를 위한 KV 캐싱)에서만 λ-return으로 학습 — 정책 학습에 추가 실환경 상호작용은 없다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>One agent ≈ an ensemble, at half the size.</strong> Matching a 26-model STORM ensemble with a single 50%-smaller model is the headline: modular world models can scale multi-task without exploding parameters.</p><p class="t-ko"><strong>단일 에이전트 ≈ 앙상블, 크기는 절반.</strong> 26개 모델 STORM 앙상블을 절반 크기의 단일 모델로 따라잡은 게 핵심 — 모듈식 월드모델은 파라미터 폭증 없이 멀티태스크 확장이 가능하다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Dynamics specialization &gt; perception specialization.</strong> Ablations show adding expert Transformers helps more than adding VAE clusters — the harder conflict is physics, not pixels.</p><p class="t-ko"><strong>동역학 전문화 &gt; 지각 전문화.</strong> 어블레이션에서 전문가 Transformer 추가가 VAE 군집 추가보다 더 효과적 — 더 어려운 충돌은 픽셀이 아니라 물리다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Visual MTRL from few steps is viable.</strong> 74.5% on Meta-World from pixels in 300k steps/task beats state-based baselines that need 20–100M steps — model-based imagination pays off in continuous control too.</p><p class="t-ko"><strong>적은 스텝의 시각 MTRL이 현실적이다.</strong> 픽셀에서 과제당 300k 스텝으로 Meta-World 74.5% — 20–100M 스텝이 필요한 상태기반 베이스라인을 능가, 연속 제어에서도 모델 기반 상상이 효과적이다.</p></div>
+      <div class="t"><span class="ic">🧱</span><p class="t-en"><strong>Stability needs custom losses.</strong> Balance loss (anti-collapse) + harmonious loss (gradient rescaling) + a task-prediction head are each load-bearing — remove any and training degrades or destabilizes.</p><p class="t-ko"><strong>안정성은 전용 손실이 받친다.</strong> balance loss(붕괴 방지) + harmonious loss(그래디언트 재스케일) + 과제 예측 헤드가 각각 핵심 — 하나라도 빼면 학습이 저하·불안정해진다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The "matches STORM" claim is on Atari 100k where MoW still <em>trails</em> the ensemble (110.4 vs 114.2) — the win is parameter count, not raw score, and the strongest Meta-World comparisons are against state-based methods rather than equally-tuned visual MBRL. The architecture also brings real complexity (clustering warmup, two auxiliary losses, router temperature annealing, per-cluster critics), and scalability is shown only up to 12 experts / dozens of tasks — whether it holds at hundreds of tasks, or who decides the cluster/expert counts, is untested.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> "STORM에 필적" 주장은 Atari 100k에서 MoW가 여전히 앙상블에 <em>뒤지는</em>(110.4 vs 114.2) 상황 — 승부처는 점수가 아니라 파라미터 수이며, 가장 강한 Meta-World 비교 대상은 동급으로 튜닝된 시각 MBRL이 아니라 상태기반 방법들이다. 또한 구조 자체가 상당한 복잡도(군집화 워밍업, 보조 손실 2개, 라우터 온도 어닐링, 군집별 critic)를 동반하고, 확장성은 전문가 12개·수십 개 과제까지만 입증 — 수백 개 과제에서도 유지될지, 군집/전문가 개수를 누가 정할지는 검증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.01270">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.01270">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.01270">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.01270">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Shared / Multi-Agent World Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

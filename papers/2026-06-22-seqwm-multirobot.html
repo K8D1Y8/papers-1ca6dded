@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Empowering Multi-Robot Cooperation via Sequential World Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · Multi-Agent</span><span class="t-ko">🌍 World Model · Multi-Agent</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>Empowering Multi-Robot Cooperation via Sequential World Models<br>
+      <span class="glow t-en">— Don't model the whole team at once: predict in a line, one robot after another</span>
+      <span class="glow t-ko">— 팀 전체를 한 번에 모델링하지 말고, 한 로봇씩 줄 세워 차례로 예측하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Zijie Zhao</b> <span class="t-en">et al.</span><span class="t-ko">외 6인</span></span>
+      <span>🏛 UCAS · Institute of Automation, CAS</span>
+      <span>🗓 2025.09.16</span>
+      <span>📄 <a href="https://arxiv.org/abs/2509.13095">arXiv:2509.13095</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Model-based RL is sample-efficient but hard to scale to multi-robot teams, because the <b>joint dynamics</b> of many high-dimensional robots is brutal to model. <b>SeqWM</b> drops the all-at-once joint model and instead lines the agents up: each robot runs its <b>own independent world model</b>, predicts its future trajectory, and <span class="hl">passes that "intention" to the next robot, which plans conditioned on it</span>. The result — advanced cooperation (predictive adaptation, role division), beating model-free and model-based baselines, running at <b>12.8 ms/step</b>, and deployed on two real Unitree Go2-W quadrupeds.</p>
+    <p class="t-ko">모델 기반 RL은 표본 효율이 좋지만 멀티로봇 팀으로 확장하기 어렵다. 고차원 로봇 여러 대의 <b>결합 동역학(joint dynamics)</b>을 모델링하는 비용이 가혹하기 때문이다. <b>SeqWM</b>은 한꺼번에 푸는 결합 모델을 버리고 에이전트를 줄 세운다. 각 로봇이 <b>독립적인 자기 월드 모델</b>로 미래 궤적을 예측하고, <span class="hl">그 "의도(intention)"를 다음 로봇에게 넘겨 다음 로봇이 그 위에서 계획</span>한다. 결과는 고급 협력(예측적 적응, 역할 분담), model-free·model-based 베이스라인 능가, <b>12.8 ms/스텝</b> 실행, 그리고 실제 Unitree Go2-W 4족 로봇 2대 배치.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The bottleneck of multi-robot model-based RL isn't the policy — it's modeling everyone's dynamics at once.</p>
+    <p class="lead t-ko">멀티로봇 모델 기반 RL의 병목은 정책이 아니라, 모두의 동역학을 한 번에 모델링하는 일이다.</p>
+    <p class="t-en">Two camps have dominated. <strong>Decentralized</strong> world models give each robot its own model but ignore the coupling between robots, so coordination falls apart. <strong>Centralized</strong> models capture coupling by predicting the full joint state-action space — but the complexity explodes with the number of agents and action dimensions, blocking real deployment. SeqWM borrows the <strong>sequential (autoregressive) paradigm</strong> from multi-agent RL: agents act and communicate in a fixed order, each conditioned on its predecessors. This <strong>decomposes the joint dynamics into per-agent models</strong> — keeping coordination, killing the complexity.</p>
+    <p class="t-ko">지금까지 두 진영이 있었다. <strong>분산형(decentralized)</strong> 월드 모델은 로봇마다 자기 모델을 주지만 로봇 간 결합을 무시해 협력이 무너진다. <strong>중앙집중형(centralized)</strong>은 전체 결합 상태-행동 공간을 예측해 결합을 잡지만, 에이전트 수와 행동 차원에 따라 복잡도가 폭증해 실배치를 막는다. SeqWM은 멀티에이전트 RL의 <strong>순차(autoregressive) 패러다임</strong>을 가져온다. 에이전트들이 정해진 순서로 행동·통신하고, 각자 자기 앞 에이전트에 조건부로 작동한다. 이로써 <strong>결합 동역학을 에이전트별 모델로 분해</strong> — 협력은 유지하고 복잡도는 죽인다.</p>
+    <figure class="fig">
+      <img src="fig/2509.13095/fig1.png" alt="SeqWM architecture: per-agent latent rollout, planner with critic and path integral, and sequential communication between agents">
+      <figcaption class="t-en"><b>Figure 2.</b> SeqWM per-agent loop — the local world model rolls out latent states / rewards / actions over horizon H, a critic + Path-Integral planner picks elite action trajectories, and a message (predicted latents + planned actions) is concatenated and passed from agent <i>v<sup>i−1</sup></i> to <i>v<sup>i+1</sup></i>.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> SeqWM의 에이전트별 루프 — 로컬 월드 모델이 호라이즌 H 동안 잠재 상태·보상·행동을 롤아웃하고, 크리틱 + Path-Integral 플래너가 엘리트 행동 궤적을 고른 뒤, 메시지(예측 잠재 + 계획 행동)를 concat해 에이전트 <i>v<sup>i−1</sup></i> → <i>v<sup>i+1</sup></i>로 넘긴다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2509.13095</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">12.8 ms</div><div class="l"><span class="t-en">Per-step execution<br>(default, RTX A6000)</span><span class="t-ko">스텝당 실행 시간<br>(기본 설정, RTX A6000)</span></div></div>
+      <div class="stat"><div class="n">−57.3%</div><div class="l"><span class="t-en">Time cut via early-stop<br>(only ~5.9% perf loss)</span><span class="t-ko">조기 종료로 시간 절감<br>(성능 손실 ~5.9%뿐)</span></div></div>
+      <div class="stat"><div class="n">~100%</div><div class="l"><span class="t-en">Success rate reached<br>(Multi-Quad tasks)</span><span class="t-ko">도달한 성공률<br>(Multi-Quad 과제)</span></div></div>
+      <div class="stat"><div class="n">2–4 M</div><div class="l"><span class="t-en">Steps to near-optimal<br>(Bi-DexHands Over/Scissors)</span><span class="t-ko">준최적까지 스텝<br>(Bi-DexHands Over/Scissors)</span></div></div>
+      <div class="stat"><div class="n">5</div><div class="l"><span class="t-en">Agents in scalability<br>test (Gate task)</span><span class="t-ko">확장성 실험 에이전트 수<br>(Gate 과제)</span></div></div>
+      <div class="stat"><div class="n">2</div><div class="l"><span class="t-en">Real Unitree Go2-W<br>quadrupeds deployed</span><span class="t-ko">실배치한 실물<br>Unitree Go2-W 4족</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Ablations — what actually carries the method</span><span class="t-ko">결과 — 무엇이 진짜 효과를 내나</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Findings from the ablations.</b> Sequential modeling matches centralized on prediction error (both ≫ decentralized); simple concat beats fancier fusion; removing intention-sharing hurts.</caption>
+        <caption class="t-ko"><b>제거 실험 요약.</b> 순차 모델링은 예측 오차에서 중앙집중형과 동급(둘 다 분산형 ≫); 단순 concat이 정교한 융합을 능가; 의도 공유 제거 시 성능 하락.</caption>
+        <thead><tr><th><span class="t-en">Ablation axis</span><span class="t-ko">제거 축</span></th><th><span class="t-en">Variant</span><span class="t-ko">변형</span></th><th><span class="t-en">Outcome</span><span class="t-ko">결과</span></th></tr></thead>
+        <tbody>
+          <tr><td><span class="t-en">Dynamics structure</span><span class="t-ko">동역학 구조</span></td><td>Sequential vs Centralized vs Decentralized</td><td class="up"><span class="t-en">Seq ≈ Central, both ≫ Decentralized</span><span class="t-ko">Seq ≈ Central, 둘 다 분산형 ≫</span></td></tr>
+          <tr><td><span class="t-en">Communication fusion</span><span class="t-ko">통신 융합</span></td><td>Concat vs MLP / Cross-attn / RNN</td><td class="up"><span class="t-en">Concat highest & most stable; RNN &lt; no-comm</span><span class="t-ko">Concat 최고·최안정; RNN은 무통신보다 낮음</span></td></tr>
+          <tr><td><span class="t-en">Intention sharing</span><span class="t-ko">의도 공유</span></td><td>SeqWM vs DecWM / SeqFree</td><td class="up"><span class="t-en">Full SeqWM best — both rollout + sequential msg needed</span><span class="t-ko">완전한 SeqWM 최고 — 롤아웃 + 순차 메시지 둘 다 필요</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role">Agent v¹</div>
+          <div class="sub"><span class="t-en">own world model</span><span class="t-ko">자기 월드 모델</span></div>
+          <div class="latent"><span class="t-en">predict ẑ, â, r̂ over H</span><span class="t-ko">H 동안 ẑ, â, r̂ 예측</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role">Agent v²</div>
+          <div class="sub"><span class="t-en">receives v¹'s intention</span><span class="t-ko">v¹의 의도 수신</span></div>
+          <div class="latent"><span class="t-en">plan conditioned on it</span><span class="t-ko">그 위에서 계획</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role">Agent vᴺ</div>
+          <div class="sub"><span class="t-en">sees all predecessors</span><span class="t-ko">앞선 모두를 봄</span></div>
+          <div class="latent"><span class="t-en">coordinated joint action</span><span class="t-ko">조율된 공동 행동</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Autoregressive over agents, not over time alone</b> — each robot's plan becomes the prior for the next. Joint dynamics is decomposed into a chain of independent, conditioned per-agent models.</div>
+      <div class="cap t-ko"><b>시간뿐 아니라 에이전트에 대해서도 autoregressive</b> — 각 로봇의 계획이 다음 로봇의 prior가 된다. 결합 동역학이 독립적·조건부 에이전트별 모델의 사슬로 분해된다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two halves: model, then plan</span><span class="t-ko">두 축: 모델링, 그다음 계획</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 순차 월드 모델링</span>
+        <h3>Sequential World Modelling</h3>
+        <p class="t-en">Treat each agent's <span class="term">observation-action pair as a token</span>. Agent 1 predicts its next latent state + reward and passes it on; agent <i>i</i> predicts conditioned on its own state plus <strong>all predecessors' predictions</strong>. Each agent owns independent MLP modules (encoder / dynamics / reward / critic / actor) — <strong>no parameter sharing</strong>, so it deploys in a distributed way. The actor is trained with HASAC.</p>
+        <p class="t-ko">각 에이전트의 <span class="term">관측-행동 쌍을 토큰</span>으로 취급. 에이전트 1이 다음 잠재 상태+보상을 예측해 넘기고, 에이전트 <i>i</i>는 자기 상태 + <strong>앞선 모든 에이전트의 예측</strong>에 조건부로 예측한다. 에이전트마다 독립 MLP 모듈(encoder/dynamics/reward/critic/actor) 보유 — <strong>파라미터 공유 없음</strong>이라 분산 배치 가능. actor는 HASAC로 학습.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 순차 계획</span>
+        <h3>Sequential MPPI Planning</h3>
+        <p class="t-en">Real decisions come from a <span class="term">Model-Predictive Path-Integral</span> planner. Each agent samples N action sequences (some from a Gaussian, some from the actor), rolls them out H steps in its world model, scores each by predicted reward + terminal critic value, keeps the <strong>elite set</strong>, and refines the distribution K times. A <strong>communication cache</strong> lets execution be serial-blocking-free — latency barely grows with agent count.</p>
+        <p class="t-ko">실제 결정은 <span class="term">Model-Predictive Path-Integral</span> 플래너가 한다. 각 에이전트가 N개 행동열을 샘플(일부 가우시안, 일부 actor)해 월드 모델로 H 스텝 롤아웃, 예측 보상 + 종단 크리틱 값으로 점수 매겨 <strong>엘리트 집합</strong>을 남기고 분포를 K번 정제. <strong>통신 캐시</strong>로 직렬 블로킹 없는 실행 — 에이전트 수가 늘어도 지연이 거의 안 커진다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Encode &amp; receive</span><span class="t-ko">인코딩 &amp; 수신</span></b><span class="t-en">Agent v<sup>i</sup> encodes its observation to a latent z<sup>i</sup> and receives a message e<sup>i</sup> — the concatenated predicted latents and planned actions of all predecessors (agent 1 gets an empty message).</span><span class="t-ko">에이전트 v<sup>i</sup>가 관측을 잠재 z<sup>i</sup>로 인코딩하고, 앞선 모든 에이전트의 예측 잠재 + 계획 행동을 concat한 메시지 e<sup>i</sup>를 수신(에이전트 1은 빈 메시지).</span></li>
+      <li><b><span class="t-en">Sample &amp; roll out</span><span class="t-ko">샘플 &amp; 롤아웃</span></b><span class="t-en">Draw N candidate action sequences (Gaussian + actor prior), then roll each out H steps through the local world model to predict future latents and rewards.</span><span class="t-ko">N개 후보 행동열을 샘플(가우시안 + actor prior)하고, 로컬 월드 모델로 각각 H 스텝 롤아웃해 미래 잠재·보상을 예측.</span></li>
+      <li><b><span class="t-en">Score &amp; refine</span><span class="t-ko">평가 &amp; 정제</span></b><span class="t-en">Value each trajectory as summed predicted reward + terminal critic value; keep the top-M elite and shift the action distribution toward them, iterating K times (with low-pass action smoothing for real robots).</span><span class="t-ko">각 궤적을 누적 예측 보상 + 종단 크리틱 값으로 평가; 상위 M개 엘리트를 남겨 행동 분포를 그쪽으로 이동, K번 반복(실물 로봇용 저역통과 행동 평활화 포함).</span></li>
+      <li><b><span class="t-en">Pass intention forward</span><span class="t-ko">의도 전달</span></b><span class="t-en">Send v<sup>i</sup>'s predicted trajectory + chosen action onward to v<sup>i+1</sup>. Training adds random agent-order permutation and random comm masking for robustness to ordering and communication failures.</span><span class="t-ko">v<sup>i</sup>의 예측 궤적 + 선택 행동을 v<sup>i+1</sup>로 전달. 학습 시 무작위 에이전트 순서 치환 + 무작위 통신 마스킹으로 순서·통신 실패에 견고화.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><strong>Decompose, don't centralize.</strong> A chain of per-agent world models reaches centralized-level prediction accuracy while staying cheap enough to run at 12.8 ms/step and deploy on real quadrupeds.</p><p class="t-ko"><strong>중앙집중 말고 분해하라.</strong> 에이전트별 월드 모델의 사슬이 중앙집중형 수준의 예측 정확도에 도달하면서도, 12.8 ms/스텝으로 돌리고 실물 4족에 배치할 만큼 가볍다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Intention sharing = emergent cooperation.</strong> Passing predicted trajectories lets behaviors like predictive adaptation, temporal alignment, and role division emerge — not hand-coded.</p><p class="t-ko"><strong>의도 공유 = 창발적 협력.</strong> 예측 궤적을 넘기는 것만으로 예측적 적응·시간 정렬·역할 분담 같은 행동이 창발한다 — 수작업 코딩이 아니다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>Simple beats clever in fusion.</strong> Plain concatenation outperformed MLP / cross-attention / RNN fusion — RNN even did worse than no communication.</p><p class="t-ko"><strong>융합은 단순한 게 이긴다.</strong> 단순 concat이 MLP·cross-attention·RNN 융합을 능가 — RNN은 무통신보다도 못했다.</p></div>
+      <div class="t"><span class="ic">🤖</span><p class="t-en"><strong>Sim-to-real held.</strong> PushBox / Gate / Shepherd behaviors transferred to two Unitree Go2-W robots, matching simulated yielding and force-coordination.</p><p class="t-ko"><strong>Sim-to-real 성립.</strong> PushBox·Gate·Shepherd 행동이 Unitree Go2-W 2대로 전이돼, 시뮬레이션의 양보·힘 조율을 재현.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> SeqWM is built for <b>fully cooperative, shared-reward</b> tasks with a <b>fixed or randomly-permuted agent order</b> — the authors themselves flag both as limitations. A fixed order imposes a coordination hierarchy that may be wrong for scenarios needing dynamic re-ordering, and the "near-100% success" headline comes from custom Multi-Quad tasks, so cross-paper comparability is limited. Whether the per-agent decomposition still holds up in competitive or mixed-motive settings is untested.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> SeqWM은 <b>완전 협력·공유 보상</b> 과제와 <b>고정 또는 무작위 치환된 에이전트 순서</b>를 전제로 한다 — 저자들도 둘 다 한계로 명시한다. 고정 순서는 동적 재정렬이 필요한 상황에 잘못된 협력 위계를 강제할 수 있고, "준 100% 성공"이라는 표제는 자체 제작한 Multi-Quad 과제에서 나와 논문 간 비교 가능성이 제한적이다. 경쟁·혼합 동기 환경에서도 에이전트별 분해가 버틸지는 검증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2509.13095">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2509.13095">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2509.13095">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2509.13095">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Shared / Multi-Agent World Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

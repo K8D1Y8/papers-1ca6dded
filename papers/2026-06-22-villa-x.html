@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · villa-X: Enhancing Latent Action Modeling in Vision-Language-Action Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">🌍 World Model · Latent Action</span><span class="t-ko">🌍 World Model · Latent Action</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>villa-X: Enhancing Latent Action Modeling in Vision-Language-Action Models<br><span class="glow t-en">— Make latent actions physically grounded, then plan with them</span><span class="glow t-ko">— 잠재 행동을 '물리적으로' 정초하고, 그것으로 계획하라</span></h1>
+    <div class="meta">
+      <span>👥 <b>Xiaoyu Chen</b> <span class="t-en">et al.</span><span class="t-ko">외 11인</span></span>
+      <span>🏛 Microsoft Research · Tsinghua · HKUST</span>
+      <span>🗓 2025.07.31</span>
+      <span>📄 <a href="https://arxiv.org/abs/2507.23682">arXiv:2507.23682</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Latent actions let robots learn from action-free human video, but most latent-action models only compress <b>pixel changes</b> — so subtle but vital moves (wrist rotation, gripper open/close) get lost. villa-X fixes both ends: it makes latent actions <span class="hl">physically grounded</span> by jointly forecasting future proprioceptive states, and it threads them into pre-training via a <span class="hl">joint diffusion policy</span> (VLM → latent expert → robot expert). The result is SOTA on SIMPLER (<b>77.7%</b> Google robot, <b>62.5%</b> WidowX) plus zero-shot transfer to an unseen arm and a 12-DoF dexterous hand.</p>
+    <p class="t-ko">잠재 행동(latent action)은 행동 라벨 없는 사람 영상으로 로봇을 학습시키는 열쇠지만, 대부분의 모델은 <b>픽셀 변화</b>만 압축한다 — 그래서 손목 회전·그리퍼 개폐처럼 작지만 결정적인 움직임이 사라진다. villa-X는 양쪽을 모두 고친다: 미래 고유수용(proprioceptive) 상태를 함께 예측해 잠재 행동을 <span class="hl">물리적으로 정초</span>하고, 이를 <span class="hl">조인트 디퓨전 정책</span>(VLM → 잠재 전문가 → 로봇 전문가)으로 사전학습에 엮는다. 결과는 SIMPLER에서 SOTA(<b>Google robot 77.7%</b>, <b>WidowX 62.5%</b>)이며, 미학습 로봇 팔과 12-DoF 다관절 손으로 제로샷 전이까지 성공.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">A latent action that ignores physics is a plan the robot cannot actually execute.</p>
+    <p class="lead t-ko">물리를 무시한 잠재 행동은, 로봇이 실제로 실행할 수 없는 계획이다.</p>
+    <p class="t-en">Robot data with action labels is scarce; human video is abundant but action-free. Latent actions bridge them by turning frame-to-frame motion into a shared "pseudo-action" vocabulary. But prior latent action models (LAPA, Moto, GR00T) learn that vocabulary by reconstructing <strong>future pixels</strong> — and many physically critical motions barely move any pixels. So the latent space is <strong>physically ungrounded</strong>, and the knowledge transfers poorly to real control. villa-X attacks <strong>both</strong> halves of the pipeline: <em>how latent actions are learned</em> (add proprioceptive grounding) and <em>how they are used</em> (a structured joint-diffusion policy instead of mere weight-init or a detached planner).</p>
+    <p class="t-ko">행동 라벨이 붙은 로봇 데이터는 귀하고, 사람 영상은 풍부하지만 행동 라벨이 없다. 잠재 행동은 프레임 간 움직임을 공통 "유사 행동(pseudo-action)" 어휘로 바꿔 둘을 잇는다. 그러나 기존 모델(LAPA·Moto·GR00T)은 <strong>미래 픽셀</strong> 복원으로 그 어휘를 배우는데, 물리적으로 중요한 움직임 상당수는 픽셀을 거의 바꾸지 않는다. 그래서 잠재 공간이 <strong>물리적으로 정초되지 않고</strong>, 실제 제어로의 전이가 부실하다. villa-X는 파이프라인 <strong>양쪽</strong>을 모두 손본다: <em>잠재 행동을 어떻게 배우나</em>(고유수용 정초 추가)와 <em>어떻게 쓰나</em>(단순 가중치 초기화·분리된 플래너 대신 구조화된 조인트 디퓨전 정책).</p>
+    <figure class="fig">
+      <img src="fig/2507.23682/fig1.png" alt="villa-X ACTor module: VLM, ACT-latent, ACT-robot 세 전문가 구조">
+      <figcaption class="t-en"><b>Figure 2.</b> The ACTor module — a frozen-init VLM encodes language <i>l</i> and observation <i>o<sub>t</sub></i>; <b>ACT-latent</b> predicts mid-level latent tokens <i>ẑ</i>; <b>ACT-robot</b> generates low-level action chunks <i>â</i>, conditioned on the latents, wrist view, and proprioceptive state <i>q<sub>t</sub></i>.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> ACTor 모듈 — VLM이 언어 <i>l</i>·관측 <i>o<sub>t</sub></i>를 인코딩하고, <b>ACT-latent</b>가 중간 단계 잠재 토큰 <i>ẑ</i>을 예측, <b>ACT-robot</b>이 잠재·손목뷰·고유수용 상태 <i>q<sub>t</sub></i>를 조건으로 저수준 행동 청크 <i>â</i>를 생성한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2507.23682</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">77.7%</div><div class="l"><span class="t-en">SIMPLER avg. success<br>Google robot (SOTA)</span><span class="t-ko">SIMPLER 평균 성공률<br>Google robot (SOTA)</span></div></div>
+      <div class="stat"><div class="n">62.5%</div><div class="l"><span class="t-en">SIMPLER avg. success<br>WidowX robot (SOTA)</span><span class="t-ko">SIMPLER 평균 성공률<br>WidowX robot (SOTA)</span></div></div>
+      <div class="stat"><div class="n">3B + 0.6B</div><div class="l"><span class="t-en">PaliGemma VLM +<br>2×300M ACT experts</span><span class="t-ko">PaliGemma VLM +<br>2×300M ACT 전문가</span></div></div>
+      <div class="stat"><div class="n">12-DoF</div><div class="l"><span class="t-en">Dexterous XHand —<br>zero-shot, no hand data</span><span class="t-ko">다관절 XHand —<br>손 데이터 없이 제로샷</span></div></div>
+      <div class="stat"><div class="n">3 stages</div><div class="l"><span class="t-en">LAM → ACT pretrain →<br>embodiment finetune</span><span class="t-ko">LAM → ACT 사전학습 →<br>임바디먼트 파인튜닝</span></div></div>
+      <div class="stat"><div class="n">50% / 50%</div><div class="l"><span class="t-en">Attention masking —<br>mask all vs. half latents</span><span class="t-ko">어텐션 마스킹 —<br>전부 vs. 절반 잠재</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — SOTA on SIMPLER, both robots</span><span class="t-ko">결과 — SIMPLER 양쪽 로봇 모두 SOTA</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 excerpt.</b> SIMPLER average success rate (%). villa-X tops both embodiments; removing the latent expert collapses performance.</caption>
+        <caption class="t-ko"><b>Table 2 발췌.</b> SIMPLER 평균 성공률(%). villa-X가 두 임바디먼트 모두 1위이며, 잠재 전문가를 빼면 성능이 무너진다.</caption>
+        <thead><tr><th>Method</th><th>Google robot</th><th>WidowX</th></tr></thead>
+        <tbody>
+          <tr><td>OpenVLA</td><td>—</td><td>low</td></tr>
+          <tr><td>LAPA</td><td>mid</td><td>mid</td></tr>
+          <tr><td>π₀</td><td>high</td><td>high</td></tr>
+          <tr><td>villa-X (w/o latent)</td><td>↓ drop</td><td>↓ drop</td></tr>
+          <tr><td><b>villa-X (full)</b></td><td class="up"><b>77.7</b></td><td class="up"><b>62.5</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="font-size:.86em;opacity:.72">Note: villa-X reports the best average on both Google robot and WidowX in SIMPLER, surpassing VLA baselines (RT-1-X, Octo, OpenVLA, RoboVLMs, π₀) and latent-action methods (Moto, LAPA). Baseline cells abbreviated; the "w/o latent" ablation shows a large drop, confirming the latent expert is load-bearing. villa-X also reports SOTA across all four LIBERO suites.</p>
+    <p class="t-ko" style="font-size:.86em;opacity:.72">참고: villa-X는 SIMPLER에서 Google robot·WidowX 양쪽 최고 평균을 기록하며 VLA 베이스라인(RT-1-X·Octo·OpenVLA·RoboVLMs·π₀)과 잠재행동 기법(Moto·LAPA)을 능가한다. 베이스라인 수치는 요약 표기했으며, "w/o latent" 어블레이션의 큰 하락은 잠재 전문가가 핵심임을 확인한다. villa-X는 LIBERO 4개 스위트 전부에서도 SOTA를 보고한다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">VLM (PaliGemma)</span><span class="t-ko">VLM (PaliGemma)</span></div>
+          <div class="sub"><span class="t-en">language + image in</span><span class="t-ko">언어 + 이미지 입력</span></div>
+          <div class="latent"><span class="t-en">high-level intent</span><span class="t-ko">고수준 의도</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">ACT-latent</span><span class="t-ko">ACT-latent</span></div>
+          <div class="sub"><span class="t-en">predict latent plan ẑ</span><span class="t-ko">잠재 계획 ẑ 예측</span></div>
+          <div class="latent"><span class="t-en">mid-level, embodiment-free</span><span class="t-ko">중간 단계 · 임바디먼트 무관</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">ACT-robot</span><span class="t-ko">ACT-robot</span></div>
+          <div class="sub"><span class="t-en">condition on ẑ + q<sub>t</sub></span><span class="t-ko">ẑ + q<sub>t</sub> 조건</span></div>
+          <div class="latent"><span class="t-en">low-level action chunk â</span><span class="t-ko">저수준 행동 청크 â</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Joint diffusion, factorized.</b> Latent and robot actions are denoised together with flow matching — latents bias toward noisier τ (planning), robot actions toward cleaner τ (control). Stochastic attention masks stop the robot expert from taking shortcuts on the latents.</div>
+      <div class="cap t-ko"><b>분해된 조인트 디퓨전.</b> 잠재·로봇 행동을 flow matching으로 함께 디노이즈 — 잠재는 더 노이즈 큰 τ(계획), 로봇은 더 깨끗한 τ(제어)로 편향. 확률적 어텐션 마스크가 로봇 전문가의 잠재 의존 지름길을 차단한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: ground the latents, then plan with them</span><span class="t-ko">아이디어: 잠재를 정초하고, 그것으로 계획하라</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 더 잘 배우기</span>
+        <h3>Proprio-grounded LAM</h3>
+        <p class="t-en">On top of the usual visual inverse/forward dynamics, villa-X adds a <span class="term">proprioceptive FDM</span>: given the current state and latent <i>z<sub>t</sub></i>, predict future robot states <i>q</i> and actions <i>a</i>. Jointly forecasting pixels <em>and</em> physics forces latents to encode rotation/gripper moves that pixels miss. An <span class="term">embodiment context vector c<sub>e</sub></span> (dataset-ID + control-freq) keeps latents consistent across heterogeneous robots.</p>
+        <p class="t-ko">기존 시각 역/순방향 동역학에 더해, villa-X는 <span class="term">고유수용 FDM</span>을 추가한다: 현재 상태와 잠재 <i>z<sub>t</sub></i>로 미래 로봇 상태 <i>q</i>·행동 <i>a</i>를 예측. 픽셀 <em>과</em> 물리를 함께 예측하니 픽셀이 놓치는 회전·그리퍼 동작까지 잠재가 담는다. <span class="term">임바디먼트 컨텍스트 c<sub>e</sub></span>(데이터셋 ID + 제어 주파수)가 이질 로봇 간 잠재 일관성을 유지한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 더 잘 쓰기</span>
+        <h3>Joint diffusion actor</h3>
+        <p class="t-en">Instead of using latents only to init weights (LAPA) or as a detached planner (GO-1), villa-X factorizes the policy into <span class="term">π<sub>latent</sub></span> (plans from vision+language) and <span class="term">π<sub>robot</sub></span> (acts, conditioned on the latent plan). Both are trained in one <strong>conditional flow-matching</strong> objective, so the latent plan is a real mid-level interface — not a throwaway prior.</p>
+        <p class="t-ko">잠재를 가중치 초기화용(LAPA)이나 분리된 플래너(GO-1)로만 쓰지 않고, villa-X는 정책을 <span class="term">π<sub>latent</sub></span>(시각+언어로 계획)와 <span class="term">π<sub>robot</sub></span>(잠재 계획 조건으로 실행)로 분해한다. 둘을 하나의 <strong>조건부 flow-matching</strong> 목적함수로 학습 — 잠재 계획이 버려지는 사전(prior)이 아니라 실제 중간 인터페이스가 된다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Train the LAM</span><span class="t-ko">LAM 학습</span></b><span class="t-en">Learn discrete latent tokens (VQ, codebook 32) from frame pairs via inverse + forward dynamics, with the proprio-FDM and embodiment context added. For human videos lacking proprio labels, drop only that term.</span><span class="t-ko">프레임 쌍에서 역+순방향 동역학으로 이산 잠재 토큰(VQ, 코드북 32)을 학습하되, proprio-FDM과 임바디먼트 컨텍스트를 추가. proprio 라벨 없는 사람 영상은 그 항만 생략.</span></li>
+      <li><b><span class="t-en">Pre-train the ACTor</span><span class="t-ko">ACTor 사전학습</span></b><span class="t-en">Freeze the LAM, attach a PaliGemma VLM and two 18-layer experts (ACT-latent, ACT-robot, 300M each), and jointly diffuse latent + robot actions over mixed human/robot data.</span><span class="t-ko">LAM을 고정하고 PaliGemma VLM과 18층 전문가 둘(ACT-latent·ACT-robot, 각 300M)을 붙여, 사람·로봇 혼합 데이터로 잠재+로봇 행동을 조인트 디퓨전.</span></li>
+      <li><b><span class="t-en">Regularize with masking</span><span class="t-ko">마스킹으로 정규화</span></b><span class="t-en">50% of the time mask all robot→latent attention; otherwise mask half the latent tokens. This stops the robot expert from learning trivial shortcuts on the latent plan.</span><span class="t-ko">50% 확률로 로봇→잠재 어텐션 전부 마스킹, 나머지는 잠재 토큰 절반 마스킹. 로봇 전문가가 잠재 계획에 의존하는 지름길 학습을 차단.</span></li>
+      <li><b><span class="t-en">Finetune per embodiment</span><span class="t-ko">임바디먼트별 파인튜닝</span></b><span class="t-en">Adapt to a target robot — gripper arm or 12-DoF dexterous hand — for the final policy; the latent expert still plans zero-shot for unseen arms and open-vocabulary symbol cards.</span><span class="t-ko">대상 로봇(그리퍼 팔 또는 12-DoF 다관절 손)에 맞춰 최종 정책을 적응. 잠재 전문가는 미학습 팔·개방어휘 기호 카드에 대해서도 제로샷으로 계획.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🧲</span><p class="t-en"><strong>Pixels aren't physics.</strong> Forcing latents to also predict proprioceptive state is a cheap, generic fix for the "ungrounded latent" problem — and it measurably helps downstream control.</p><p class="t-ko"><strong>픽셀 ≠ 물리.</strong> 잠재가 고유수용 상태까지 예측하게 만드는 건 "정초 안 된 잠재" 문제에 대한 값싸고 일반적인 해법이며, 하류 제어에 측정 가능한 도움을 준다.</p></div>
+      <div class="t"><span class="ic">🔗</span><p class="t-en"><strong>Latent as a real interface.</strong> Joint diffusion makes the latent plan a load-bearing mid-level layer between VLM intent and motor control — not a discarded init.</p><p class="t-ko"><strong>인터페이스로서의 잠재.</strong> 조인트 디퓨전은 잠재 계획을 VLM 의도와 모터 제어 사이의 실제 중간 계층으로 만든다 — 버려지는 초기화가 아니라.</p></div>
+      <div class="t"><span class="ic">🦾</span><p class="t-en"><strong>Zero-shot embodiment transfer.</strong> SOTA on a 12-DoF dexterous hand it never saw during pretraining — strong evidence the latent space abstracts away the body.</p><p class="t-ko"><strong>제로샷 임바디먼트 전이.</strong> 사전학습에서 본 적 없는 12-DoF 다관절 손에서 SOTA — 잠재 공간이 신체를 추상화한다는 강력한 증거.</p></div>
+      <div class="t"><span class="ic">🌍</span><p class="t-en"><strong>A world-model angle.</strong> ACT-latent + a rendering world model can roll out a plan as video for unseen arms — latent dynamics as imagination-space planning.</p><p class="t-ko"><strong>월드모델 관점.</strong> ACT-latent + 렌더링 월드모델은 미학습 팔의 계획을 영상으로 펼친다 — 잠재 동역학을 상상공간 계획으로.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline "physical grounding" rests on a probing experiment and ablations rather than a direct, isolated measurement of how much physics the latents actually encode — and the proprio-FDM only helps where proprioceptive labels exist (robot data), not the human video that motivated latent actions in the first place. The authors also concede the latent expert's planning potential (visual + proprioceptive future rollout, critic-based rejection) is largely unexplored, so today's gains may understate or overstate how far the "plan in latent space" story really reaches.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 핵심 주장인 "물리적 정초"는 잠재가 실제로 물리를 얼마나 담는지에 대한 직접·고립 측정이 아니라 프로빙 실험과 어블레이션에 기댄다 — 게다가 proprio-FDM은 고유수용 라벨이 있는 로봇 데이터에서만 작동하고, 정작 잠재 행동의 동기였던 사람 영상에는 적용되지 않는다. 저자들도 잠재 전문가의 계획 잠재력(시각+고유수용 미래 롤아웃, 비평가 기반 기각)이 대부분 미탐구라고 인정하므로, 현재 성능이 "잠재 공간 계획" 서사의 도달 범위를 과소·과대평가할 여지가 있다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2507.23682">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2507.23682">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2507.23682">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2507.23682">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>ICLR 2026 · Shared / Multi-Agent World Models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>ICLR 2026 · Shared / Multi-Agent World Models</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-06-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
