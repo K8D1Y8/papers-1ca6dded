@@ -5,9 +5,16 @@ Bilingual archive (English default + Korean toggle) with an "All / ⭐ Must Read
 and a "Full Review" link for papers that have one (reviews/<arxivId>.html).
 Run after creating a page:  python3 build_index.py
 """
-import os, re, html, glob
+import os, re, html, glob, hashlib
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+
+def asset_v(rel):
+    """Short content hash for cache-busting asset URLs (?v=...)."""
+    try:
+        return hashlib.md5(open(os.path.join(ROOT, rel), "rb").read()).hexdigest()[:8]
+    except OSError:
+        return ""
 PAPERS = os.path.join(ROOT, "papers")
 REVIEWS = os.path.join(ROOT, "reviews")
 
@@ -94,6 +101,8 @@ def card(it):
             '    </div>')
 
 cards = "\n".join(card(it) for it in items) or '<p class="empty">No summaries yet.</p>'
+css_v = asset_v("assets/style.css")
+js_v = asset_v("assets/app.js")
 
 doc = f"""<!DOCTYPE html>
 <html lang="en">
@@ -102,7 +111,7 @@ doc = f"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>5-min papers · Archive</title>
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/style.css?v={css_v}">
 </head>
 <body>
 <div class="langtoggle">
@@ -130,7 +139,7 @@ doc = f"""<!DOCTYPE html>
   </div>
   <footer><span class="t-en">Local auto-generated · noindex</span><span class="t-ko">로컬 자동 생성 · noindex</span></footer>
 </div>
-<script src="assets/app.js"></script>
+<script src="assets/app.js?v={js_v}"></script>
 </body>
 </html>
 """
