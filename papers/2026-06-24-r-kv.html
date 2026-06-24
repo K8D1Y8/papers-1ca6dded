@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · R-KV: Redundancy-aware KV Cache Compression for Reasoning Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">KV Cache Compression · Reasoning Models</span><span class="t-ko">KV Cache Compression · Reasoning Models</span></span>
+      <span>2026 · 06 · 24</span>
+    </div>
+    <h1>R-KV: Redundancy-aware KV Cache Compression for Reasoning Models<br>
+      <span class="glow t-en">— Reasoning traces repeat themselves; evict the redundant tokens, not the important ones — 90% memory cut, accuracy intact</span>
+      <span class="glow t-ko">— 추론 과정은 스스로를 반복한다; 중요한 토큰이 아니라 중복 토큰을 버려라 — 메모리 90% 절감, 정확도 유지</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Zefan Cai</b> <span class="t-en">et al. · corresponding Zefan Cai · senior author Junjie Hu</span><span class="t-ko"> 외 · 교신저자 Zefan Cai · 책임저자 Junjie Hu</span></span>
+      <span>🏛 UW–Madison · Microsoft · CMU · Caltech · UCSD · Berkeley</span>
+      <span>🗓 May 2025</span>
+      <span>📄 <a href="https://arxiv.org/abs/2505.24133">arXiv:2505.24133</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Reasoning models (DeepSeek-R1 and friends) think out loud — and they <b>repeat themselves</b>, generating chains 8–14× longer than the answer with 5–7× higher word repetition. That blows up the KV cache during <em>decoding</em>. Standard KV-cache eviction keeps whatever has high <b>attention</b>, but the authors show repetition <em>inflates</em> attention: SnapKV happily retains "let me re-check… let me re-check…" and drops the one crucial step. R-KV scores every token by <b>importance (attention)</b> <em>minus</em> <b>redundancy (key-vector cosine similarity)</b>, so it keeps tokens that are both useful <em>and</em> novel. Training-free and model-agnostic, it preserves <b>~100%</b> of full-cache accuracy at <b>10–34%</b> of the budget — at one tight budget it even <b>beats</b> the full cache (105%) — while cutting memory up to <b>90%</b> and lifting throughput up to <b>6.6×</b> via much larger batches. Where the attention-only baseline lands ~60% of full performance, R-KV lands ~100%.</p>
+    <p class="t-ko">추론 모델(DeepSeek-R1 계열)은 생각을 길게 늘어놓으면서 <b>스스로를 반복</b>한다 — 정답보다 8–14배 긴 사고 사슬을 만들고 단어 반복률은 5–7배 높다. 이 때문에 <em>디코딩</em> 중 KV 캐시가 폭증한다. 기존 KV 캐시 축출은 <b>어텐션</b>이 높은 토큰을 남기는데, 저자들은 반복이 어텐션을 <em>부풀린다</em>는 점을 보인다 — SnapKV는 "다시 확인하자… 다시 확인하자…"를 그대로 남기고 정작 핵심 한 단계를 버린다. R-KV는 각 토큰을 <b>중요도(어텐션)</b> <em>빼기</em> <b>중복도(key 벡터 코사인 유사도)</b>로 채점해, 유용하면서도 <em>새로운</em> 토큰을 남긴다. 학습이 필요 없고 모델에 독립적이며, 예산의 <b>10–34%</b>만으로 full-cache 정확도의 <b>~100%</b>를 유지하고(한 빠듯한 예산에선 full을 <b>넘어서</b> 105%), 메모리를 최대 <b>90%</b> 줄이고 큰 배치 덕에 처리량을 최대 <b>6.6×</b> 끌어올린다. 어텐션만 쓰는 베이스라인이 full 성능의 ~60%에 머무는 지점에서 R-KV는 ~100%에 도달한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">For reasoning models the KV-cache bottleneck has moved from the <em>prompt</em> to the <em>output</em> — and the output is full of redundancy that attention can't see past.</p>
+    <p class="lead t-ko">추론 모델에서 KV 캐시 병목은 <em>프롬프트</em>가 아니라 <em>출력</em>으로 옮겨갔다 — 그리고 그 출력은 어텐션이 꿰뚫어 보지 못하는 중복으로 가득하다.</p>
+    <p class="t-en">Almost all KV-cache compression was designed for the <strong>prefill</strong> stage: a long input prompt, compressed once. Reasoning models flip the problem — a short prompt produces a <strong>32K-token</strong> chain-of-thought, and the cache grows token-by-token during <strong>decoding</strong> (a single R1-Distill-Llama-8B trace can eat 4.1 GB of KV alone). The natural fix — evict low-attention tokens (SnapKV, PyramidKV) — backfires here: repeated self-reflections attend strongly to their own earlier copies, so attention <em>rewards</em> redundancy and the method keeps the duplicates while pruning scattered-but-essential reasoning steps. R-KV's contribution is to make eviction <strong>redundancy-aware</strong>: a second signal, semantic similarity between key vectors, explicitly penalises tokens that merely echo what's already cached. It's training-free, drop-in, and turns a setting where prior compression collapses to ~60% of full accuracy into one that stays effectively lossless.</p>
+    <p class="t-ko">거의 모든 KV 캐시 압축은 <strong>prefill</strong> 단계용으로 설계됐다 — 긴 입력 프롬프트를 한 번 압축. 추론 모델은 문제를 뒤집는다. 짧은 프롬프트가 <strong>32K 토큰</strong>짜리 사고 사슬을 만들고, 캐시는 <strong>디코딩</strong> 중 토큰마다 자라난다(R1-Distill-Llama-8B 한 번의 추론이 KV만 4.1GB를 먹는다). 자연스러운 해법인 저(低)어텐션 토큰 축출(SnapKV, PyramidKV)은 여기서 역효과를 낸다 — 반복되는 자기성찰 문장은 앞서 나온 자기 복사본에 강하게 어텐션하므로, 어텐션이 중복을 <em>보상</em>하고 기법은 중복을 남긴 채 흩어져 있지만 필수적인 추론 단계를 잘라낸다. R-KV의 기여는 축출을 <strong>중복 인식형</strong>으로 만든 것이다 — 두 번째 신호인 key 벡터 간 의미 유사도가, 이미 캐시된 내용을 그저 되풀이하는 토큰에 명시적 페널티를 준다. 학습이 필요 없는 drop-in이며, 기존 압축이 full 정확도의 ~60%로 무너지던 상황을 사실상 무손실로 바꾼다.</p>
+    <figure class="fig">
+      <img src="fig/2505.24133/x1.png" alt="R-KV pipeline: decoding-time compression, importance + redundancy estimation, joint selection">
+      <figcaption class="t-en"><b>Figure 1.</b> The R-KV pipeline. During decoding, after each fixed-length segment R-KV scores cached + buffered tokens two ways — <em>importance</em> from observation-query attention and <em>redundancy</em> from key-vector cosine similarity — then keeps the top tokens by the joint score <span class="hl">Z = λ·Importance − (1−λ)·Redundancy</span>, holding the cache at a fixed budget.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> R-KV 파이프라인. 디코딩 중 고정 길이 구간마다 R-KV는 캐시·버퍼 토큰을 두 방식으로 채점한다 — 관측 쿼리 어텐션 기반 <em>중요도</em>와 key 벡터 코사인 유사도 기반 <em>중복도</em> — 그 뒤 결합 점수 <span class="hl">Z = λ·중요도 − (1−λ)·중복도</span> 상위 토큰을 남겨 캐시를 고정 예산으로 유지한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2505.24133</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">90%</div><div class="l"><span class="t-en">KV memory saved (10% budget) — cache stays constant vs linear FullKV</span><span class="t-ko">KV 메모리 절감(예산 10%) — FullKV의 선형 증가 대비 캐시 일정</span></div></div>
+      <div class="stat"><div class="n">6.6×</div><div class="l"><span class="t-en">Throughput at 16K len (up to 9.2× / 13.4× batch at fixed-1024)</span><span class="t-ko">16K 길이 처리량(fixed-1024에선 최대 9.2× / 배치 13.4×)</span></div></div>
+      <div class="stat"><div class="n">105%</div><div class="l"><span class="t-en">Of FullKV accuracy reached (AIME-24, ~16% budget)</span><span class="t-ko">도달한 FullKV 정확도 비율(AIME-24, ~16% 예산)</span></div></div>
+      <div class="stat"><div class="n">~40 pts</div><div class="l"><span class="t-en">Max accuracy gain over SnapKV at equal budget</span><span class="t-ko">동일 예산에서 SnapKV 대비 최대 정확도 향상</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">Extra training — training-free &amp; model-agnostic</span><span class="t-ko">추가 학습 — 학습 불필요·모델 독립</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">On the hardest benchmark, R-KV matches the full cache while the attention-only baseline collapses</span><span class="t-ko">가장 어려운 벤치마크에서 R-KV는 full 캐시를 따라잡고, 어텐션-only 베이스라인은 무너진다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (from Table 2).</b> AIME 2024 pass@1 (%) on R1-Distill-Llama-8B at fixed KV budgets. SnapKV (attention-only) needs a far larger budget to recover; at a 1536-token budget R-KV already <em>exceeds</em> the full uncompressed cache. pass@1 over 64 samples.</caption>
+        <caption class="t-ko"><b>표 1 (Table 2 발췌).</b> R1-Distill-Llama-8B의 고정 KV 예산별 AIME 2024 pass@1(%). 어텐션만 쓰는 SnapKV는 회복에 훨씬 큰 예산이 필요하며, 1536 토큰 예산에서 R-KV는 이미 무압축 full 캐시를 <em>넘어선다</em>. 64 샘플 pass@1.</caption>
+        <thead><tr><th><span class="t-en">KV budget (tokens)</span><span class="t-ko">KV 예산(토큰)</span></th><th>FullKV</th><th>SnapKV</th><th>R-KV</th></tr></thead>
+        <tbody>
+          <tr><td>512</td><td>49.79</td><td>4.53</td><td class="up">29.48</td></tr>
+          <tr><td>1024</td><td>49.79</td><td>15.73</td><td class="up">45.26</td></tr>
+          <tr><td>1536</td><td>49.79</td><td>26.04</td><td class="up">51.56</td></tr>
+          <tr><td>2048</td><td>49.79</td><td>32.76</td><td class="up">52.29</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core ideas</span><span class="t-ko">핵심 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag"><span class="t-en">Importance</span><span class="t-ko">중요도</span></span>
+        <h3><span class="t-en">Attention — but stabilised</span><span class="t-ko">어텐션 — 단, 안정화</span></h3>
+        <p class="t-en">The last α "observation" tokens (e.g. 8) act as queries against every cached key to score importance. For GQA, head-group attention is aggregated by <b>max-pooling</b> (preserves critical tokens better than mean), and a sliding-window max-pool over recent positions damps outlier spikes. This is the familiar SnapKV-style signal — necessary, but on its own it rewards repetition.</p>
+        <p class="t-ko">마지막 α개(예: 8) "관측" 토큰이 모든 캐시 key에 대한 쿼리가 되어 중요도를 매긴다. GQA에서는 헤드 그룹 어텐션을 <b>max-pooling</b>으로 집계하고(평균보다 핵심 토큰을 더 잘 보존), 최근 위치에 슬라이딩 윈도 max-pool을 적용해 이상치 스파이크를 누른다. 익숙한 SnapKV식 신호로 필수적이지만, 단독으로는 반복을 보상한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag"><span class="t-en">Redundancy</span><span class="t-ko">중복도</span></span>
+        <h3><span class="t-en">Cosine similarity between keys</span><span class="t-ko">key 간 코사인 유사도</span></h3>
+        <p class="t-en">L2-normalise key vectors and build a token×token cosine-similarity matrix (diagonal zeroed). A token whose key looks like many others is redundant; its averaged similarity, softmax-normalised, becomes a per-token redundancy score. A guard zeroes similarity to a token's β most-recent neighbours so freshly generated context isn't wrongly flagged as duplicate.</p>
+        <p class="t-ko">key 벡터를 L2 정규화해 토큰×토큰 코사인 유사도 행렬을 만든다(대각선은 0). 자신의 key가 많은 다른 토큰과 닮은 토큰은 중복이다 — 평균 유사도를 softmax로 정규화해 토큰별 중복 점수로 삼는다. 보호 장치로 토큰의 최근 β개 이웃과의 유사도를 0으로 만들어, 갓 생성된 문맥이 중복으로 오인되지 않게 한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag"><span class="t-en">Joint selection</span><span class="t-ko">결합 선택</span></span>
+        <h3><span class="t-en">Keep the useful AND novel</span><span class="t-ko">유용하면서 새로운 것을 남김</span></h3>
+        <p class="t-en">Each token's score is <b>Z = λ·Importance − (1−λ)·Redundancy</b> (best at λ=0.1), averaged across heads. The top <em>B−α</em> tokens plus the α recent observation tokens fill a fixed budget. Compression fires after every 128-token segment during decoding, so the cache size never grows with the reasoning length.</p>
+        <p class="t-ko">각 토큰 점수는 <b>Z = λ·중요도 − (1−λ)·중복도</b>(λ=0.1이 최적)이며 헤드 평균을 낸다. 상위 <em>B−α</em>개 토큰과 최근 관측 토큰 α개가 고정 예산을 채운다. 디코딩 중 128 토큰 구간마다 압축이 실행되어 캐시 크기가 추론 길이에 따라 늘지 않는다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Decode a segment</span><span class="t-ko">한 구간 디코딩</span></b><span class="t-en"> — generate a fixed buffer (e.g. 128 tokens) on top of the current fixed-size cache; always pin the last α tokens as observation queries.</span><span class="t-ko"> — 현재 고정 크기 캐시 위에 고정 버퍼(예: 128 토큰)를 생성하고, 마지막 α 토큰은 관측 쿼리로 항상 고정한다.</span></li>
+      <li><b><span class="t-en">Score importance</span><span class="t-ko">중요도 채점</span></b><span class="t-en"> — attention from the α observation tokens to all candidates, max-pooled across GQA groups and over a recent window for stability.</span><span class="t-ko"> — α 관측 토큰에서 모든 후보로의 어텐션을 GQA 그룹·최근 윈도에 걸쳐 max-pool해 안정화한다.</span></li>
+      <li><b><span class="t-en">Score redundancy</span><span class="t-ko">중복도 채점</span></b><span class="t-en"> — cosine similarity between normalised keys; high average similarity → high redundancy, with recent neighbours exempted.</span><span class="t-ko"> — 정규화된 key 간 코사인 유사도로, 평균 유사도가 높으면 중복도 ↑(최근 이웃은 면제).</span></li>
+      <li><b><span class="t-en">Joint select</span><span class="t-ko">결합 선택</span></b><span class="t-en"> — rank by Z = λ·importance − (1−λ)·redundancy, keep the top B−α plus the α observation tokens, evict the rest.</span><span class="t-ko"> — Z = λ·중요도 − (1−λ)·중복도로 정렬해 상위 B−α개와 관측 토큰 α개를 남기고 나머지는 축출한다.</span></li>
+      <li><b><span class="t-en">Repeat to the end</span><span class="t-ko">끝까지 반복</span></b><span class="t-en"> — the cache stays at the fixed budget for the whole generation, freeing memory for far larger batches (the real throughput win).</span><span class="t-ko"> — 캐시는 생성 내내 고정 예산을 유지해 훨씬 큰 배치를 위한 메모리를 확보한다(실제 처리량 이득의 원천).</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><b>Attention ≠ importance for reasoning traces.</b> Repetition makes redundant tokens <em>look</em> important; adding a cheap redundancy signal (key cosine similarity) is what unlocks near-lossless compression where attention-only methods plateau at ~60%.</p><p class="t-ko"><b>추론 과정에서 어텐션은 중요도가 아니다.</b> 반복이 중복 토큰을 중요해 <em>보이게</em> 만든다 — 값싼 중복 신호(key 코사인 유사도)를 더한 것이, 어텐션-only가 ~60%에서 정체하던 지점에서 무손실에 가까운 압축을 연다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The bottleneck for reasoning models is <b>decode-time</b>, not prefill. R-KV holds the cache at a fixed budget regardless of how long the model rambles, so memory is decoupled from chain-of-thought length.</p><p class="t-ko">추론 모델의 병목은 prefill이 아니라 <b>디코딩 시점</b>이다. R-KV는 모델이 얼마나 길게 늘어놓든 캐시를 고정 예산으로 유지해, 메모리를 사고 사슬 길이와 분리한다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><b>Throughput comes from batch size, not per-request speed.</b> At batch 1 R-KV is barely faster; the 6.6–9.2× gains come from fitting 9–13× more sequences in the same memory — useful for RL rollouts and serving, less so for single-stream latency.</p><p class="t-ko"><b>처리량은 요청당 속도가 아니라 배치 크기에서 온다.</b> 배치 1에선 거의 빠르지 않다 — 6.6–9.2× 이득은 같은 메모리에 9–13× 더 많은 시퀀스를 담는 데서 나온다. RL 롤아웃·서빙엔 유용, 단일 스트림 지연엔 덜하다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> Evidence is narrow — only two DeepSeek-R1 <em>distilled</em> models (Llama-8B, Qwen-14B) on two <em>math</em> benchmarks, one of which (AIME-24) has just 30 problems, so the eye-catching "beats FullKV / 105%" results sit on a high-variance, single-domain footing (no code, agentic, or general long-context reasoning; no non-distilled R1). The redundancy term also matters less than the framing suggests: the paper's own Figure 5 notes that once λ≥0.1 the score is "dominated by attention," and λ=0.1 is the chosen setting — so R-KV is mostly stabilised attention with a small redundancy nudge. Finally, the method is acknowledged to be incompatible with paged attention and standard serving stacks, which tempers the headline throughput numbers in production. (Preprint — NeurIPS-formatted with a paper checklist, but no confirmed acceptance.)</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 근거가 좁다 — DeepSeek-R1 <em>distilled</em> 모델 둘(Llama-8B, Qwen-14B)을 <em>수학</em> 벤치마크 둘에서만 평가했고 그중 AIME-24는 문제가 30개뿐이라, 눈길을 끄는 "FullKV 초과 / 105%" 결과는 분산이 크고 단일 도메인에 기댄다(코드·에이전트·일반 롱컨텍스트 추론 없음, 비distilled R1 없음). 중복 항의 비중도 프레이밍보다 작다 — 논문의 Figure 5는 λ≥0.1이면 점수가 "어텐션에 지배된다"고 적고 있고 선택된 설정이 바로 λ=0.1이다. 즉 R-KV는 대체로 안정화된 어텐션에 약간의 중복 보정을 더한 셈이다. 끝으로 저자들도 paged attention·표준 서빙 스택과 호환되지 않음을 인정하므로, 프로덕션에서의 처리량 헤드라인은 다소 보수적으로 봐야 한다. (프리프린트 — NeurIPS 양식·체크리스트는 있으나 채택 확인 안 됨.)</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2505.24133">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2505.24133">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2505.24133">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2505.24133">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist exhausted · fallback pick · redundancy-aware KV-cache compression for reasoning models</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-24.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 소진 · 폴백 선정 · 추론 모델용 중복 인식 KV 캐시 압축</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-24.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
