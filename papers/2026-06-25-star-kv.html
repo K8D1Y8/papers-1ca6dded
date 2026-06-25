@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · STAR-KV</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank KV Cache</span><span class="t-ko">Model Compression · Low-rank KV Cache</span></span>
+      <span>2026 · 06 · 25</span>
+    </div>
+    <h1>STAR-KV: Low-Rank KV Cache Compression via Soft Thresholding for Adaptive Rank Control<br>
+      <span class="glow t-en">— Stop guessing the rank: learn how many singular values to keep, per head and per block</span>
+      <span class="glow t-ko">— 랭크를 더 이상 추측하지 말 것: 헤드별·블록별로 남길 특이값 개수를 학습으로 정한다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Priyansh Bhatnagar</b> <span class="t-en">· Ashkan Moradifirouzabadi (equal) · senior author Mingu Kang · with Jungwook Choi</span><span class="t-ko"> · Ashkan Moradifirouzabadi (공동 1저자) · 책임저자 Mingu Kang · 공저 Jungwook Choi</span></span>
+      <span>🏛 UC San Diego · Dnotitia · Hanyang University</span>
+      <span>🗓 Jun 2026</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.08382">arXiv:2606.08382</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">STAR-KV makes low-rank KV-cache compression <b>rank-adaptive</b>: a differentiable soft-threshold learns how many singular values to keep for <b>each attention head and each decoder block</b>, a hybrid decomposition keeps reconstruction cheap, and an outlier-aware Hadamard quantizer stacks on top — reaching <b>75% low-rank</b> compression (and <b>20×</b> overall with 3.2-bit quantization) at near-baseline accuracy, with <b>3.1× higher</b> generation throughput and 128K context on a single RTX 4090.</p>
+    <p class="t-ko">STAR-KV는 저랭크 KV 캐시 압축을 <b>랭크-적응형</b>으로 만든다: 미분 가능한 소프트 임계값이 <b>어텐션 헤드마다·디코더 블록마다</b> 남길 특이값 개수를 학습하고, 하이브리드 분해로 복원 비용을 낮추며, 이상치 인지 Hadamard 양자화를 위에 쌓는다 — <b>75% 저랭크</b> 압축(3.2-bit 양자화와 합치면 전체 <b>20×</b>)을 기준 정확도 근처에서 달성하고, 생성 처리량을 <b>3.1×</b> 높이며 단일 RTX 4090에서 128K 컨텍스트를 띄운다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">For long-context LLMs the bottleneck is no longer the weights — it is the KV cache. On LLaMA-3.1-8B at 128K tokens (batch 4) the KV cache is <b>81% of 85 GB</b> of FP16 memory.</p>
+    <p class="lead t-ko">긴 컨텍스트 LLM에서 병목은 더 이상 가중치가 아니라 KV 캐시다. LLaMA-3.1-8B의 128K 토큰(배치 4)에서 KV 캐시가 FP16 메모리 85 GB의 <b>81%</b>를 차지한다.</p>
+    <p class="t-en">Low-rank decomposition compresses the <i>channel</i> dimension of keys and values by projecting them into a smaller latent space — and unlike token eviction it discards no tokens. But prior low-rank methods (Palu, ReCalKV) pick ranks with fixed budgets or heuristics like Fisher scores, so they stall at 30–50% compression before accuracy collapses, and they pay reconstruction latency at inference. STAR-KV's bet is that <b>the rank itself should be learned</b>: different heads and blocks tolerate compression very differently, and a model can discover that profile from a tiny calibration set. Making rank a learnable, differentiable quantity is what unlocks aggressive 75% compression while staying near-lossless — and the paper ships Triton kernels so the savings are real, not just on paper.</p>
+    <p class="t-ko">저랭크 분해는 키·밸류를 작은 잠재 공간으로 투영해 <i>채널</i> 차원을 압축한다 — 토큰 제거와 달리 어떤 토큰도 버리지 않는다. 그러나 기존 저랭크 기법(Palu, ReCalKV)은 고정 예산이나 Fisher 점수 같은 휴리스틱으로 랭크를 정해, 정확도가 무너지기 전 30–50% 압축에서 멈추고 추론 시 복원 지연을 치른다. STAR-KV의 베팅은 <b>랭크 자체를 학습</b>해야 한다는 것이다: 헤드와 블록마다 압축 내성이 크게 다르며, 작은 캘리브레이션 셋으로 그 프로파일을 발견할 수 있다. 랭크를 학습 가능한 미분량으로 만드는 것이 75%의 공격적 압축을 거의 무손실로 가능케 하며, 논문은 Triton 커널까지 제공해 절감이 실제로 구현되게 한다.</p>
+    <figure class="fig">
+      <img src="fig/2606.08382/x3.png" alt="A projection matrix W is decomposed by SVD into U, Sigma, V-transpose; a learnable threshold alpha on the diagonal of Sigma suppresses singular values below alpha, leaving a lower adaptive rank.">
+      <figcaption class="t-en"><b>Fig 3.</b> The core mechanism. Each key/value projection is factored as W = UΣVᵀ; a <b>learnable threshold α</b> on the diagonal of Σ suppresses every singular value σ&lt;α, so the effective rank — how many columns survive — is set adaptively rather than fixed in advance.</figcaption>
+      <figcaption class="t-ko"><b>Fig 3.</b> 핵심 메커니즘. 각 키/밸류 투영을 W = UΣVᵀ로 분해하고, Σ 대각의 <b>학습 가능한 임계값 α</b>가 σ&lt;α인 모든 특이값을 억제한다 — 즉 유효 랭크(살아남는 열 개수)가 사전에 고정되지 않고 적응적으로 결정된다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.08382</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">75%</div><div class="l"><span class="t-en">low-rank KV compression at near-baseline accuracy (60.49 vs 61.53)</span><span class="t-ko">저랭크 KV 압축, 기준 정확도 근처 (60.49 vs 61.53)</span></div></div>
+      <div class="stat"><div class="n">20×</div><div class="l"><span class="t-en">overall KV reduction with 3.2-bit mixed-precision quant</span><span class="t-ko">3.2-bit 혼합정밀 양자화 합산 전체 KV 절감</span></div></div>
+      <div class="stat"><div class="n">6.9×</div><div class="l"><span class="t-en">attention speedup (64K ctx, RTX 4090, 75% + 4-bit)</span><span class="t-ko">어텐션 가속 (64K 컨텍스트, RTX 4090, 75% + 4-bit)</span></div></div>
+      <div class="stat"><div class="n">3.1×</div><div class="l"><span class="t-en">avg end-to-end generation throughput gain</span><span class="t-ko">평균 종단 생성 처리량 향상</span></div></div>
+      <div class="stat"><div class="n">+21.6</div><div class="l"><span class="t-en">accuracy points, adaptive vs static rank @75% (38.88→60.49)</span><span class="t-ko">정확도 포인트, 적응형 vs 정적 랭크 @75% (38.88→60.49)</span></div></div>
+      <div class="stat"><div class="n">&lt;6</div><div class="l"><span class="t-en">GPU-hours to calibrate (3,000 samples)</span><span class="t-ko">캘리브레이션 GPU 시간 (샘플 3,000개)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Overall compression vs accuracy</span><span class="t-ko">전체 압축률 vs 정확도</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 4.</b> Overall KV-cache compression vs zero-shot accuracy on LongChat-7B-v1.5 (ARC-e/c, OBQA, PIQA, HellaSwag). STAR-KV reaches 20× — well past prior quantization baselines — at comparable accuracy.</caption>
+        <caption class="t-ko"><b>Table 4.</b> LongChat-7B-v1.5에서 전체 KV 압축률 vs 제로샷 정확도 (ARC-e/c, OBQA, PIQA, HellaSwag). STAR-KV는 비슷한 정확도에서 기존 양자화 기법을 크게 넘는 20×에 도달.</caption>
+        <thead><tr><th>Method</th><th>Avg KV bits</th><th>Overall compression</th><th>Zero-shot acc (%)</th></tr></thead>
+        <tbody>
+          <tr><td>KIVI</td><td>3.16-bit</td><td>5.1×</td><td>60.30</td></tr>
+          <tr><td>KVQuant</td><td>2.33-bit</td><td>6.9×</td><td>58.00</td></tr>
+          <tr><td>Palu + 4-bit</td><td>4-bit</td><td>8.0×</td><td>56.71</td></tr>
+          <tr><td><b>STAR-KV</b> (75% + quant)</td><td>3.2-bit</td><td class="up">20×</td><td class="up">59.18</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in three moves</span><span class="t-ko">세 가지 핵심 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">adaptive rank</span>
+        <h3><span class="t-en">Soft-threshold rank control</span><span class="t-ko">소프트 임계값 랭크 제어</span></h3>
+        <p class="t-en">A hard "keep top-k singular values" cut is non-differentiable, so you can't learn it. STAR-KV replaces it with a soft threshold T(σ;α)=σ·tanh(s(σ−α)) that smoothly zeroes small singular values while staying differentiable. A separate threshold α is learned <b>per head for keys and per block for values</b>, trained with a KD loss (match the uncompressed model's output distribution) plus an exponentially decaying compression loss Σe⁻ᵅ that pushes ranks down early, then relaxes so the model can recover quality.</p>
+        <p class="t-ko">"상위 k개 특이값만 유지" 같은 하드 절단은 미분 불가능해 학습할 수 없다. STAR-KV는 이를 소프트 임계값 T(σ;α)=σ·tanh(s(σ−α))로 바꿔 작은 특이값을 부드럽게 0으로 보내면서 미분 가능하게 만든다. 임계값 α는 <b>키는 헤드별, 밸류는 블록별</b>로 따로 학습하며, KD 손실(압축 안 한 모델의 출력 분포와 일치)과 지수 감쇠 압축 손실 Σe⁻ᵅ를 함께 쓴다 — 초반엔 랭크를 강하게 누르고 점차 완화해 품질을 회복시킨다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">cheap reconstruction</span>
+        <h3><span class="t-en">Hybrid K/V decomposition</span><span class="t-ko">하이브리드 K/V 분해</span></h3>
+        <p class="t-en">Reconstructing the latent KV at inference costs FLOPs. Joint decomposition (all heads together) is more accurate but ~h× more expensive than head-wise. STAR-KV's analysis shows values are more error-sensitive and keys are not, so it uses <b>joint decomposition for values</b> — fusing the value reconstruction matrix into the output projection (weight absorption) to erase the overhead — and <b>head-wise decomposition for keys</b>, which is cheap to begin with. Accuracy where it matters, low latency everywhere.</p>
+        <p class="t-ko">추론 시 잠재 KV 복원은 FLOPs를 쓴다. 결합 분해(모든 헤드 합침)는 더 정확하지만 헤드별보다 ~h배 비싸다. 분석 결과 밸류는 오차에 민감하고 키는 둔감하므로, STAR-KV는 <b>밸류엔 결합 분해</b>를 쓰되 밸류 복원 행렬을 출력 투영에 흡수(weight absorption)해 오버헤드를 없애고, <b>키엔 헤드별 분해</b>를 써 애초에 저렴하게 둔다. 필요한 곳엔 정확도, 어디서든 낮은 지연.</p>
+      </div>
+      <div class="m">
+        <span class="tag">stack quantization</span>
+        <h3><span class="t-en">Outlier-aware Hadamard quant</span><span class="t-ko">이상치 인지 Hadamard 양자화</span></h3>
+        <p class="t-en">After low-rank projection the latent channels are scaled by singular values — a few become high-magnitude outliers that wreck uniform quantization. STAR-KV splits the latent dimension into an outlier block (top ~20%) and an inlier block, applies an independent Hadamard rotation to each to smooth magnitudes, then quantizes mixed-precision (4-bit outliers, 3-bit inliers). The Hadamard factors are fused into the up/down projections, so it adds <b>zero runtime overhead</b> — and pushes overall compression to 20×.</p>
+        <p class="t-ko">저랭크 투영 뒤 잠재 채널은 특이값으로 스케일되어 일부가 큰 이상치가 되고, 이는 균일 양자화를 망가뜨린다. STAR-KV는 잠재 차원을 이상치 블록(상위 ~20%)과 정상 블록으로 나눠 각각 독립 Hadamard 회전으로 크기를 평탄화한 뒤 혼합정밀(이상치 4-bit, 정상 3-bit)로 양자화한다. Hadamard 인자는 up/down 투영에 흡수되어 <b>런타임 오버헤드 0</b>이며, 전체 압축률을 20×까지 끌어올린다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Decompose offline. </span><span class="t-ko">오프라인 분해. </span></b><span class="t-en">SVD-factor every key/value projection W = UΣVᵀ — no runtime change yet.</span><span class="t-ko">모든 키/밸류 투영을 W = UΣVᵀ로 SVD 분해한다 — 아직 런타임 변화는 없다.</span></li>
+      <li><b><span class="t-en">Learn the thresholds. </span><span class="t-ko">임계값 학습. </span></b><span class="t-en">On a 3,000-sample calibration set (&lt;6 GPU-h), train per-head/per-block α with the soft-threshold operator under KD + compression loss.</span><span class="t-ko">3,000개 캘리브레이션 셋(&lt;6 GPU시간)에서 KD + 압축 손실로 헤드별/블록별 α를 소프트 임계값과 함께 학습한다.</span></li>
+      <li><b><span class="t-en">Hard-truncate &amp; absorb. </span><span class="t-ko">하드 절단 &amp; 흡수. </span></b><span class="t-en">Apply a hard threshold offline to fix each head/block rank; absorb value reconstruction into the output projection and Hadamard factors into the up/down projections.</span><span class="t-ko">오프라인에서 하드 임계값을 적용해 헤드/블록 랭크를 확정하고, 밸류 복원은 출력 투영에, Hadamard 인자는 up/down 투영에 흡수한다.</span></li>
+      <li><b><span class="t-en">Quantize the latent. </span><span class="t-ko">잠재 양자화. </span></b><span class="t-en">Split latent dims into outlier/inlier, Hadamard-rotate each, quantize 4-bit/3-bit mixed precision.</span><span class="t-ko">잠재 차원을 이상치/정상으로 나눠 각각 Hadamard 회전 후 4-bit/3-bit 혼합정밀로 양자화한다.</span></li>
+      <li><b><span class="t-en">Serve with fused kernels. </span><span class="t-ko">융합 커널로 서빙. </span></b><span class="t-en">Triton kernels fuse RoPE + dequant + reconstruction into the attention matmuls and stack head-wise probabilities into a single GEMM for throughput.</span><span class="t-ko">Triton 커널이 RoPE + 역양자화 + 복원을 어텐션 행렬곱에 융합하고, 헤드별 확률을 단일 GEMM으로 묶어 처리량을 높인다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Making rank a <b>learned, fine-grained</b> quantity lets low-rank KV compression reach 75% (and 20× with quant), where fixed-rank methods stall at 30–50%.</p><p class="t-ko">랭크를 <b>학습 가능한 세분화 양</b>으로 만들면 저랭크 KV 압축이 75%(양자화 합산 20×)에 도달한다 — 고정 랭크 기법은 30–50%에서 멈춘다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The compression axes are <b>complementary</b>: low-rank (channel) + quantization (precision) + token eviction (sequence) stack — STAR-KV + H2O hits 84% compression with no accuracy drop.</p><p class="t-ko">압축 축들은 <b>상호 보완적</b>이다: 저랭크(채널) + 양자화(정밀도) + 토큰 제거(시퀀스)가 쌓인다 — STAR-KV + H2O는 정확도 손실 없이 84% 압축.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Adaptive rank is not a small effect: <b>+21.6 points</b> over static at 75% — heterogeneous head/block sensitivity is real, and learnable from data.</p><p class="t-ko">적응형 랭크의 효과는 작지 않다: 75%에서 정적 대비 <b>+21.6 포인트</b> — 헤드/블록별 민감도 차이는 실재하며 데이터로 학습된다.</p></div>
+      <div class="t"><span class="ic">⚙️</span><p class="t-en">Algorithm meets systems: fused Triton kernels turn the savings into <b>3.1× throughput</b> and 128K context on a single RTX 4090, not just a smaller memory number.</p><p class="t-ko">알고리즘과 시스템의 결합: 융합 Triton 커널이 절감을 단지 작은 메모리 수치가 아니라 <b>3.1× 처리량</b>과 단일 RTX 4090의 128K 컨텍스트로 바꾼다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the gains lean on a <b>gradient-based, teacher-distilled calibration</b> run per model — cheaper than full retraining (&lt;6 GPU-h) but still not training-free like eviction/quantization baselines, and rank profiles must be re-learned per architecture. Evaluation also tops out at 7–13B dense models on a single 4090; there are no results on 70B+ or GQA/MLA-native models whose KV is already compact, so it is unclear the channel redundancy STAR-KV exploits survives at that scale. Treat the headline 20× / 6.9× as best-case pairings (specific context lengths and batch sizes, with some baselines estimated due to memory limits).</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 성능은 모델마다 한 번씩 도는 <b>그래디언트 기반·교사 증류 캘리브레이션</b>에 기댄다 — 전체 재학습보다 싸지만(&lt;6 GPU시간) 제거/양자화 베이스라인처럼 학습이 필요 없는 것은 아니며, 랭크 프로파일은 아키텍처마다 다시 학습해야 한다. 평가도 단일 4090의 7–13B 밀집 모델에 그치며, KV가 이미 작은 70B+나 GQA/MLA 기반 모델 결과가 없어 STAR-KV가 노리는 채널 중복이 그 규모에서도 남는지는 불분명하다. 헤드라인 20× / 6.9×는 최적 조합(특정 컨텍스트 길이·배치, 일부 베이스라인은 메모리 한계로 추정치)으로 보는 게 안전하다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.08382">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.08382">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.08382">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.08382">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist exhausted · fallback pick · learnable per-head/per-block rank for low-rank KV-cache compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-25.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 소진 · 폴백 선택 · 저랭크 KV 캐시 압축을 위한 헤드별·블록별 학습 랭크</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-25.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
