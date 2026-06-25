@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · OjaKV: Context-Aware Online Low-Rank KV Cache Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank KV Cache</span><span class="t-ko">Model Compression · Low-rank KV Cache</span></span>
+      <span>2026 · 06 · 26</span>
+    </div>
+    <h1>OjaKV: Context-Aware Online Low-Rank KV Cache Compression<br>
+      <span class="glow t-en">— a KV-cache subspace that <i>moves with the context</i>, updated by Oja's rule</span>
+      <span class="glow t-ko">— 문맥을 따라 <i>스스로 움직이는</i> KV 캐시 부분공간, Oja 규칙으로 갱신</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Yuxuan Zhu, David H. Yang</b> <span class="t-en">(equal) · …Amiri, Murugesan, Pedapati, Pin-Yu Chen</span><span class="t-ko">(공동 1저자) · …Amiri, Murugesan, Pedapati, Pin-Yu Chen</span></span>
+      <span>🏛 Rensselaer Polytechnic Institute · IBM Research</span>
+      <span>🗓 Sep 2025 · rev. Apr 2026</span>
+      <span>📄 <a href="https://arxiv.org/abs/2509.21623">arXiv:2509.21623</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Low-rank KV-cache compression normally learns <b>one fixed subspace offline</b> from calibration data — and falls apart when the live context drifts away from that distribution (dialogue → code, or a reasoning model's long chain-of-thought). <b>OjaKV</b> keeps the subspace <b>alive at inference</b>: it tracks the principal directions of the key/value streams with <b>Oja's rule</b> (streaming PCA) during both prefill and decode, and stores a handful of <b>worst-fitting tokens at full rank</b>. Training-free and FlashAttention-compatible, it cuts the KV cache <b>16 GB → 11.6 GB</b> at 32K tokens and is the <b>only</b> low-rank method that keeps a reasoning model alive (<b>13%</b> on AIME2025 where static baselines score <b>0</b>).</p>
+    <p class="t-ko">저랭크 KV 캐시 압축은 보통 캘리브레이션 데이터로 <b>고정된 부분공간 하나를 오프라인 학습</b>한다 — 그리고 실제 문맥이 그 분포에서 벗어나면(대화→코드, 또는 추론 모델의 긴 사고사슬) 무너진다. <b>OjaKV</b>는 부분공간을 <b>추론 중에 살아있게</b> 유지한다: <b>Oja 규칙</b>(스트리밍 PCA)으로 prefill·decode 양쪽에서 키·밸류 스트림의 주성분 방향을 추적하고, <b>가장 안 맞는 소수 토큰은 풀랭크</b>로 저장한다. 학습이 필요 없고 FlashAttention과 호환되며, 32K 토큰에서 KV 캐시를 <b>16 GB → 11.6 GB</b>로 줄이고, 추론 모델을 살려두는 <b>유일한</b> 저랭크 기법이다(정적 베이스라인이 <b>0</b>점인 AIME2025에서 <b>13%</b>).</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Processing a 32K-token prompt with Llama-3.1-8B in float16 at batch size 4 consumes an extra <b>16 GB</b> for the KV cache — rivalling the size of the model weights themselves.</p>
+    <p class="lead t-ko">Llama-3.1-8B로 32K 토큰 프롬프트를 float16·배치 4로 처리하면 KV 캐시가 <b>16 GB</b>를 추가로 먹는다 — 모델 가중치 크기에 맞먹는다.</p>
+    <p class="t-en">Low-rank projection compresses the <i>channel</i> dimension of keys and values into a small latent space, and unlike token eviction it throws away no tokens. But every prior projection method — EigenAttention, MatryoshkaKV, StaticPCA — learns its subspace <b>once, offline, from a calibration set</b>, implicitly assuming inference prompts look like calibration. They don't: a chatbot moves from prose to code, and a reasoning model's chain-of-thought continuously invents new semantic patterns. As the live distribution drifts, the fixed basis misaligns, projection error explodes, and generation quality collapses. OjaKV's bet is that <b>the subspace must be a moving target</b> — re-estimated cheaply, online, as tokens arrive — and that the few tokens a low-rank basis genuinely cannot represent should simply be kept uncompressed.</p>
+    <p class="t-ko">저랭크 투영은 키·밸류의 <i>채널</i> 차원을 작은 잠재 공간으로 압축하며, 토큰 제거와 달리 어떤 토큰도 버리지 않는다. 그러나 기존 투영 기법(EigenAttention, MatryoshkaKV, StaticPCA)은 부분공간을 <b>캘리브레이션 셋으로 단 한 번, 오프라인</b> 학습하고, 추론 프롬프트가 캘리브레이션과 비슷할 거라 암묵적으로 가정한다. 실제론 그렇지 않다: 챗봇은 산문에서 코드로 옮겨가고, 추론 모델의 사고사슬은 계속 새로운 의미 패턴을 만든다. 실시간 분포가 흘러가면 고정 기저가 어긋나고 투영 오차가 폭발하며 생성 품질이 무너진다. OjaKV의 베팅은 <b>부분공간이 움직이는 표적이어야 한다</b>는 것 — 토큰이 도착할 때마다 온라인으로 값싸게 재추정 — 그리고 저랭크 기저가 정말로 표현 못 하는 소수 토큰은 그냥 비압축으로 두자는 것이다.</p>
+    <figure class="fig">
+      <img src="fig/2509.21623/x1.png" alt="OjaKV method overview: traditional full KV-cache attention vs. low-rank reduced cache, with the Oja update mechanism applied during prefill and decode.">
+      <figcaption class="t-en"><b>Figure 1.</b> OjaKV overview. Keys/values are projected into a compact subspace before caching and reconstructed on the fly so FlashAttention runs unchanged (bottom). The projection basis <code>U_k, U_v</code> is continuously re-estimated by <b>Oja's rule</b> during both prefill and decode (right); a few high-reconstruction-error tokens are kept at full rank ("keep important tokens full rank").</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> OjaKV 개요. 키·밸류를 작은 부분공간으로 투영해 캐시에 저장하고, 어텐션 직전에 즉석 복원해 FlashAttention을 그대로 돌린다(하단). 투영 기저 <code>U_k, U_v</code>는 prefill·decode 양쪽에서 <b>Oja 규칙</b>으로 계속 재추정되며(우측), 복원 오차가 큰 소수 토큰은 풀랭크로 유지한다("중요 토큰은 풀랭크로").</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2509.21623</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">16→11.6 GB</div><div class="l"><span class="t-en">KV cache at 32K tokens (Llama-3.1-8B, ~40% saved)</span><span class="t-ko">32K 토큰 KV 캐시 (Llama-3.1-8B, 약 40% 절감)</span></div></div>
+      <div class="stat"><div class="n">54.2 vs 28.4</div><div class="l"><span class="t-en">RULER-16K avg: OjaKV-PF vs StaticPCA (0.8× budget)</span><span class="t-ko">RULER-16K 평균: OjaKV-PF vs StaticPCA (0.8× 예산)</span></div></div>
+      <div class="stat"><div class="n">13.0%</div><div class="l"><span class="t-en">AIME2025 reasoning kept — only method above 0%</span><span class="t-ko">AIME2025 추론 유지 — 유일하게 0% 초과</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">fine-tuning steps — training-free, FlashAttention-compatible</span><span class="t-ko">파인튜닝 0 — 학습 불필요·FlashAttention 호환</span></div></div>
+      <div class="stat"><div class="n">+18 pts</div><div class="l"><span class="t-en">RULER gain from hybrid full-rank tokens (38.9→57)</span><span class="t-ko">하이브리드 풀랭크 토큰의 RULER 기여 (38.9→57)</span></div></div>
+      <div class="stat"><div class="n">10–13%</div><div class="l"><span class="t-en">per-token decode overhead from online Oja updates</span><span class="t-ko">온라인 Oja 갱신의 토큰당 디코드 오버헤드</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">RULER retrieval — where the subspace shift hurts most</span><span class="t-ko">RULER 검색 — 부분공간 어긋남이 가장 아픈 곳</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> Retrieval accuracy (%) on RULER, LongChat-7b-v1.5-32k, 16K-token prompt. S2 = single-NIAH, MK1 = multi-key, MV = multi-value. Eigen-N runs out of memory (FlashAttention-incompatible); Palu collapses to 0.</caption>
+        <caption class="t-ko"><b>Table 3.</b> RULER 검색 정확도(%), LongChat-7b-v1.5-32k, 16K 프롬프트. S2=단일 NIAH, MK1=다중 키, MV=다중 값. Eigen-N은 OOM(FlashAttention 비호환), Palu는 0으로 붕괴.</caption>
+        <thead><tr><th>Method (0.8×)</th><th>S2</th><th>MK1</th><th>MV</th><th>Avg</th></tr></thead>
+        <tbody>
+          <tr><td>Full KV</td><td>99</td><td>91</td><td>71</td><td>74</td></tr>
+          <tr><td>StaticPCA</td><td>17</td><td>23</td><td>25.75</td><td>28.37</td></tr>
+          <tr><td>Palu</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>OjaKV</td><td>50</td><td>40</td><td>44.75</td><td>44.85</td></tr>
+          <tr><td><b>OjaKV-PF</b></td><td>92</td><td>76</td><td>47</td><td class="up">54.19</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" width="100%" role="img" aria-label="OjaKV data flow">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#9aa4b2"/>
+          </marker>
+        </defs>
+        <style>
+          .bx{fill:#11161d;stroke:#2b3440;stroke-width:1.5;rx:9}
+          .tx{fill:#dfe6ef;font:600 13px system-ui,sans-serif}
+          .sm{fill:#9aa4b2;font:500 11px system-ui,sans-serif}
+          .hi{fill:#1a2330;stroke:#3b82f6;stroke-width:1.6}
+          .oj{fill:#1c1622;stroke:#c084fc;stroke-width:1.6}
+          .ln{stroke:#9aa4b2;stroke-width:1.6;fill:none}
+        </style>
+        <rect class="bx" x="12" y="100" width="120" height="48" rx="9"/>
+        <text class="tx" x="72" y="122" text-anchor="middle">New K,V</text>
+        <text class="sm" x="72" y="139" text-anchor="middle">per step</text>
+
+        <rect class="bx hi" x="178" y="100" width="138" height="48" rx="9"/>
+        <text class="tx" x="247" y="121" text-anchor="middle">Project · Uᵀ</text>
+        <text class="sm" x="247" y="138" text-anchor="middle">compressed K̃, Ṽ → cache</text>
+
+        <rect class="bx" x="362" y="100" width="138" height="48" rx="9"/>
+        <text class="tx" x="431" y="121" text-anchor="middle">Reconstruct</text>
+        <text class="sm" x="431" y="138" text-anchor="middle">K̂=K̃Uᵀ, V̂=ṼUᵀ</text>
+
+        <rect class="bx" x="548" y="100" width="150" height="48" rx="9"/>
+        <text class="tx" x="623" y="121" text-anchor="middle">FlashAttention</text>
+        <text class="sm" x="623" y="138" text-anchor="middle">math-equivalent</text>
+
+        <line class="ln" x1="132" y1="124" x2="176" y2="124" marker-end="url(#ar)"/>
+        <line class="ln" x1="316" y1="124" x2="360" y2="124" marker-end="url(#ar)"/>
+        <line class="ln" x1="500" y1="124" x2="546" y2="124" marker-end="url(#ar)"/>
+
+        <!-- Oja update loop -->
+        <rect class="bx oj" x="178" y="20" width="138" height="46" rx="9"/>
+        <text class="tx" x="247" y="40" text-anchor="middle">Oja update</text>
+        <text class="sm" x="247" y="57" text-anchor="middle">U ← U+η(xxᵀU−UUᵀxxᵀU)</text>
+        <path class="ln" d="M247 100 L247 68" marker-end="url(#ar)"/>
+        <path class="ln" d="M280 66 C320 80 300 96 270 100" marker-end="url(#ar)"/>
+
+        <!-- hybrid full-rank tokens -->
+        <rect class="bx hi" x="362" y="186" width="200" height="44" rx="9"/>
+        <text class="tx" x="462" y="206" text-anchor="middle">Top-k high-error tokens</text>
+        <text class="sm" x="462" y="222" text-anchor="middle">kept full-rank (hybrid storage)</text>
+        <path class="ln" d="M247 148 C247 186 330 200 360 206" marker-end="url(#ar)"/>
+        <path class="ln" d="M562 208 C600 200 623 176 623 148" marker-end="url(#ar)"/>
+      </svg>
+      <div class="cap t-en">Keys/values are projected to a low-rank cache and reconstructed for FlashAttention; the basis <b>U</b> is continuously refreshed by Oja's rule, and the worst-fitting tokens bypass compression entirely.</div>
+      <div class="cap t-ko">키·밸류는 저랭크 캐시로 투영했다가 FlashAttention용으로 복원된다; 기저 <b>U</b>는 Oja 규칙으로 계속 갱신되고, 가장 안 맞는 토큰은 압축을 건너뛴다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas that make it work</span><span class="t-ko">작동을 만드는 두 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">online PCA</span>
+        <h3>Oja's rule tracks the moving subspace</h3>
+        <p class="t-en">The optimal rank-<i>r</i> basis is the top eigenvectors of the key/value covariance — but re-running SVD over the whole history every step is hopeless. OjaKV uses <b>Oja's rule</b>, a streaming stochastic-gradient PCA update <code>U ← U + η(xxᵀU − UUᵀxxᵀU)</code>: the first term pulls toward high-variance directions, the second keeps <code>U</code> roughly orthonormal. It runs as a batch update on pooled tokens during prefill, and every <b>T=32</b> steps (conservative learning rate, QR re-orthonormalization) during decode.</p>
+        <p class="t-ko">최적 랭크-<i>r</i> 기저는 키·밸류 공분산의 상위 고유벡터지만, 매 스텝 전체 히스토리에 SVD를 다시 돌리는 건 불가능하다. OjaKV는 스트리밍 SGD-PCA 갱신인 <b>Oja 규칙</b> <code>U ← U + η(xxᵀU − UUᵀxxᵀU)</code>을 쓴다: 첫 항은 고분산 방향으로 당기고, 둘째 항은 <code>U</code>를 대략 정규직교로 유지한다. prefill에선 풀링된 토큰에 배치 갱신, decode에선 <b>T=32</b> 스텝마다(보수적 학습률·QR 재정규직교) 갱신한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">hybrid storage</span>
+        <h3>Keep the tokens the basis can't fit</h3>
+        <p class="t-en">Not all tokens compress equally. For each token OjaKV measures the residual <code>r_t = k_t − U_kU_kᵀk_t</code>, weights it by attention from the last <b>w=32</b> queries, and stores the <b>top-k highest-error tokens at full rank</b>. A Cauchy–Schwarz bound shows each attention logit's error is capped by <code>‖q‖‖r_t‖/√d</code>, so retaining the high-residual tokens directly bounds the worst case — unlike positional "attention-sink" heuristics with no such guarantee. The ablation says this is the <b>dominant</b> contributor: 38.9 → 57 on RULER.</p>
+        <p class="t-ko">모든 토큰이 똑같이 압축되진 않는다. OjaKV는 토큰마다 잔차 <code>r_t = k_t − U_kU_kᵀk_t</code>를 재고, 최근 <b>w=32</b> 쿼리의 어텐션으로 가중한 뒤, <b>오차 상위 top-k 토큰을 풀랭크</b>로 저장한다. Cauchy–Schwarz 한계로 각 어텐션 로짓 오차가 <code>‖q‖‖r_t‖/√d</code>로 묶이므로, 고잔차 토큰을 남기면 최악의 경우가 직접 제한된다 — 보장 없는 위치 기반 "어텐션 싱크" 휴리스틱과 다르다. 절제 실험은 이게 <b>지배적</b> 기여라 한다: RULER 38.9 → 57.</p>
+      </div>
+      <div class="m">
+        <span class="tag">drop-in</span>
+        <h3>Training-free & FlashAttention-equivalent</h3>
+        <p class="t-en">Attention in the low-rank space is mathematically identical to attention on the reconstructed tensors (<code>QK̂ᵀ = Q̃K̃ᵀ</code>), proven as a lemma — so OjaKV caches compressed <code>K̃, Ṽ</code> and rebuilds <code>K̂, V̂</code> before an unmodified FlashAttention call. No fine-tuning, no model surgery. Empirically Eigen-N and StaticPCA produce identical short-context scores, confirming the equivalence holds in practice.</p>
+        <p class="t-ko">저랭크 공간의 어텐션은 복원 텐서의 어텐션과 수학적으로 동일하며(<code>QK̂ᵀ = Q̃K̃ᵀ</code>, 보조정리로 증명) — 그래서 OjaKV는 압축된 <code>K̃, Ṽ</code>를 캐시하고 변경 없는 FlashAttention 호출 직전에 <code>K̂, V̂</code>를 복원한다. 파인튜닝도, 모델 수술도 없다. 실제로 Eigen-N과 StaticPCA의 단문맥 점수가 동일해 등가성이 성립함을 확인한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Initialize per-head bases. </span><span class="t-ko">헤드별 기저 초기화. </span></b><span class="t-en">Compact SVD on calibration features picks the smallest rank meeting an energy threshold; the layer's rank is set to the max across its heads. Q and K share <code>U_k</code>; V gets its own <code>U_v</code>.</span><span class="t-ko">캘리브레이션 특징에 compact SVD로 에너지 임계값을 넘는 최소 랭크를 고르고, 층의 랭크는 헤드 최댓값으로 둔다. Q·K는 <code>U_k</code> 공유, V는 <code>U_v</code> 별도.</span></li>
+      <li><b><span class="t-en">Prefill: batch-update + select. </span><span class="t-ko">Prefill: 배치 갱신 + 선택. </span></b><span class="t-en">Average-pool the prompt K/V, run one Oja batch update, QR-re-orthonormalize, then compute residuals weighted by the recent query window and flag the top-k high-error tokens to keep full-rank.</span><span class="t-ko">프롬프트 K/V를 평균 풀링하고 Oja 배치 갱신 1회 → QR 재정규직교, 이후 최근 쿼리 창으로 가중한 잔차를 계산해 오차 상위 top-k 토큰을 풀랭크로 표시한다.</span></li>
+      <li><b><span class="t-en">Decode: buffer, then refresh every T. </span><span class="t-ko">Decode: 버퍼링 후 T마다 갱신. </span></b><span class="t-en">New KV pairs are buffered; every T=32 steps a conservative Oja update (+QR) adapts the basis to the drifting context, then the buffer clears. Only compressed <code>K̃, Ṽ</code> stay in cache.</span><span class="t-ko">새 KV 쌍은 버퍼에 쌓이고, T=32 스텝마다 보수적 Oja 갱신(+QR)이 흘러가는 문맥에 기저를 맞춘 뒤 버퍼를 비운다. 캐시엔 압축된 <code>K̃, Ṽ</code>만 남는다.</span></li>
+      <li><b><span class="t-en">Attend via reconstruction. </span><span class="t-ko">복원으로 어텐션. </span></b><span class="t-en">Before each attention step, reconstruct <code>K̂=K̃U_kᵀ, V̂=ṼU_vᵀ</code> on the fly and hand them to standard FlashAttention — high-error tokens enter at full rank.</span><span class="t-ko">각 어텐션 직전 <code>K̂=K̃U_kᵀ, V̂=ṼU_vᵀ</code>를 즉석 복원해 표준 FlashAttention에 넘긴다 — 고오차 토큰은 풀랭크로 들어간다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">A low-rank cache doesn't have to be static. Treating the subspace as an <b>online estimation problem</b> (Oja's rule) makes projection-based compression robust to distribution shift — the regime where static SVD bases silently fail.</p><p class="t-ko">저랭크 캐시가 정적일 필요는 없다. 부분공간을 <b>온라인 추정 문제</b>(Oja 규칙)로 다루면 투영 기반 압축이 분포 변화에 견딘다 — 정적 SVD 기저가 조용히 실패하는 영역이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The bigger lever is hybrid storage: just keeping the few tokens a low-rank basis can't represent (+18 RULER points) beats the adaptive update (+3). "Compress most, protect the hard ones" is the reusable lesson.</p><p class="t-ko">더 큰 지렛대는 하이브리드 저장이다: 저랭크 기저가 표현 못 하는 소수 토큰만 지켜도(RULER +18점) 적응 갱신(+3)보다 효과가 크다. "대부분 압축, 어려운 건 보호"가 재사용 가능한 교훈.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">It's orthogonal to token eviction — stack OjaKV (channel) on SnapKV (sequence) and memory drops to <b>30%</b> with accuracy flat (43.1→43.3). The two axes of KV compression multiply.</p><p class="t-ko">토큰 제거와 직교한다 — OjaKV(채널)를 SnapKV(시퀀스) 위에 쌓으면 메모리가 <b>30%</b>로 떨어지고 정확도는 그대로(43.1→43.3). KV 압축의 두 축이 곱해진다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline RULER numbers belong to <b>OjaKV-PF</b>, which runs <i>full-rank</i> attention during prefill — so it saves decode-time memory but not prefill compute, an apples-vs-oranges framing against the truly-compressed OjaKV (44.85, not 54.19). And on the hardest benchmarks the comparison effectively reduces to OjaKV-vs-StaticPCA: Palu scores literal 0 and Eigen-N OOMs. There's no comparison to quantization (KIVI/KVQuant) or to the closest cited priors (MatryoshkaKV, ReCalKV), all models are 7–8B, and a 43.3%→13.0% reasoning gap remains far from solved.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 RULER 수치는 prefill에서 <i>풀랭크</i> 어텐션을 쓰는 <b>OjaKV-PF</b>의 것 — decode 메모리는 아끼지만 prefill 연산은 아끼지 않아, 진짜 압축본 OjaKV(54.19가 아니라 44.85)와 비교하면 사과-오렌지다. 또 가장 어려운 벤치마크에선 사실상 OjaKV vs StaticPCA 싸움이다: Palu는 그대로 0, Eigen-N은 OOM. 양자화(KIVI/KVQuant)나 가장 가까운 선행연구(MatryoshkaKV, ReCalKV)와의 비교가 없고, 모델은 전부 7–8B이며, 43.3%→13.0%의 추론 격차는 해결과 거리가 멀다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2509.21623">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2509.21623">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2509.21623">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2509.21623">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Wishlist exhausted · fallback pick · online (Oja's rule) low-rank KV-cache compression that adapts to context shift, a distinct mechanism from static-SVD methods</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-06-26.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 소진 · 폴백 선택 · 문맥 변화에 적응하는 온라인(Oja 규칙) 저랭크 KV 캐시 압축, 정적 SVD 기법과 구별되는 메커니즘</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · auto-generated 2026-06-26.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
