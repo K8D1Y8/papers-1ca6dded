@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Cache-to-Cache: Direct Semantic Communication Between LLMs</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent Systems · Latent Communication</span><span class="t-ko">Multi-Agent Systems · Latent Communication</span></span>
+      <span>2026·06·29</span>
+    </div>
+    <h1>Cache-to-Cache: Direct Semantic Communication Between LLMs<br>
+      <span class="glow t-en">— LLMs talk through KV-cache fusion, not text — richer and ~2× faster</span>
+      <span class="glow t-ko">— 텍스트 대신 KV-캐시를 직접 융합해 LLM끼리 소통 — 더 풍부하고 약 2배 빠르게</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Tianyu Fu</b> <span class="t-en">, Zihan Min, Guohao Dai, Wanli Ouyang, Yu Wang (corresp.) et al.</span><span class="t-ko"> 외 — 교신저자 Yu Wang</span></span>
+      <span>🏛 Tsinghua University · Infinigence AI · SJTU · CUHK · Shanghai AI Lab</span>
+      <span>🗓 Oct 2025</span>
+      <span>📄 <a href="https://arxiv.org/abs/2510.03215">arXiv:2510.03215</a></span>
+      <span>🏆 ICLR 2026</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Today, when two LLMs collaborate they pass <b>text</b> back and forth — a low-bandwidth, ambiguous, token-by-token bottleneck. <b>Cache-to-Cache (C2C)</b> lets a "Sharer" model inject its <b>KV-cache</b> (its rich internal understanding) directly into a "Receiver" model through a small trained <b>Cache Fuser</b>, with both LLMs frozen. The Receiver then answers conditioned on the fused cache. Across four benchmarks C2C beats single-model by <b>6.4–14.2%</b> and beats text-to-text communication by <b>3.1–5.4%</b> while running on average <b>~2.5× faster</b>.</p>
+    <p class="t-ko">지금은 두 LLM이 협업할 때 <b>텍스트</b>를 주고받는다 — 대역폭이 낮고 모호하며 토큰 하나씩 생성·해석해야 하는 병목이다. <b>Cache-to-Cache(C2C)</b>는 "Sharer" 모델의 <b>KV-캐시</b>(풍부한 내부 이해)를 작은 학습형 <b>Cache Fuser</b>를 통해 "Receiver" 모델에 직접 주입한다(두 LLM은 동결). 그런 다음 Receiver가 융합된 캐시를 바탕으로 답한다. 4개 벤치마크에서 C2C는 단일 모델 대비 <b>6.4–14.2%</b>, 텍스트 통신 대비 <b>3.1–5.4%</b> 높은 정확도를 내면서 평균 <b>약 2.5배</b> 빠르다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Multi-LLM systems are everywhere — coder + writer, big model + small model, generalist + specialist. But they all talk in one impoverished language: text.</p>
+    <p class="lead t-ko">멀티-LLM 시스템은 도처에 있다 — 코더+작가, 큰 모델+작은 모델, 제너럴리스트+전문가. 그러나 이들은 모두 빈약한 하나의 언어, 즉 텍스트로만 대화한다.</p>
+    <p class="t-en">Text-to-text (T2T) communication has three structural problems. (1) <b>Information bottleneck</b>: a model's high-dimensional internal state must be squeezed into a linear token stream, losing nuance one model "knows" but cannot phrase. (2) <b>Ambiguity</b>: natural language is vague (the paper's example: a coder fails to convey that <code>&lt;p&gt;</code> is a paragraph separator). (3) <b>Latency</b>: every exchange needs token-by-token decoding by the sender and re-encoding by the receiver. C2C asks a simple but radical question — <i>can LLMs communicate beyond text?</i> — and answers yes, by treating the KV-cache as the communication channel.</p>
+    <p class="t-ko">텍스트(T2T) 통신에는 세 가지 구조적 문제가 있다. (1) <b>정보 병목</b>: 모델의 고차원 내부 상태를 선형 토큰 열로 압축해야 하므로, 모델이 "알지만" 말로 표현하지 못하는 미묘함이 손실된다. (2) <b>모호성</b>: 자연어는 애매하다(논문 예시: 코더가 <code>&lt;p&gt;</code>가 문단 구분자임을 전달하지 못함). (3) <b>지연</b>: 매 교환마다 송신자의 토큰 단위 디코딩과 수신자의 재인코딩이 필요하다. C2C는 단순하지만 급진적인 질문 — <i>LLM은 텍스트를 넘어 소통할 수 있는가?</i> — 을 던지고, KV-캐시를 통신 채널로 삼아 "그렇다"고 답한다.</p>
+    <figure class="fig">
+      <img src="fig/2510.03215/x1.png" alt="Text-to-Text vs Cache-to-Cache communication overview">
+      <figcaption class="t-en"><b>Fig 1.</b> (a) Text-to-Text (T2T): the Sharer must <i>generate</i> explicit text, which the Receiver then re-reads. (b) Cache-to-Cache (C2C): the Sharer's KV-cache is projected and merged directly into the Receiver's cache by a Cache Fuser — no intermediate text.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> (a) T2T: Sharer가 명시적 텍스트를 <i>생성</i>하고 Receiver가 이를 다시 읽는다. (b) C2C: Sharer의 KV-캐시를 Cache Fuser가 Receiver의 캐시에 직접 투영·병합한다 — 중간 텍스트가 없다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2510.03215</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">6.4–14.2%</div><div class="l"><span class="t-en">Accuracy gain over single (Receiver-only) model</span><span class="t-ko">단일(Receiver-only) 모델 대비 정확도 향상</span></div></div>
+      <div class="stat"><div class="n">3.1–5.4%</div><div class="l"><span class="t-en">Accuracy gain over text-to-text communication</span><span class="t-ko">텍스트(T2T) 통신 대비 정확도 향상</span></div></div>
+      <div class="stat"><div class="n">~2.5×</div><div class="l"><span class="t-en">Average speedup vs text-to-text</span><span class="t-ko">텍스트 통신 대비 평균 속도 향상</span></div></div>
+      <div class="stat"><div class="n">90 ms</div><div class="l"><span class="t-en">Cache fusion time (vs 1312 ms T2T token decode)</span><span class="t-ko">캐시 융합 시간 (T2T 토큰 디코딩 1312 ms 대비)</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">LLM weights trained — both frozen, only the fuser learns</span><span class="t-ko">학습되는 LLM 파라미터 — 둘 다 동결, fuser만 학습</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Core results</span><span class="t-ko">핵심 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 4 (excerpt).</b> Accuracy (%) on four benchmarks. Receiver = Qwen3-0.6B, Sharer = Qwen2.5-0.5B. C2C consistently beats both the lone Receiver and text-to-text communication.</caption>
+        <caption class="t-ko"><b>표 4 (발췌).</b> 4개 벤치마크 정확도(%). Receiver = Qwen3-0.6B, Sharer = Qwen2.5-0.5B. C2C는 단일 Receiver와 T2T 통신을 모두 일관되게 능가한다.</caption>
+        <thead><tr><th>Benchmark</th><th>Receiver-only</th><th>Text-to-Text</th><th>Cache-to-Cache</th></tr></thead>
+        <tbody>
+          <tr><td>MMLU-Redux</td><td>35.53</td><td>41.03</td><td class="up">42.92</td></tr>
+          <tr><td>OpenBookQA</td><td>39.20</td><td>44.00</td><td class="up">52.60</td></tr>
+          <tr><td>ARC-Challenge</td><td>41.04</td><td>49.48</td><td class="up">54.52</td></tr>
+          <tr><td>C-Eval</td><td>32.04</td><td>35.88</td><td class="up">41.77</td></tr>
+          <tr><td><b>Average</b></td><td><b>36.95</b></td><td><b>42.60</b></td><td class="up"><b>47.95</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">A 0.6B Receiver, helped by a 0.5B Sharer's cache, lands ~11 points above going solo and ~5 points above passing text — and the per-query latency for C2C (0.30–0.40 s) is close to the lone Receiver, while T2T costs 0.8–1.5 s.</p>
+    <p class="t-ko">0.6B Receiver가 0.5B Sharer의 캐시 도움을 받아 단독 대비 약 11점, 텍스트 전달 대비 약 5점 높아진다 — 게다가 C2C의 질의당 지연(0.30–0.40초)은 단독 Receiver에 가깝고, T2T는 0.8–1.5초가 든다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 230" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto" font-family="system-ui,sans-serif">
+        <defs>
+          <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#888"/></marker>
+        </defs>
+        <!-- Sharer cache -->
+        <rect x="20" y="24" width="150" height="46" rx="8" fill="#3b4a6b" opacity="0.18" stroke="#3b4a6b"/>
+        <text x="95" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#cfe">Sharer KV-cache</text>
+        <text x="95" y="61" text-anchor="middle" font-size="11" fill="#9ab">specialist understanding</text>
+        <!-- Receiver cache -->
+        <rect x="20" y="158" width="150" height="46" rx="8" fill="#6b3b4a" opacity="0.18" stroke="#6b3b4a"/>
+        <text x="95" y="178" text-anchor="middle" font-size="13" font-weight="700" fill="#fcd">Receiver KV-cache</text>
+        <text x="95" y="195" text-anchor="middle" font-size="11" fill="#caa">its own context</text>
+        <!-- Fuser box -->
+        <rect x="250" y="74" width="210" height="80" rx="10" fill="#2e7d6b" opacity="0.16" stroke="#2e7d6b"/>
+        <text x="355" y="96" text-anchor="middle" font-size="13" font-weight="700" fill="#7fe">Cache Fuser (trained)</text>
+        <text x="355" y="116" text-anchor="middle" font-size="11" fill="#9d9">1 · Project + concat</text>
+        <text x="355" y="132" text-anchor="middle" font-size="11" fill="#9d9">2 · Dynamic head weighting</text>
+        <text x="355" y="148" text-anchor="middle" font-size="11" fill="#9d9">3 · Learnable per-layer gate</text>
+        <!-- Fused -->
+        <rect x="540" y="90" width="158" height="48" rx="8" fill="#2e7d6b" opacity="0.28" stroke="#2e7d6b"/>
+        <text x="619" y="110" text-anchor="middle" font-size="13" font-weight="700" fill="#aef">Fused cache</text>
+        <text x="619" y="127" text-anchor="middle" font-size="11" fill="#9cc">Receiver decodes →</text>
+        <!-- arrows -->
+        <path d="M170,47 C210,47 215,95 248,100" fill="none" stroke="#888" stroke-width="1.6" marker-end="url(#ah)"/>
+        <path d="M170,181 C210,181 215,132 248,128" fill="none" stroke="#888" stroke-width="1.6" marker-end="url(#ah)"/>
+        <path d="M460,114 L536,114" fill="none" stroke="#888" stroke-width="1.6" marker-end="url(#ah)"/>
+        <!-- residual note -->
+        <text x="355" y="186" text-anchor="middle" font-size="10.5" fill="#789" font-style="italic">residual: Fused = Receiver + Fuser(Receiver, Sharer)</text>
+      </svg>
+      <div class="cap t-en">C2C fuses the two caches per layer with a residual connection, so the Sharer's signal <i>augments</i> rather than overwrites the Receiver — and a learnable gate decides, layer by layer, whether to inject at all.</div>
+      <div class="cap t-ko">C2C는 레이어마다 잔차(residual) 연결로 두 캐시를 융합해, Sharer 신호가 Receiver를 덮어쓰지 않고 <i>보강</i>한다 — 그리고 학습형 게이트가 레이어별로 주입 여부를 결정한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas that make it work</span><span class="t-ko">작동을 가능케 한 두 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">Oracle motivation</span>
+        <h3>KV-caches carry transferable semantics</h3>
+        <p class="t-en">Two probing experiments justify the whole idea. <b>Cache enrichment</b>: prefilling on exemplars then dropping their cache (keeping only a semantically "enriched" question cache of the <i>same length</i>) lifts accuracy 58.4 → 62.3% — so quality, not length, is what helps. <b>Cache transformation</b>: an MLP can project one model's cache into another's representation space (t-SNE shows it lands inside the target subspace) — so caches are convertible across heterogeneous LLMs.</p>
+        <p class="t-ko">두 가지 탐침 실험이 아이디어 전체를 정당화한다. <b>캐시 보강</b>: 예시로 prefill 후 그 캐시를 버리고 <i>같은 길이</i>의 의미적으로 "풍부해진" 질문 캐시만 남기면 정확도가 58.4 → 62.3%로 오른다 — 즉 길이가 아니라 품질이 도움을 준다. <b>캐시 변환</b>: MLP가 한 모델의 캐시를 다른 모델의 표현 공간으로 투영할 수 있다(t-SNE상 타깃 부분공간 안에 위치) — 즉 이종 LLM 간에 캐시가 변환 가능하다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Cache Fuser</span>
+        <h3>Project → weight → gate, with a residual</h3>
+        <p class="t-en">Per layer, the fuser concatenates Receiver and Sharer caches, projects them, applies an <b>input-aware dynamic head weighting</b>, and adds the result back to the Receiver cache (<b>residual</b>). A <b>learnable per-layer gate</b> (Gumbel-sigmoid, binary at inference) decides whether that layer gets the Sharer's signal at all — because the oracle showed some layers help and others hurt. Both LLMs stay frozen; only fusers train, with plain next-token loss.</p>
+        <p class="t-ko">레이어마다 fuser는 Receiver·Sharer 캐시를 이어붙여 투영하고, <b>입력 인지 동적 헤드 가중</b>을 적용한 뒤 그 결과를 Receiver 캐시에 더한다(<b>잔차</b>). <b>학습형 레이어별 게이트</b>(Gumbel-sigmoid, 추론 시 이진)가 해당 레이어에 Sharer 신호를 넣을지 결정한다 — 오라클 실험에서 일부 레이어는 도움, 일부는 해가 되기 때문. 두 LLM은 동결, fuser만 일반 next-token 손실로 학습한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Independent prefill.</span><span class="t-ko">독립 prefill.</span></b><span class="t-en"> Sharer and Receiver each encode the same context, producing their own KV-caches in parallel.</span><span class="t-ko"> Sharer와 Receiver가 같은 맥락을 각자 인코딩해 자기 KV-캐시를 병렬로 만든다.</span></li>
+      <li><b><span class="t-en">Token &amp; layer alignment.</span><span class="t-ko">토큰·레이어 정렬.</span></b><span class="t-en"> Different tokenizers/depths are reconciled: tokens are re-encoded with maximal-coverage selection; layers are matched <i>terminal-first</i> (align final layers, then work backward), since deep layers hold higher-level semantics.</span><span class="t-ko"> 서로 다른 토크나이저·깊이를 맞춘다: 토큰은 maximal-coverage 방식으로 재인코딩하고, 레이어는 <i>마지막부터(terminal-first)</i> 정렬한다(깊은 레이어가 상위 의미를 담으므로).</span></li>
+      <li><b><span class="t-en">Fuse per layer.</span><span class="t-ko">레이어별 융합.</span></b><span class="t-en"> The Cache Fuser injects the aligned Sharer cache into the Receiver cache via projection, dynamic weighting, and a gated residual add.</span><span class="t-ko"> Cache Fuser가 정렬된 Sharer 캐시를 투영·동적 가중·게이트 잔차 덧셈으로 Receiver 캐시에 주입한다.</span></li>
+      <li><b><span class="t-en">Decode once.</span><span class="t-ko">한 번에 디코딩.</span></b><span class="t-en"> The Receiver generates its answer conditioned on the fused cache — no Sharer text is ever produced, so fusion (~90 ms) replaces token-by-token decoding (~1300 ms).</span><span class="t-ko"> Receiver가 융합 캐시를 바탕으로 답을 생성한다 — Sharer 텍스트는 전혀 만들지 않으므로, 융합(약 90 ms)이 토큰 단위 디코딩(약 1300 ms)을 대체한다.</span></li>
+      <li><b><span class="t-en">Train only the fuser.</span><span class="t-ko">fuser만 학습.</span></b><span class="t-en"> Freeze both LLMs; backprop next-token loss through the fuser modules only, on a general SFT mix.</span><span class="t-ko"> 두 LLM을 동결하고, 일반 SFT 데이터로 next-token 손실을 fuser 모듈에만 역전파한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">A working existence proof that LLMs can communicate in <b>latent space</b> (KV-cache), not just text — richer signal <i>and</i> parallel transfer, beating T2T on both accuracy and speed.</p><p class="t-ko">LLM이 텍스트가 아닌 <b>잠재 공간</b>(KV-캐시)에서 소통할 수 있다는 실증 — 더 풍부한 신호 <i>그리고</i> 병렬 전송으로 정확도·속도 모두 T2T를 능가.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Gains come from <b>complementary understanding</b> across heterogeneous models, not extra capacity: an ablation shows a <i>different</i> Sharer beats an identical-model Sharer, and effective rank of the Receiver cache rises after fusion.</p><p class="t-ko">향상은 추가 용량이 아니라 이종 모델 간 <b>상호보완적 이해</b>에서 온다: ablation에서 <i>다른</i> Sharer가 동일 모델 Sharer를 능가하고, 융합 후 Receiver 캐시의 effective rank가 증가.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">It even lets a weak instruction-tuned Receiver borrow knowledge from a strong <i>base</i> model that can't follow instructions in T2T at all — fusion sidesteps the "can't phrase it" problem.</p><p class="t-ko">지시를 못 따르는 강한 <i>base</i> 모델의 지식을, 약한 instruction-tuned Receiver가 빌려 쓸 수 있게 한다 — 융합이 "말로 표현 못 함" 문제를 우회.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> A fuser is trained <i>per Sharer–Receiver pair</i>, and naive scaling to N models needs O(N²) fusers — the O(N) shared-latent-space variant is only sketched as future work. Gains also hinge on Sharer quality (a noisy Sharer can drag a strong Receiver down), and the headline results use small 0.6B Receivers where there is generous headroom; how much survives at 14B-scale Receivers on hard tasks is far less established.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> fuser는 <i>Sharer–Receiver 쌍마다</i> 학습해야 하고, N개 모델로 단순 확장하면 O(N²)개의 fuser가 필요하다 — O(N) 공유 잠재공간 변형은 향후 과제로 스케치만 되어 있다. 또한 향상은 Sharer 품질에 의존하며(잡음 많은 Sharer는 강한 Receiver를 끌어내릴 수 있음), 대표 결과는 여유가 큰 작은 0.6B Receiver를 쓴다 — 어려운 과제에서 14B급 Receiver에 얼마나 남을지는 훨씬 덜 검증됐다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2510.03215">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2510.03215">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2510.03215">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2510.03215">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Fallback · topic: Multi-Agent Latent Communication · policy: recent conference accepts first</b> · venue: ICLR 2026.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-06-29.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Fallback · 주제: 멀티에이전트 잠재 통신 · 정책: 최근 학회 accept 우선</b> · venue: ICLR 2026.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-06-29.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
