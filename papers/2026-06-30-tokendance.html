@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · TokenDance: Scaling Multi-Agent LLM Serving via Collective KV Cache Sharing</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">LLM Serving · KV Cache Compression · Multi-Agent</span><span class="t-ko">LLM Serving · KV Cache Compression · Multi-Agent</span></span>
+      <span>2026·06·30</span>
+    </div>
+    <h1>TokenDance: Scaling Multi-Agent LLM Serving via Collective KV Cache Sharing<br>
+      <span class="glow t-en">— Store the diff, not the copy: one A100 serves up to 2.7× more agents</span>
+      <span class="glow t-ko">— 복사본 대신 차이만 저장 — A100 한 장이 최대 2.7배 더 많은 에이전트를 서빙</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Zhuohang Bian</b> <span class="t-en">, Feiyang Wu, Chengrui Zhang, Hangcheng Dong, Yun Liang, Youwei Zhuo (corresp.)</span><span class="t-ko">, Feiyang Wu, Chengrui Zhang, Hangcheng Dong, Yun Liang 외 — 교신저자 Youwei Zhuo</span></span>
+      <span>🏛 Peking University · SJTU</span>
+      <span>🗓 Apr 2026</span>
+      <span>📄 <a href="https://arxiv.org/abs/2604.03143">arXiv:2604.03143</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Multi-agent LLM apps (social simulations, agent swarms) run in synchronized rounds where a scheduler gathers every agent's output and re-broadcasts the combined context — the <b>All-Gather pattern</b>. So in an <i>N</i>-agent round, all <i>N</i> prompts contain the <b>same shared blocks</b>, just at different offsets, producing <i>N</i> near-identical KV caches that swamp GPU memory. <b>TokenDance</b> lifts the unit of optimization from the request to the whole round: (1) a <b>KV Collector</b> reuses each shared block <i>once</i> for the round instead of once per agent, and (2) <b>Diff-Aware Storage</b> keeps one full "Master" cache and encodes every sibling as a block-sparse diff — <b>11–17× compression</b>. Result: up to <b>2.7× more concurrent agents</b> under the same latency SLO, <b>2.3×</b> lower end-to-end latency, and <b>94%</b> less KV cache storage vs vLLM prefix caching, with <b>identical output</b> to the PIC backend it builds on.</p>
+    <p class="t-ko">멀티에이전트 LLM 앱(사회 시뮬레이션, 에이전트 군집)은 동기화된 라운드로 실행된다 — 스케줄러가 모든 에이전트의 출력을 모아 합친 맥락을 다시 뿌리는 <b>All-Gather 패턴</b>이다. 그래서 <i>N</i>개 에이전트 라운드에서 <i>N</i>개의 프롬프트가 위치만 다를 뿐 <b>똑같은 공유 블록</b>을 담고, 거의 동일한 KV 캐시 <i>N</i>개가 GPU 메모리를 잡아먹는다. <b>TokenDance</b>는 최적화 단위를 요청에서 라운드 전체로 끌어올린다: (1) <b>KV Collector</b>가 공유 블록을 에이전트마다가 아니라 라운드당 <i>한 번</i> 재사용하고, (2) <b>Diff-Aware Storage</b>가 하나의 "Master" 캐시만 온전히 두고 나머지는 블록-희소 차이(diff)로 인코딩한다 — <b>11–17배 압축</b>. 결과적으로 같은 지연 SLO에서 <b>최대 2.7배 더 많은 동시 에이전트</b>, 종단 지연 <b>2.3배</b> 감소, vLLM prefix caching 대비 KV 캐시 저장량 <b>94%</b> 절감, 그러면서 기반이 된 PIC와 <b>동일한 출력</b>을 낸다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">For multi-agent systems, GPU memory — not compute — is the wall. Each agent keeps a KV cache that lives across rounds, and all of them must coexist at once.</p>
+    <p class="lead t-ko">멀티에이전트 시스템에서 벽은 연산이 아니라 GPU 메모리다. 각 에이전트는 라운드 너머까지 유지되는 KV 캐시를 갖고, 그것들이 전부 동시에 메모리에 공존해야 한다.</p>
+    <p class="t-en">The paper's motivating measurement is stark: on one A100-80GB serving Qwen2.5-14B, a 10-session multi-agent workload (250 subrequests) consumes <b>41.5 GiB of KV cache — 99.3% of the pool</b> and hits a P99 latency of 136 s, while 250 <i>independent</i> requests with the same total work use only 24.8 GiB (59.2%). The difference is pure redundancy: independent requests free their cache when done, but multi-agent caches must persist across rounds, and each one redundantly re-stores the same shared context. Existing systems can't see this — vLLM's prefix caching breaks the moment private histories make prompts diverge from position zero, and even position-independent caching (PIC) methods like CacheBlend re-do the same reuse work <i>N</i> separate times and still store <i>N</i> full dense copies. TokenDance's insight: the redundancy is a property of the <b>round</b>, so optimize the round.</p>
+    <p class="t-ko">논문의 동기 측정은 강렬하다: Qwen2.5-14B를 서빙하는 A100-80GB 한 장에서, 10세션 멀티에이전트 워크로드(서브요청 250개)는 <b>KV 캐시 41.5 GiB — 풀의 99.3%</b>를 쓰고 P99 지연 136초에 도달한다. 반면 같은 총량의 <i>독립</i> 요청 250개는 24.8 GiB(59.2%)만 쓴다. 차이는 순수한 중복이다: 독립 요청은 끝나면 캐시를 반납하지만, 멀티에이전트 캐시는 라운드를 가로질러 유지되어야 하고 각각이 똑같은 공유 맥락을 중복 저장한다. 기존 시스템은 이를 못 본다 — vLLM의 prefix caching은 사적 히스토리 때문에 프롬프트가 0번 위치에서 갈리는 순간 깨지고, CacheBlend 같은 위치-독립 캐싱(PIC)조차 같은 재사용 작업을 <i>N</i>번 따로 하고 여전히 <i>N</i>개의 온전한 dense 복사본을 저장한다. TokenDance의 통찰: 중복은 <b>라운드</b>의 속성이니, 라운드를 최적화하라.</p>
+    <figure class="fig">
+      <img src="fig/2604.03143/overview.png" alt="TokenDance overview: round-aware interface, collective KV cache reuse, and diff-aware storage with fused restore">
+      <figcaption class="t-en"><b>Fig 5.</b> TokenDance overview. A <i>round-aware prompt interface</i> preserves block boundaries so the runtime can recognize shared content; <i>collective KV cache reuse</i> amortizes reuse cost across all agents in the round; <i>diff-aware storage</i> with <i>fused restore</i> compresses each agent's cache down to only the inter-agent differences.</figcaption>
+      <figcaption class="t-ko"><b>그림 5.</b> TokenDance 개요. <i>라운드 인지 프롬프트 인터페이스</i>가 블록 경계를 보존해 런타임이 공유 내용을 인식하고, <i>집합적 KV 캐시 재사용</i>이 재사용 비용을 라운드 내 모든 에이전트에 분산하며, <i>fused restore</i>가 결합된 <i>diff 인지 저장</i>이 각 에이전트의 캐시를 에이전트 간 차이만으로 압축한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.03143</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">2.7×</div><div class="l"><span class="t-en">More concurrent agents vs vLLM prefix caching (same SLO)</span><span class="t-ko">vLLM prefix caching 대비 더 많은 동시 에이전트 (같은 SLO)</span></div></div>
+      <div class="stat"><div class="n">11–17×</div><div class="l"><span class="t-en">KV cache compression (Master-Mirror): 11.2× at 7B, 17.5× at 14B</span><span class="t-ko">KV 캐시 압축(Master-Mirror): 7B 11.2×, 14B 17.5×</span></div></div>
+      <div class="stat"><div class="n">91–97%</div><div class="l"><span class="t-en">Pairwise block similarity across sibling caches in a round</span><span class="t-ko">한 라운드 내 형제 캐시들 간 블록 유사도</span></div></div>
+      <div class="stat"><div class="n">1.9×</div><div class="l"><span class="t-en">Prefill speedup over per-request PIC (collective reuse peaks at 2.57×)</span><span class="t-ko">요청별 PIC 대비 prefill 속도 (집합 재사용 최대 2.57×)</span></div></div>
+      <div class="stat"><div class="n">~3.5K</div><div class="l"><span class="t-en">Lines of code (3K Python + 500 CUDA/C++) on vLLM + LMCache</span><span class="t-ko">코드 줄수 (Python 3K + CUDA/C++ 500), vLLM + LMCache 위</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Core results</span><span class="t-ko">핵심 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Headline comparison.</b> Max agents = sustained below the 1500 ms SLO at QPS=16, GenerativeAgents / Qwen2.5-7B, single A100-80GB. TokenDance changes <i>both</i> how caches are computed (collective) and stored (diff).</caption>
+        <caption class="t-ko"><b>핵심 비교.</b> 최대 에이전트 = QPS=16에서 1500 ms SLO 이하로 유지, GenerativeAgents / Qwen2.5-7B, A100-80GB 1장. TokenDance는 캐시의 <i>계산 방식</i>(집합)과 <i>저장 방식</i>(diff)을 모두 바꾼다.</caption>
+        <thead><tr><th>System</th><th>Max agents @ QPS=16</th><th>Per-agent KV storage</th><th>Prefill reuse</th></tr></thead>
+        <tbody>
+          <tr><td>vLLM (prefix caching)</td><td>2</td><td>full dense</td><td>per-request</td></tr>
+          <tr><td>CacheBlend (per-request PIC)</td><td>4</td><td>full dense</td><td>per-request · N passes</td></tr>
+          <tr><td><b>TokenDance</b></td><td class="up"><b>8</b></td><td class="up">block-sparse diff (11–17× smaller)</td><td class="up">collective · 1 pass</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">The advantage compounds with scale: at 1–2 agents all systems are similar (little redundancy), but as agent count rises the baselines pay linearly growing reuse and storage costs while TokenDance pays each shared cost once. The gap is even larger on the 14B model, where each agent's cache is ~2× bigger — TokenDance compresses Mirrors to ~6% of full size, removing the model-size storage penalty.</p>
+    <p class="t-ko">이점은 규모와 함께 누적된다: 에이전트 1–2개에선 (중복이 적어) 모든 시스템이 비슷하지만, 수가 늘수록 베이스라인은 선형으로 커지는 재사용·저장 비용을 치르고 TokenDance는 공유 비용을 한 번만 치른다. 격차는 14B 모델에서 더 크다 — 각 에이전트 캐시가 약 2배 큰데 TokenDance는 Mirror를 원본의 약 6%로 압축해 모델 크기에 따른 저장 페널티를 없앤다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto" font-family="system-ui,sans-serif">
+        <defs>
+          <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#888"/></marker>
+        </defs>
+        <text x="120" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#9ab">Before: N dense caches</text>
+        <!-- three near-identical caches -->
+        <rect x="40" y="34" width="160" height="26" rx="5" fill="#6b3b4a" opacity="0.22" stroke="#6b3b4a"/>
+        <text x="120" y="51" text-anchor="middle" font-size="10.5" fill="#fcd">Agent 1 cache (≈97% shared)</text>
+        <rect x="40" y="66" width="160" height="26" rx="5" fill="#6b3b4a" opacity="0.22" stroke="#6b3b4a"/>
+        <text x="120" y="83" text-anchor="middle" font-size="10.5" fill="#fcd">Agent 2 cache (≈97% shared)</text>
+        <rect x="40" y="98" width="160" height="26" rx="5" fill="#6b3b4a" opacity="0.22" stroke="#6b3b4a"/>
+        <text x="120" y="115" text-anchor="middle" font-size="10.5" fill="#fcd">Agent 3 cache (≈97% shared)</text>
+        <text x="120" y="150" text-anchor="middle" font-size="10.5" fill="#c66" font-style="italic">3 full copies → memory blows up</text>
+        <!-- arrow -->
+        <path d="M210,79 L300,79" fill="none" stroke="#888" stroke-width="1.6" marker-end="url(#ah)"/>
+        <text x="255" y="70" text-anchor="middle" font-size="10" fill="#789">TokenDance</text>
+        <!-- master + diffs -->
+        <text x="500" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#9d9">After: 1 Master + sparse diffs</text>
+        <rect x="320" y="34" width="200" height="40" rx="6" fill="#2e7d6b" opacity="0.28" stroke="#2e7d6b"/>
+        <text x="420" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#aef">Master cache (full)</text>
+        <text x="420" y="66" text-anchor="middle" font-size="10" fill="#9cc">shared blocks, stored once</text>
+        <rect x="320" y="84" width="95" height="24" rx="5" fill="#3b4a6b" opacity="0.30" stroke="#3b4a6b"/>
+        <text x="367" y="100" text-anchor="middle" font-size="10" fill="#cfe">Diff 2 (~10%)</text>
+        <rect x="425" y="84" width="95" height="24" rx="5" fill="#3b4a6b" opacity="0.30" stroke="#3b4a6b"/>
+        <text x="472" y="100" text-anchor="middle" font-size="10" fill="#cfe">Diff 3 (~10%)</text>
+        <text x="420" y="132" text-anchor="middle" font-size="10.5" fill="#9d9" font-style="italic">11–17× smaller · restored on-the-fly</text>
+        <!-- fused restore note -->
+        <rect x="560" y="44" width="140" height="64" rx="8" fill="#2e7d6b" opacity="0.14" stroke="#2e7d6b"/>
+        <text x="630" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7fe">Fused restore</text>
+        <text x="630" y="82" text-anchor="middle" font-size="9.5" fill="#9d9">Master+diff merged</text>
+        <text x="630" y="96" text-anchor="middle" font-size="9.5" fill="#9d9">in GPU transfer</text>
+        <path d="M520,94 L556,80" fill="none" stroke="#888" stroke-width="1.4" marker-end="url(#ah)"/>
+        <!-- collective reuse band -->
+        <rect x="40" y="178" width="660" height="54" rx="8" fill="#3b4a6b" opacity="0.12" stroke="#3b4a6b"/>
+        <text x="60" y="199" font-size="11" font-weight="700" fill="#cfe">Collective reuse (compute side)</text>
+        <text x="60" y="217" font-size="10" fill="#9ab">RoPE rotation + important-position selection done ONCE per round, not N times — 1.9× prefill (peak 2.57×).</text>
+      </svg>
+      <div class="cap t-en">Two redundancies, two fixes. <b>Compute:</b> the shared blocks' reuse work (RoPE + key-diff) is done once per round, not once per agent. <b>Memory:</b> the resulting near-identical caches are stored as one Master plus tiny per-agent diffs, then merged back in-place during the GPU transfer — no dense reconstruction.</div>
+      <div class="cap t-ko">두 가지 중복, 두 가지 해법. <b>연산:</b> 공유 블록의 재사용 작업(RoPE + key-diff)을 에이전트마다가 아니라 라운드당 한 번만 한다. <b>메모리:</b> 거의 동일한 캐시들을 Master 하나 + 에이전트별 작은 diff로 저장하고, GPU 전송 중 제자리에서 다시 합친다 — dense 재구성 없음.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three pieces that make it work</span><span class="t-ko">작동을 가능케 한 세 조각</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">Compute</span>
+        <h3>Collective KV Cache reuse (KV Collector)</h3>
+        <p class="t-en">PIC methods recover shared blocks at any offset, but repeat the work — RoPE rotation and "important-position" selection — once per agent. The KV Collector groups compatible same-round requests, concatenates their Q/K tensors, fires <b>one batched RoPE</b> and <b>one batched key-diff pass</b> on a check layer, finds the diverging positions for the whole group at once, and refreshes only those. Cost scales with <i>differing</i> positions, not agent count.</p>
+        <p class="t-ko">PIC는 임의 오프셋의 공유 블록을 복원하지만 그 작업(RoPE 회전, "중요 위치" 선택)을 에이전트마다 반복한다. KV Collector는 호환되는 같은-라운드 요청을 묶어 Q/K 텐서를 이어붙이고, check 레이어에서 <b>배치 RoPE 한 번</b>과 <b>배치 key-diff 한 번</b>으로 그룹 전체의 발산 위치를 동시에 찾아 그 위치만 갱신한다. 비용은 에이전트 수가 아니라 <i>차이 나는</i> 위치 수에 비례한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Memory</span>
+        <h3>Diff-Aware Storage (Master-Mirror)</h3>
+        <p class="t-en">After reuse, sibling caches differ at only 10–20% of positions. One cache becomes the <b>Master</b> (lowest deviation); every other is a <b>Mirror</b> stored as a <b>block-sparse K/V diff</b> — just the touched block indices and their corrected values. On the GenerativeAgents round only ~53 (7B) / ~60 (14B) of 500–700 blocks differ, giving 11.2× / 17.5× compression. Reads return a lightweight mirror object; materialization is deferred.</p>
+        <p class="t-ko">재사용 후 형제 캐시들은 위치의 10–20%만 다르다. 한 캐시가 <b>Master</b>(편차 최소)가 되고, 나머지는 <b>블록-희소 K/V diff</b>로 저장되는 <b>Mirror</b>다 — 바뀐 블록 인덱스와 보정값만 기록. GenerativeAgents 라운드에서 500–700 블록 중 약 53개(7B)/약 60개(14B)만 다르며, 11.2×/17.5× 압축을 준다. 읽기는 가벼운 mirror 객체를 반환하고 실체화는 미룬다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Retrieval</span>
+        <h3>Fused Diff Restore</h3>
+        <p class="t-en">Compression is useless if restore is slow. A naive path would load the full Master, copy it, then overwrite — an extra dense round trip. TokenDance instead applies the sparse diff <b>inside the layerwise GPU transfer</b> that already moves cache data: <b>ping-pong buffers</b> load Master chunks while the other buffer is corrected in place, RoPE-recovered, and written to paged memory. Blocks identical to the Master bypass correction entirely. 27% faster restore than dense at 10 agents.</p>
+        <p class="t-ko">복원이 느리면 압축은 무용지물이다. 순진한 방식은 Master 전체를 적재·복사 후 덮어쓴다 — dense 왕복이 더해진다. TokenDance는 대신 캐시 데이터를 이미 옮기는 <b>레이어별 GPU 전송 안에서</b> 희소 diff를 적용한다: <b>핑퐁 버퍼</b>가 Master 청크를 적재하는 동안 다른 버퍼는 제자리에서 보정·RoPE 복원되어 paged 메모리에 쓰인다. Master와 동일한 블록은 보정을 건너뛴다. 10 에이전트에서 dense 대비 복원 27% 빠름.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Make the round visible.</span><span class="t-ko">라운드를 보이게.</span></b><span class="t-en"> The application inserts a reserved <code>&lt;TTSEP&gt;</code> separator between logical blocks (private history vs shared outputs). The runtime swaps fixed-size chunk hashing for <b>segment-based hashing</b>, so a shared block is recognized regardless of its absolute position.</span><span class="t-ko"> 앱이 논리 블록(사적 히스토리 vs 공유 출력) 사이에 예약 토큰 <code>&lt;TTSEP&gt;</code>를 넣는다. 런타임은 고정 크기 청크 해싱을 <b>세그먼트 기반 해싱</b>으로 바꿔, 절대 위치와 무관하게 공유 블록을 인식한다.</span></li>
+      <li><b><span class="t-en">Group &amp; collectively reuse.</span><span class="t-ko">묶어서 집합 재사용.</span></b><span class="t-en"> The KV Collector groups same-round requests that meet execution constraints and drives them in lockstep, layerwise — one batched RoPE and one batched key-diff pass identify the important positions for every agent at once; only those are recomputed.</span><span class="t-ko"> KV Collector가 실행 제약을 만족하는 같은-라운드 요청을 묶어 레이어별로 보조를 맞춰 구동한다 — 배치 RoPE 한 번과 key-diff 한 번이 모든 에이전트의 중요 위치를 동시에 찾고, 그것만 재계산한다.</span></li>
+      <li><b><span class="t-en">Pick a Master, diff the rest.</span><span class="t-ko">Master 선정, 나머지는 diff.</span></b><span class="t-en"> The reuse plan names the lowest-deviation cache as Master; each remaining cache is serialized as a block-sparse K/V diff (shared block-index list across K and V to shrink metadata).</span><span class="t-ko"> 재사용 계획이 편차 최소 캐시를 Master로 지정하고, 나머지 캐시는 블록-희소 K/V diff로 직렬화된다(메타데이터 축소를 위해 K·V가 블록 인덱스 목록 공유).</span></li>
+      <li><b><span class="t-en">Restore inside the transfer.</span><span class="t-ko">전송 안에서 복원.</span></b><span class="t-en"> At decode, ping-pong buffers load the Master while merging each Mirror's diff in place and recovering RoPE positions, writing straight to paged KV cache — no separate dense Mirror is ever built.</span><span class="t-ko"> 디코딩 시 핑퐁 버퍼가 Master를 적재하면서 각 Mirror의 diff를 제자리 병합하고 RoPE 위치를 복원해 paged KV 캐시에 바로 쓴다 — 별도의 dense Mirror는 만들지 않는다.</span></li>
+      <li><b><span class="t-en">Stay drop-in.</span><span class="t-ko">교체형 유지.</span></b><span class="t-en"> The collective amortization is backend-agnostic (the prototype uses CacheBlend's selective recomputation), and per-cache eviction/quantization (H2O, KIVI) can still be layered on top — TokenDance removes cross-cache redundancy first.</span><span class="t-ko"> 집합적 분산은 백엔드 독립적이고(프로토타입은 CacheBlend의 선택적 재계산 사용), 캐시별 eviction/quantization(H2O, KIVI)을 그 위에 얹을 수 있다 — TokenDance는 캐시 간 중복을 먼저 제거한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Optimize the <b>round</b>, not the request. Treating the All-Gather round as the unit turns <i>N</i> near-identical caches into one Master plus tiny diffs and one shared reuse pass — <b>2.7× agent capacity</b>, 2.3× lower latency, 94% less storage on a single A100.</p><p class="t-ko">요청이 아니라 <b>라운드</b>를 최적화하라. All-Gather 라운드를 단위로 보면 거의 동일한 캐시 <i>N</i>개가 Master 하나 + 작은 diff들과 공유 재사용 한 번이 된다 — A100 한 장에서 <b>에이전트 용량 2.7배</b>, 지연 2.3배 감소, 저장 94% 절감.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">It's <b>orthogonal and (mostly) lossless</b>: TokenDance dedupes <i>across</i> sibling caches, so single-cache quantization/eviction still stacks on top, and its output is byte-identical to the PIC method it wraps — the redundancy was structural, not approximate.</p><p class="t-ko">이것은 <b>직교적이고 (대체로) 무손실</b>이다: TokenDance는 형제 캐시들 <i>사이</i>를 중복 제거하므로 단일 캐시 quantization/eviction을 그 위에 쌓을 수 있고, 출력은 감싼 PIC와 바이트 단위로 동일하다 — 중복은 근사가 아니라 구조적인 것이었다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Bigger models win more: 14B compresses <b>17.5×</b> vs 11.2× at 7B because cache tensors grow per token while the number of differing blocks stays ~constant — deduplication erases the model-size storage penalty.</p><p class="t-ko">큰 모델이 더 이득이다: 14B는 7B의 11.2× 대비 <b>17.5×</b> 압축된다 — 토큰당 캐시 텐서는 커지지만 다른 블록 수는 거의 일정하기 때문 — 중복 제거가 모델 크기에 따른 저장 페널티를 지운다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The whole win is contingent on the All-Gather pattern with very high cross-agent overlap (91–97% block similarity). The paper itself notes that as private histories grow, Mirror diffs grow and the storage benefit "diminishes" — but never quantifies the break-even similarity at which 11–17× collapses toward 1×, so workloads with long/divergent histories or non-synchronized topologies are unaddressed. Fidelity is also <i>relative</i>: output matches CacheBlend exactly, but vs vLLM greedy decoding 5 of 8 scenarios still diverge after 3.3–11.9% of rounds (inherited PIC perturbation). Finally it's a cs.DC <b>preprint</b> (placeholder "Conference'17", no peer review yet), evaluated only on two simulation frameworks with ≤10–20 agents on a single A100 — the "tens to hundreds of agents" and multi-GPU framing is extrapolation, not measured.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 모든 이득은 에이전트 간 중복이 매우 높은(블록 유사도 91–97%) All-Gather 패턴에 달려 있다. 논문도 사적 히스토리가 길어지면 Mirror diff가 커져 저장 이득이 "줄어든다"고 인정하지만, 11–17×가 1×로 무너지는 손익분기 유사도는 정량화하지 않는다 — 길거나 발산하는 히스토리, 비동기 토폴로지 워크로드는 다뤄지지 않는다. 충실도도 <i>상대적</i>이다: 출력은 CacheBlend와 정확히 일치하지만, vLLM greedy 대비 8개 시나리오 중 5개가 라운드의 3.3–11.9% 이후 발산한다(상속된 PIC 섭동). 끝으로 이것은 cs.DC <b>프리프린트</b>(자리표시자 "Conference'17", 아직 동료심사 전)로, A100 1장에서 에이전트 ≤10–20개의 시뮬레이션 프레임워크 둘만으로 평가됐다 — "수십~수백 에이전트"와 멀티-GPU 서술은 측정이 아니라 외삽이다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2604.03143">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2604.03143">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2604.03143">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2604.03143">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Fallback · topic: Model Compression / Multi-Agent Latent Communication · policy: recent conference accepts first</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-06-30.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Fallback · 주제: 모델 압축 / 멀티에이전트 잠재 통신 · 정책: 최근 학회 accept 우선</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-06-30.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
