@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · End-to-End Context Compression at Scale (LCLM)</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Long-Context · Soft-Token</span><span class="t-ko">Model Compression · Long-Context · Soft-Token</span></span>
+      <span>2026·07·01</span>
+    </div>
+    <h1>End-to-End Context Compression at Scale<br>
+      <span class="glow t-en">— teach a small encoder to fold long context into a few latent tokens, no KV eviction</span>
+      <span class="glow t-ko">— 작은 인코더가 긴 맥락을 몇 개의 잠재 토큰으로 접는다, KV 제거 없이</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Ang Li</b> <span class="t-en">, S. McLeish, H. Chen, … M. Goldblum, P. Izmailov</span><span class="t-ko">, S. McLeish, H. Chen, … M. Goldblum, P. Izmailov</span></span>
+      <span>🏛 NYU · Columbia · Princeton · UMD · Meta FAIR</span>
+      <span>🗓 2026-06-08</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.09659">arXiv:2606.09659</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Instead of evicting tokens from the KV cache, LCLM trains an <b>encoder–decoder</b> pair end-to-end: a small 0.6B encoder folds every block of N raw tokens into a single learned "latent" vector, and a 4B decoder reads those latents <i>in place of</i> the original context. After 350B tokens of staged training, the result sits on a new Pareto frontier — up to <b>8.8× faster</b> time-to-first-token and far lower peak memory — while keeping <b>81.0%</b> on GSM8K at 16× compression, exactly where KV-eviction baselines collapse to ~0%.</p>
+    <p class="t-ko">KV 캐시에서 토큰을 버리는 대신, LCLM은 <b>인코더–디코더</b> 쌍을 end-to-end로 학습한다: 작은 0.6B 인코더가 원본 토큰 N개 블록마다 하나의 학습된 "잠재" 벡터로 접고, 4B 디코더가 원본 맥락 <i>대신</i> 그 잠재들을 읽는다. 350B 토큰의 단계적 학습 후, 결과는 새로운 파레토 프론티어에 올라선다 — TTFT(첫 토큰까지 시간) 최대 <b>8.8× 빠름</b>, 피크 메모리도 훨씬 낮음 — 그러면서 16× 압축에서 GSM8K <b>81.0%</b>를 유지한다. 바로 그 지점에서 KV 제거 방식들은 ~0%로 무너진다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The dominant way to shrink long-context cost — evict "unimportant" tokens from the KV cache — has two quiet failures: it must prefill the <i>full</i> context first (so it barely speeds up time-to-first-token), and on information-dense inputs it throws away tokens that turn out to matter.</p>
+    <p class="lead t-ko">긴 맥락 비용을 줄이는 주류 방식 — KV 캐시에서 "덜 중요한" 토큰을 제거 — 에는 조용한 두 실패가 있다: <i>전체</i> 맥락을 먼저 프리필해야 하고(그래서 첫 토큰까지 시간은 거의 안 빨라짐), 정보가 빽빽한 입력에서는 정작 필요한 토큰을 버린다.</p>
+    <p class="t-en">LCLM revives an older idea — "soft-token" encoder–decoder compression — and shows that with a careful architecture sweep and a 4-stage, 350B-token training recipe, it finally beats KV-cache compression on the accuracy–latency–memory frontier <i>without</i> being task-specialised. Because compression happens <i>before</i> decoder prefill, higher compression directly cuts decoder compute and memory, and the decoder emits a standard, uniform KV cache that drops straight into vLLM/SGLang.</p>
+    <p class="t-ko">LCLM은 더 오래된 아이디어 — "소프트 토큰" 인코더–디코더 압축 — 을 되살리고, 세심한 아키텍처 스윕과 4단계·350B 토큰 학습 레시피로 그것이 마침내 정확도–지연–메모리 프론티어에서 KV 캐시 압축을 이긴다는 걸 보인다. 그것도 태스크 특화 없이. 압축이 디코더 프리필 <i>이전</i>에 일어나므로 압축률이 높을수록 디코더 연산·메모리가 직접 줄고, 디코더는 vLLM/SGLang에 그대로 꽂히는 표준·균일 KV 캐시를 내놓는다.</p>
+    <figure class="fig">
+      <img src="fig/2606.09659/x1.png" alt="Accuracy vs TTFT scatter plots on RULER and LongBench; LCLM red stars form a new Pareto frontier at low latency, KV baselines appear as vertical lines.">
+      <figcaption class="t-en"><b>Figure 1.</b> Accuracy vs. time-to-first-token on a single H200 (RULER, left; LongBench, right) — all methods share the same Qwen3-4B decoder. LCLM (red ★) lies on a new Pareto frontier: up to 8.8× faster on RULER and 5.2× faster on LongBench. KV-cache baselines appear as near-vertical lines because they prefill the full context regardless of compression ratio.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 단일 H200에서 정확도 vs 첫 토큰까지 시간(RULER 왼쪽, LongBench 오른쪽) — 모든 방법이 같은 Qwen3-4B 디코더를 공유. LCLM(빨간 ★)은 새 파레토 프론티어에 위치: RULER 최대 8.8×, LongBench 최대 5.2× 빠름. KV 캐시 베이스라인은 압축률과 무관하게 전체 맥락을 프리필하므로 거의 수직선으로 나타난다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.09659</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">350B</div><div class="l"><span class="t-en">tokens to train the encoder–decoder end-to-end</span><span class="t-ko">인코더–디코더 end-to-end 학습 토큰</span></div></div>
+      <div class="stat"><div class="n">16×</div><div class="l"><span class="t-en">headline compression ratio (also 8×, 4×)</span><span class="t-ko">대표 압축률 (8×·4×도)</span></div></div>
+      <div class="stat"><div class="n">8.8×</div><div class="l"><span class="t-en">faster TTFT vs KV baselines (RULER 4k)</span><span class="t-ko">KV 베이스라인 대비 빠른 TTFT (RULER 4k)</span></div></div>
+      <div class="stat"><div class="n">81.0</div><div class="l"><span class="t-en">GSM8K @16× — KV-eviction ≈ 0</span><span class="t-ko">GSM8K @16× — KV 제거 방식은 ≈ 0</span></div></div>
+      <div class="stat"><div class="n">4</div><div class="l"><span class="t-en">training stages: adapter → encoder → end-to-end → SFT</span><span class="t-ko">학습 4단계: 어댑터 → 인코더 → end-to-end → SFT</span></div></div>
+      <div class="stat"><div class="n">1M</div><div class="l"><span class="t-en">token context LCLM serves where baselines OOM</span><span class="t-ko">베이스라인이 OOM 나는 곳에서 LCLM이 처리하는 맥락 길이</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The result that separates it from KV eviction</span><span class="t-ko">KV 제거 방식과 갈라지는 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table.</b> Accuracy at <b>16× compression</b>, all on the same Qwen3-4B-Instruct decoder. On dense, short-context GSM8K, every KV-eviction baseline collapses to near-zero while LCLM keeps most of full-KV accuracy. (Excerpt of paper Table 6.)</caption>
+        <caption class="t-ko"><b>표.</b> <b>16× 압축</b>에서의 정확도, 모두 같은 Qwen3-4B-Instruct 디코더. 빽빽하고 짧은 GSM8K에서 KV 제거 베이스라인은 전부 0 근처로 무너지지만 LCLM은 풀-KV 정확도를 대부분 유지한다. (논문 Table 6 발췌.)</caption>
+        <thead><tr><th>Model</th><th>RULER 4k</th><th>LongBench en16</th><th>GSM8K</th></tr></thead>
+        <tbody>
+          <tr><td>Qwen3-4B (full KV)</td><td>94.41</td><td>45.21</td><td>93.25</td></tr>
+          <tr><td><b>LCLM 0.6b-4b (Mean)</b></td><td>75.06</td><td>39.08</td><td class="up">81.05</td></tr>
+          <tr><td>AM-Slow (KV evict)</td><td>69.21</td><td>40.26</td><td>29.80</td></tr>
+          <tr><td>SnapKV-QA (KV evict)</td><td>20.54</td><td>38.52</td><td>0.08</td></tr>
+          <tr><td>ExpAttn (KV evict)</td><td>40.97</td><td>29.44</td><td>0.08</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">
+        <defs>
+          <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#C8714F"/>
+          </marker>
+        </defs>
+        <!-- raw tokens -->
+        <g>
+          <rect x="8" y="80" width="120" height="56" rx="8" fill="#efe9df" stroke="#d8cdbb"/>
+          <text x="68" y="104" text-anchor="middle" font-size="13" font-weight="700" fill="#3a3027">N raw tokens</text>
+          <text x="68" y="122" text-anchor="middle" font-size="11" fill="#6a5f52">long context</text>
+        </g>
+        <line x1="130" y1="108" x2="176" y2="108" stroke="#C8714F" stroke-width="2.2" marker-end="url(#ah)"/>
+        <!-- encoder -->
+        <g>
+          <rect x="180" y="74" width="120" height="68" rx="8" fill="#C8714F"/>
+          <text x="240" y="102" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">Encoder 0.6B</text>
+          <text x="240" y="120" text-anchor="middle" font-size="11" fill="#ffe9df">mean-pool every</text>
+          <text x="240" y="134" text-anchor="middle" font-size="11" fill="#ffe9df">N tokens → 1 latent</text>
+        </g>
+        <line x1="302" y1="108" x2="348" y2="108" stroke="#C8714F" stroke-width="2.2" marker-end="url(#ah)"/>
+        <!-- latents -->
+        <g>
+          <rect x="352" y="86" width="96" height="44" rx="8" fill="#efe9df" stroke="#d8cdbb"/>
+          <text x="400" y="106" text-anchor="middle" font-size="12" font-weight="700" fill="#3a3027">N/16 latents</text>
+          <text x="400" y="122" text-anchor="middle" font-size="10.5" fill="#6a5f52">soft tokens</text>
+        </g>
+        <line x1="450" y1="108" x2="490" y2="108" stroke="#C8714F" stroke-width="2.2" marker-end="url(#ah)"/>
+        <!-- adapter -->
+        <g>
+          <rect x="494" y="90" width="70" height="36" rx="8" fill="#f3ece0" stroke="#C8714F" stroke-dasharray="3 2"/>
+          <text x="529" y="112" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a4f31">MLP adapter</text>
+        </g>
+        <line x1="566" y1="108" x2="602" y2="108" stroke="#C8714F" stroke-width="2.2" marker-end="url(#ah)"/>
+        <!-- decoder -->
+        <g>
+          <rect x="606" y="74" width="106" height="68" rx="8" fill="#3a3027"/>
+          <text x="659" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">Decoder 4B</text>
+          <text x="659" y="118" text-anchor="middle" font-size="10.5" fill="#d8cdbb">reads latents,</text>
+          <text x="659" y="131" text-anchor="middle" font-size="10.5" fill="#d8cdbb">emits standard KV</text>
+        </g>
+        <!-- expand loop -->
+        <path d="M659,142 C659,182 400,196 400,150" fill="none" stroke="#8a7a66" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+        <text x="500" y="190" text-anchor="middle" font-size="10.5" fill="#6a5f52" font-style="italic">agentic EXPAND(i): uncompress one chunk on demand</text>
+        <text x="360" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="#3a3027">Compress before prefill — not evict after</text>
+      </svg>
+      <div class="cap t-en">Compression shrinks the sequence <i>before</i> the decoder prefills, so higher ratios cut decoder compute and memory directly. The decoder still produces an ordinary KV cache; an agent can call EXPAND(i) to recover the exact text of any chunk when fidelity matters.</div>
+      <div class="cap t-ko">압축이 디코더 프리필 <i>이전</i>에 시퀀스를 줄이므로, 압축률이 높을수록 디코더 연산·메모리가 직접 줄어든다. 디코더는 여전히 평범한 KV 캐시를 만들고, 에이전트는 정밀함이 필요할 때 EXPAND(i)로 특정 청크의 원문을 복원할 수 있다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core ideas</span><span class="t-ko">핵심 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">soft-token compression</span>
+        <h3>Latents, not evictions</h3>
+        <p class="t-en">An encoder (initialised from Qwen3-Embedding-0.6B) maps each block of N tokens to one continuous latent via mean pooling over a 1024-token causal window; a tiny MLP adapter rescales it to the decoder's width. The 4B decoder then consumes the short latent sequence as its context — nothing is deleted, the information is re-encoded.</p>
+        <p class="t-ko">인코더(Qwen3-Embedding-0.6B에서 초기화)가 1024 토큰 causal 윈도우에 mean pooling을 적용해 N개 토큰 블록마다 하나의 연속 잠재로 매핑하고, 작은 MLP 어댑터가 그것을 디코더 차원으로 맞춘다. 그러면 4B 디코더가 짧은 잠재 시퀀스를 맥락으로 소비한다 — 아무것도 삭제하지 않고, 정보를 다시 인코딩한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">architecture sweep</span>
+        <h3>What actually wins at scale</h3>
+        <p class="t-en">A from-scratch 38B-token sweep settles the design: mean pooling, encoder window W=1024, <b>causal</b> (not bidirectional) masking, an MLP (not attention) adapter, and an embedding-initialised encoder. A revealing scaling law: enlarging the <i>decoder</i> drops loss far more than enlarging the encoder — the encoder only has to summarise.</p>
+        <p class="t-ko">밑바닥부터 38B 토큰 스윕으로 설계를 확정한다: mean pooling, 인코더 윈도우 W=1024, <b>causal</b>(양방향 아님) 마스킹, MLP(어텐션 아님) 어댑터, 임베딩 초기화 인코더. 흥미로운 스케일링: <i>디코더</i>를 키우는 것이 인코더를 키우는 것보다 손실을 훨씬 많이 줄인다 — 인코더는 요약만 하면 되기 때문.</p>
+      </div>
+      <div class="m">
+        <span class="tag">staged recipe</span>
+        <h3>4 stages + reconstruction</h3>
+        <p class="t-en">Training goes adapter-warmup → encoder → end-to-end → SFT, with three data types: continual-pretrain text with interleaved compressed/uncompressed blocks (loss only on the uncompressed tokens), instruction SFT with compressed prompts, and an auxiliary objective that asks the decoder to reproduce the exact original text — forcing latents to keep fine-grained detail.</p>
+        <p class="t-ko">학습은 어댑터 워밍업 → 인코더 → end-to-end → SFT 순으로 진행되며 세 종류의 데이터를 쓴다: 압축/비압축 블록을 교차한 연속 사전학습 텍스트(손실은 비압축 토큰에만), 압축된 프롬프트의 instruction SFT, 그리고 디코더가 원문을 정확히 재현하게 하는 보조 목적(잠재가 세밀한 디테일을 보존하도록 강제).</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Chunk &amp; encode.</span><span class="t-ko">청크로 나눠 인코딩.</span></b><span class="t-en"> Split the context into 1024-token windows; the encoder mean-pools each block of N tokens into a single latent vector (N/16 latents at 16×).</span><span class="t-ko"> 맥락을 1024 토큰 윈도우로 나누고, 인코더가 N개 토큰 블록마다 mean pooling으로 하나의 잠재 벡터를 만든다(16×면 N/16개 잠재).</span></li>
+      <li><b><span class="t-en">Adapt.</span><span class="t-ko">어댑팅.</span></b><span class="t-en"> A two-layer MLP projects latents from the encoder's hidden size to the decoder's — cheaper and better than an attention adapter.</span><span class="t-ko"> 2층 MLP가 잠재를 인코더 차원에서 디코더 차원으로 투영한다 — 어텐션 어댑터보다 싸고 더 좋다.</span></li>
+      <li><b><span class="t-en">Decode on latents.</span><span class="t-ko">잠재 위에서 디코딩.</span></b><span class="t-en"> The decoder uses the short latent sequence in place of raw tokens and produces a normal, uniform KV cache — so vLLM/SGLang need no special kernels.</span><span class="t-ko"> 디코더가 원본 토큰 대신 짧은 잠재 시퀀스를 쓰고 평범하고 균일한 KV 캐시를 만든다 — 그래서 vLLM/SGLang에 특수 커널이 필요 없다.</span></li>
+      <li><b><span class="t-en">Train in stages.</span><span class="t-ko">단계적으로 학습.</span></b><span class="t-en"> Warm up the adapter, then the encoder, then unfreeze the decoder end-to-end, then SFT — 350B tokens total, with a reconstruction loss for detail fidelity.</span><span class="t-ko"> 어댑터를 워밍업하고, 인코더를, 그다음 디코더를 풀어 end-to-end로, 마지막 SFT — 총 350B 토큰, 디테일 충실도를 위한 재구성 손실 포함.</span></li>
+      <li><b><span class="t-en">Expand on demand (agentic).</span><span class="t-ko">필요 시 펼치기(에이전트).</span></b><span class="t-en"> An agent sees the whole context compressed and calls EXPAND(i) to uncompress just the chunk it needs — pushing needle-in-a-haystack accuracy back toward uncompressed.</span><span class="t-ko"> 에이전트는 전체 맥락을 압축된 채로 보고, 필요한 청크만 EXPAND(i)로 펼친다 — needle-in-a-haystack 정확도를 비압축 수준으로 끌어올린다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><b>Learned compression beats eviction on dense inputs.</b> At 16×, LCLM keeps GSM8K at 81.0 while SnapKV/ExpAttn/KVzip fall to ~0 — eviction discards tokens that turn out to be load-bearing; a trained encoder re-packs them.</p><p class="t-ko"><b>밀집 입력에서는 학습된 압축이 제거를 이긴다.</b> 16×에서 LCLM은 GSM8K 81.0을 유지하지만 SnapKV/ExpAttn/KVzip은 ~0으로 떨어진다 — 제거는 정작 중요한 토큰을 버리고, 학습된 인코더는 그것을 다시 담는다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><b>Real wall-clock and memory wins.</b> Up to 8.8× faster TTFT, memory that plateaus at long context, and serving at 1M tokens where baselines OOM — because the sequence shrinks <i>before</i> prefill, not after.</p><p class="t-ko"><b>실제 시간·메모리 이득.</b> TTFT 최대 8.8× 빠름, 긴 맥락에서 평탄해지는 메모리, 베이스라인이 OOM 나는 1M 토큰에서도 서빙 — 시퀀스가 프리필 <i>이전</i>에 줄어들기 때문.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><b>Production-shaped output.</b> A standard uniform KV cache means it slots into existing engines, and the EXPAND tool turns it into a clean backbone for long-horizon agents.</p><p class="t-ko"><b>실전형 출력.</b> 표준·균일 KV 캐시라 기존 엔진에 그대로 들어가고, EXPAND 도구는 이것을 장기 에이전트의 깔끔한 백본으로 만든다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the wins come with a heavy, decoder-specific bill. You pay 350B tokens of end-to-end training tied to one decoder (Qwen3-4B), unlike training-free KV-eviction that works on any model out of the box — and the 8B-decoder variant did <i>not</i> inherit the gains, hinting the recipe doesn't transfer cleanly. "Preserves capabilities" is also relative: at 16× it still gives up ~19 points of RULER-4k and ~12 of GSM8K versus full KV.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이득에는 무겁고 디코더 특화된 비용이 따른다. 하나의 디코더(Qwen3-4B)에 묶인 350B 토큰의 end-to-end 학습을 치러야 한다 — 어떤 모델에도 바로 적용되는 학습 불필요 KV 제거와 다르다. 게다가 8B 디코더 변형은 이득을 <i>물려받지 못했고</i>, 이는 레시피가 깔끔히 전이되지 않음을 시사한다. "능력 보존"도 상대적이다: 16×에서도 풀 KV 대비 RULER-4k는 약 19점, GSM8K는 약 12점을 여전히 내준다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.09659">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.09659">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.09659">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.09659">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Fallback · topic: Model Compression / Low-rank &amp; latent compression · policy: recent conference accepts first; diversify from a 5-paper KV-eviction streak</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-01.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Fallback · 주제: 모델 압축 / 저랭크·잠재 압축 · 정책: 최근 학회 accept 우선; 최근 5편 연속 KV 제거 주제에서 다양화</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-01.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
