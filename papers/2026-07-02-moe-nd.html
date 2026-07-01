@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · MoE-nD: Per-Layer Routing for Multi-Axis KV Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache · Mixture-of-Experts</span><span class="t-ko">Model Compression · KV Cache · Mixture-of-Experts</span></span>
+      <span>2026·07·02</span>
+    </div>
+    <h1>MoE-nD: Per-Layer Routing for Multi-Axis KV Compression<br>
+      <span class="glow t-en">— every layer gets its own eviction-ratio + bit-width, chosen by an offline greedy solver</span>
+      <span class="glow t-ko">— 모든 레이어가 자기만의 제거율 + 비트폭을 갖고, 오프라인 그리디 솔버가 그걸 고른다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Libo Sun</b> <span class="t-en">, Peixiong He, Po-Wei Harn, Xiao Qin (corresp.)</span><span class="t-ko">, Peixiong He, Po-Wei Harn, Xiao Qin (교신저자)</span></span>
+      <span>🏛 Auburn University · National Central University</span>
+      <span>🗓 2026-04-21</span>
+      <span>📄 <a href="https://arxiv.org/abs/2604.17695">arXiv:2604.17695</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">The KV cache is a 4-D tensor and every compression trick — token <b>eviction</b>, <b>quantization</b>, low-rank, cross-layer sharing — acts on a single axis, applied <i>uniformly</i> to all layers. MoE-nD shows that's leaving accuracy on the table: at aggressive eviction the per-layer accuracy cost varies by <b>548–689×</b>. It treats each axis-setting as an "expert" and uses an offline <b>greedy solver</b> (over a 5 kB sensitivity table, &lt;50 ms on CPU) to route each layer to its own (keep-ratio, K-bits, V-bits) under one global budget. Result: it matches the uncompressed 1.9 GB baseline at <b>14× compression (136 MB)</b> while every comparable single- or uniform-axis method stays under 8/100. An honest ablation pins the win on per-layer <i>eviction</i> routing (+15 pts on AIME), not quantization routing (≈0).</p>
+    <p class="t-ko">KV 캐시는 4차원 텐서이고, 모든 압축 기법 — 토큰 <b>제거(eviction)</b>, <b>양자화</b>, 저랭크, 레이어 간 공유 — 는 하나의 축에만 작용하며 모든 레이어에 <i>균일하게</i> 적용된다. MoE-nD는 이것이 정확도를 낭비한다고 지적한다: 공격적 제거에서 레이어별 정확도 비용은 <b>548–689×</b>까지 벌어진다. 이 논문은 각 축 설정을 하나의 "전문가(expert)"로 보고, 오프라인 <b>그리디 솔버</b>(5 kB 민감도 테이블, CPU에서 &lt;50 ms)로 각 레이어에 고유한 (유지율, K-비트, V-비트)를 하나의 전역 예산 아래 배정한다. 결과: <b>14× 압축(136 MB)</b>에서 비압축 1.9 GB 베이스라인과 동등, 반면 동급의 단일축·균일축 방법은 전부 8/100 미만에 머문다. 정직한 ablation은 승리의 원천이 레이어별 <i>제거</i> 라우팅(AIME에서 +15점)이지 양자화 라우팅(≈0)이 아님을 짚는다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Long-context reasoning pushes the KV cache into the tens of GB, and the field has three separate tools for it — evict tokens, drop bits, project to low rank. Almost everyone applies one tool with the same setting on every transformer layer.</p>
+    <p class="lead t-ko">긴 맥락 추론은 KV 캐시를 수십 GB로 밀어올리고, 이를 줄이는 도구는 세 갈래로 나뉜다 — 토큰 제거, 비트 줄이기, 저랭크 투영. 그런데 거의 모두가 하나의 도구를 모든 레이어에 같은 설정으로 적용한다.</p>
+    <p class="t-en">MoE-nD's contribution is to route <i>two</i> axes jointly at per-layer granularity. Prior "per-layer" work is single-axis: AdaKV/PyramidKV route eviction budgets per layer, KVTuner routes quantization bits per layer — but nobody had chosen, per layer, <i>whether to spend memory on eviction or on quantization</i>. The paper first documents why that matters (layers respond to eviction with a 500×+ spread but to V-quant almost uniformly), then builds a mixture-of-experts router over the joint space. Because the router is a tiny offline greedy solver over a pre-measured sensitivity table, inference-time cost is that of an ordinary two-axis method.</p>
+    <p class="t-ko">MoE-nD의 기여는 <i>두</i> 축을 레이어 단위로 함께 라우팅하는 것이다. 기존 "레이어별" 연구는 단일축이다: AdaKV/PyramidKV는 제거 예산을 레이어별로, KVTuner는 양자화 비트를 레이어별로 배정한다 — 하지만 <i>레이어마다 메모리를 제거에 쓸지 양자화에 쓸지</i>를 고른 사람은 없었다. 논문은 왜 이게 중요한지 먼저 문서화하고(레이어는 제거에 대해 500×+의 편차로 반응하지만 V-양자화에는 거의 균일하게 반응), 그다음 결합 공간 위에 mixture-of-experts 라우터를 세운다. 라우터가 사전 측정된 민감도 테이블 위의 작은 오프라인 그리디 솔버이므로, 추론 시 비용은 평범한 2축 방법 수준이다.</p>
+    <figure class="fig">
+      <img src="fig/2604.17695/fig1.png" alt="LongBench accuracy versus compressed KV memory on DeepSeek-R1-Distill-Qwen-7B; the 2d_hetero (MoE-nD) curve stays at full-cache accuracy at 136 MB while single-axis and uniform baselines collapse.">
+      <figcaption class="t-en"><b>Figure 1.</b> LongBench-v1 accuracy vs. compressed KV memory (DeepSeek-R1-Distill-Qwen-7B, 4-task subset, 16k inputs). MoE-nD's hetero variant (2d_hetero) matches the uncompressed 1.9 GB full cache at 136 MB — <b>14× smaller, no detectable accuracy loss</b> — while single-axis eviction (1d), uniform two-axis, and per-layer-quantization-only all lose 33–64% of the average and up to 99% on individual tasks.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> LongBench-v1 정확도 vs 압축 KV 메모리(DeepSeek-R1-Distill-Qwen-7B, 4개 태스크, 16k 입력). MoE-nD의 hetero 변형(2d_hetero)은 136 MB에서 비압축 1.9 GB 풀 캐시와 동등 — <b>14× 작고, 감지 가능한 정확도 손실 없음</b> — 반면 단일축 제거(1d), 균일 2축, 레이어별 양자화만 쓰는 방법은 평균의 33–64%, 개별 태스크에선 최대 99%를 잃는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.17695</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">14×</div><div class="l"><span class="t-en">compression (136 MB vs 1.9 GB) at no accuracy loss</span><span class="t-ko">압축 (136 MB vs 1.9 GB), 정확도 손실 없이</span></div></div>
+      <div class="stat"><div class="n">548–689×</div><div class="l"><span class="t-en">per-layer accuracy-cost spread at aggressive eviction</span><span class="t-ko">공격적 제거에서 레이어별 정확도 비용 편차</span></div></div>
+      <div class="stat"><div class="n">+15.0</div><div class="l"><span class="t-en">avg pts on AIME from eviction routing (quant routing: −2.1)</span><span class="t-ko">AIME에서 제거 라우팅 평균 이득 (양자화 라우팅: −2.1)</span></div></div>
+      <div class="stat"><div class="n">&lt;50 ms</div><div class="l"><span class="t-en">greedy solver time on CPU (5 kB table)</span><span class="t-ko">CPU 그리디 솔버 시간 (5 kB 테이블)</span></div></div>
+      <div class="stat"><div class="n">1.2–1.6×</div><div class="l"><span class="t-en">V-quant spread — essentially free to apply uniformly</span><span class="t-ko">V-양자화 편차 — 균일 적용해도 사실상 무손실</span></div></div>
+      <div class="stat"><div class="n">0.945</div><div class="l"><span class="t-en">Pearson: cheap L₂ proxy vs KL calibration (rankings match)</span><span class="t-ko">Pearson: 저비용 L₂ 프록시 vs KL 보정 (순위 일치)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The result that carries the paper</span><span class="t-ko">논문을 떠받치는 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table.</b> LongBench 4-task average at the tightest budget (b=512), DeepSeek-R1-Distill-Qwen-7B. The apples-to-apples comparison is <b>2d_hetero (136 MB) vs 2d (139 MB)</b>: at essentially equal memory, joint per-layer eviction routing more than doubles accuracy and matches the full cache. (Paper Table 2.)</caption>
+        <caption class="t-ko"><b>표.</b> 가장 빡빡한 예산(b=512)에서의 LongBench 4-태스크 평균, DeepSeek-R1-Distill-Qwen-7B. 공정 비교는 <b>2d_hetero(136 MB) vs 2d(139 MB)</b>: 사실상 같은 메모리에서 결합 레이어별 제거 라우팅이 정확도를 두 배 이상으로 끌어올리고 풀 캐시와 동등해진다. (논문 Table 2.)</caption>
+        <thead><tr><th>Method</th><th>KV mem (MB)</th><th>Compression</th><th>LongBench avg</th></tr></thead>
+        <tbody>
+          <tr><td>full (no compression)</td><td>1859</td><td>1×</td><td>11.5</td></tr>
+          <tr><td>1d — uniform eviction</td><td>56</td><td>33×</td><td>6.1</td></tr>
+          <tr><td>2d_uniform — + fixed K8/V4</td><td>56</td><td>33×</td><td>4.9</td></tr>
+          <tr><td>2d — per-layer quant routing</td><td>139</td><td>13×</td><td>5.9</td></tr>
+          <tr><td><b>2d_hetero (MoE-nD)</b></td><td>136</td><td>14×</td><td class="up">12.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">
+        <defs>
+          <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#C8714F"/>
+          </marker>
+        </defs>
+        <text x="360" y="24" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3a3027">Route each layer to its own compression "expert" under one budget</text>
+        <!-- Stage A: sensitivity table -->
+        <text x="118" y="52" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a4f31">A · offline probe</text>
+        <g>
+          <rect x="30" y="62" width="176" height="120" rx="8" fill="#efe9df" stroke="#d8cdbb"/>
+          <text x="118" y="80" text-anchor="middle" font-size="11" font-weight="700" fill="#3a3027">Sensitivity table S (28×9)</text>
+          <!-- mini heatmap grid -->
+          <g>
+            <rect x="52" y="90" width="16" height="16" fill="#f3ece0"/><rect x="70" y="90" width="16" height="16" fill="#e7c4b2"/><rect x="88" y="90" width="16" height="16" fill="#C8714F"/><rect x="106" y="90" width="16" height="16" fill="#e7c4b2"/><rect x="124" y="90" width="16" height="16" fill="#f3ece0"/><rect x="142" y="90" width="16" height="16" fill="#d99a7e"/>
+            <rect x="52" y="108" width="16" height="16" fill="#C8714F"/><rect x="70" y="108" width="16" height="16" fill="#f3ece0"/><rect x="88" y="108" width="16" height="16" fill="#d99a7e"/><rect x="106" y="108" width="16" height="16" fill="#f3ece0"/><rect x="124" y="108" width="16" height="16" fill="#C8714F"/><rect x="142" y="108" width="16" height="16" fill="#e7c4b2"/>
+            <rect x="52" y="126" width="16" height="16" fill="#e7c4b2"/><rect x="70" y="126" width="16" height="16" fill="#d99a7e"/><rect x="88" y="126" width="16" height="16" fill="#f3ece0"/><rect x="106" y="126" width="16" height="16" fill="#C8714F"/><rect x="124" y="126" width="16" height="16" fill="#f3ece0"/><rect x="142" y="126" width="16" height="16" fill="#d99a7e"/>
+          </g>
+          <text x="118" y="160" text-anchor="middle" font-size="9.5" fill="#6a5f52">L₂ error of applying each op</text>
+          <text x="118" y="173" text-anchor="middle" font-size="9.5" fill="#6a5f52">to one layer · 5 kB, seconds</text>
+        </g>
+        <line x1="208" y1="122" x2="250" y2="122" stroke="#C8714F" stroke-width="2.2" marker-end="url(#ah)"/>
+        <!-- Stage B: greedy solver -->
+        <text x="322" y="52" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a4f31">B · greedy solver</text>
+        <g>
+          <rect x="254" y="72" width="136" height="100" rx="8" fill="#C8714F"/>
+          <text x="322" y="96" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">Budget solver</text>
+          <text x="322" y="116" text-anchor="middle" font-size="10.5" fill="#ffe9df">upgrade layer with</text>
+          <text x="322" y="130" text-anchor="middle" font-size="10.5" fill="#ffe9df">best ΔS / Δmem</text>
+          <text x="322" y="150" text-anchor="middle" font-size="10.5" fill="#ffe9df">until Σ mem ≤ M</text>
+          <text x="322" y="164" text-anchor="middle" font-size="9.5" fill="#ffd9c6">&lt;50 ms · CPU</text>
+        </g>
+        <line x1="392" y1="122" x2="434" y2="122" stroke="#C8714F" stroke-width="2.2" marker-end="url(#ah)"/>
+        <!-- Stage C: hetero cache -->
+        <text x="562" y="52" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a4f31">C · hetero attention patch</text>
+        <g>
+          <rect x="438" y="62" width="252" height="120" rx="8" fill="#f6f1e8" stroke="#d8cdbb"/>
+          <!-- per-layer rows -->
+          <text x="448" y="82" font-size="10" fill="#6a5f52">L00</text><rect x="486" y="72" width="150" height="12" rx="3" fill="#3a3027"/><text x="646" y="82" font-size="9" fill="#6a5f52">keep1·16b</text>
+          <text x="448" y="102" font-size="10" fill="#6a5f52">L06</text><rect x="486" y="92" width="70" height="12" rx="3" fill="#C8714F"/><text x="646" y="102" font-size="9" fill="#6a5f52">.5·k4</text>
+          <text x="448" y="122" font-size="10" fill="#6a5f52">L14</text><rect x="486" y="112" width="108" height="12" rx="3" fill="#d99a7e"/><text x="646" y="122" font-size="9" fill="#6a5f52">.75·k8</text>
+          <text x="448" y="142" font-size="10" fill="#6a5f52">L21</text><rect x="486" y="132" width="44" height="12" rx="3" fill="#C8714F"/><text x="646" y="142" font-size="9" fill="#6a5f52">.25·k4</text>
+          <text x="562" y="168" text-anchor="middle" font-size="9.5" fill="#6a5f52">each layer: own cache length T_ℓ + RoPE re-inversion</text>
+        </g>
+        <text x="360" y="212" text-anchor="middle" font-size="10.5" fill="#6a5f52" font-style="italic">Reduces to the standard uniform patch when all layers pick the same config — uniform methods are a strict special case.</text>
+        <text x="360" y="232" text-anchor="middle" font-size="10.5" fill="#3a3027" font-weight="700">The novel lever is per-layer eviction routing, not per-layer quantization.</text>
+      </svg>
+      <div class="cap t-en">MoE-nD measures a per-layer sensitivity table once (A), a greedy solver spends a global memory budget where each byte buys the most accuracy (B), and an attention patch runs the resulting heterogeneous cache — different token counts and bit-widths per layer, with per-layer RoPE re-inversion (C).</div>
+      <div class="cap t-ko">MoE-nD는 레이어별 민감도 테이블을 한 번 측정하고(A), 그리디 솔버가 전역 메모리 예산을 "바이트당 정확도가 가장 큰" 곳에 쓰며(B), 어텐션 패치가 결과인 이질적 캐시 — 레이어마다 다른 토큰 수·비트폭, 레이어별 RoPE 재역변환 — 를 실행한다(C).</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core ideas</span><span class="t-ko">핵심 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">observation</span>
+        <h3>Layers are not equal</h3>
+        <p class="t-en">Apply one compression op to one layer and measure the attention-output error. At mild eviction (≤50%) the most- and least-sensitive layers differ only 1.6–2.6×, so uniform is defensible. But at 75%/90% eviction the spread explodes to <b>548×/689×</b>, and K-quant spans 15–87×. Crucially, V-quant barely moves (1.2–1.6×) — so it's fine to apply uniformly, but eviction absolutely is not.</p>
+        <p class="t-ko">하나의 압축 연산을 한 레이어에만 적용하고 어텐션 출력 오차를 잰다. 약한 제거(≤50%)에선 가장·가장 덜 민감한 레이어 차이가 1.6–2.6×뿐이라 균일이 정당화된다. 그러나 75%/90% 제거에선 편차가 <b>548×/689×</b>로 폭발하고, K-양자화는 15–87×에 이른다. 결정적으로 V-양자화는 거의 안 움직인다(1.2–1.6×) — 그래서 균일 적용해도 되지만, 제거는 절대 아니다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">mixture-of-experts</span>
+        <h3>Each axis-setting is an expert</h3>
+        <p class="t-en">Every layer exposes three knobs: keep-ratio ∈ {0.1…1.0}, K-bits ∈ {16,8,4}, V-bits ∈ {16,8,4}. MoE-nD casts each combination as an "expert" and asks a router to pick the mix per layer under a single global memory budget M — the first method to route eviction <i>and</i> quantization jointly at layer granularity. (Low-rank and cross-layer sharing were deliberately excluded — they didn't compose cleanly with GQA sensitivity routing.)</p>
+        <p class="t-ko">각 레이어는 세 손잡이를 노출한다: 유지율 ∈ {0.1…1.0}, K-비트 ∈ {16,8,4}, V-비트 ∈ {16,8,4}. MoE-nD는 각 조합을 "전문가"로 두고, 라우터가 하나의 전역 메모리 예산 M 아래 레이어별 조합을 고르게 한다 — 제거<i>와</i> 양자화를 레이어 단위로 함께 라우팅한 최초의 방법. (저랭크·레이어 간 공유는 GQA 민감도 라우팅과 깔끔히 결합되지 않아 일부러 제외.)</p>
+      </div>
+      <div class="m">
+        <span class="tag">greedy solver</span>
+        <h3>10⁴² choices, solved in 50 ms</h3>
+        <p class="t-en">Exact search over (6·3·3)²⁸ ≈ 10⁴² routings is intractable, so MoE-nD reuses KVTuner's greedy allocator: start every layer at the cheapest config, then repeatedly upgrade the layer with the largest sensitivity reduction per unit memory (ΔS/Δm) until the budget is spent. The sensitivity table is built from a single 27-token prompt (5 kB, seconds to compute) and validated against a KL calibration at 0.945 Pearson.</p>
+        <p class="t-ko">(6·3·3)²⁸ ≈ 10⁴² 라우팅에 대한 정확 탐색은 불가능하므로, MoE-nD는 KVTuner의 그리디 할당기를 재사용한다: 모든 레이어를 가장 싼 설정에서 시작해, 메모리당 민감도 감소(ΔS/Δm)가 가장 큰 레이어를 반복 업그레이드하며 예산을 소진한다. 민감도 테이블은 27-토큰 프롬프트 하나로 만들고(5 kB, 초 단위), KL 보정과 Pearson 0.945로 검증했다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Probe sensitivity offline.</span><span class="t-ko">오프라인 민감도 측정.</span></b><span class="t-en"> For each layer × op, apply the op to that layer only and record the relative L₂ error of its attention output vs. full precision → a 28×9 table S, persisted at 5 kB.</span><span class="t-ko"> 레이어 × 연산마다 해당 레이어에만 연산을 적용하고 어텐션 출력의 상대 L₂ 오차(풀 정밀도 대비)를 기록 → 28×9 테이블 S, 5 kB로 저장.</span></li>
+      <li><b><span class="t-en">Solve the budget.</span><span class="t-ko">예산 배분.</span></b><span class="t-en"> Greedily upgrade the layer with best ΔS/Δmem from the cheapest config until total KV size hits the global budget M. Produces one (keep, K-bits, V-bits) per layer in &lt;50 ms.</span><span class="t-ko"> 가장 싼 설정에서 시작해 ΔS/Δmem이 최선인 레이어를 그리디하게 업그레이드, 총 KV 크기가 전역 예산 M에 닿을 때까지. 레이어당 (유지율, K-비트, V-비트) 하나를 &lt;50 ms에 산출.</span></li>
+      <li><b><span class="t-en">Run the heterogeneous cache.</span><span class="t-ko">이질적 캐시 실행.</span></b><span class="t-en"> A patched attention kernel gives every layer its own cache length T_ℓ, tracks retained token positions, re-inverts RoPE from those positions, and fires eviction every 128 generated tokens.</span><span class="t-ko"> 패치된 어텐션 커널이 각 레이어에 고유 캐시 길이 T_ℓ를 부여하고, 유지된 토큰 위치를 추적하며, 그 위치로 RoPE를 재역변환하고, 128 토큰마다 제거를 발동한다.</span></li>
+      <li><b><span class="t-en">Isolate the real lever.</span><span class="t-ko">진짜 지렛대 분리.</span></b><span class="t-en"> The ablation chain 2d_uniform → 2d → 2d_hetero adds one routing axis at a time: per-layer eviction routing gives +15.0 pts avg on AIME (+5.7 on LongBench); per-layer quant routing gives ≈0. Honest scoping, not credit-grabbing.</span><span class="t-ko"> ablation 사슬 2d_uniform → 2d → 2d_hetero는 라우팅 축을 하나씩 더한다: 레이어별 제거 라우팅은 AIME 평균 +15.0점(LongBench +5.7); 레이어별 양자화 라우팅은 ≈0. 공을 부풀리지 않는 정직한 범위 규정.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><b>Composing axes beats stacking them uniformly.</b> At matched memory (~136 MB), joint per-layer eviction+quant routing more than doubles LongBench accuracy over per-layer-quant-only (12.0 vs 5.9) and restores full-cache quality at 14× compression.</p><p class="t-ko"><b>축을 결합하는 것이 균일하게 쌓는 것을 이긴다.</b> 같은 메모리(~136 MB)에서 결합 레이어별 제거+양자화 라우팅은 양자화만 하는 방법 대비 LongBench 정확도를 두 배 이상(12.0 vs 5.9)으로, 14× 압축에서 풀 캐시 품질을 복원한다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><b>Not all axes deserve routing.</b> The paper's own numbers say V-quant is nearly layer-flat and quant routing adds ≈0 — so the useful complexity is per-layer <i>eviction</i>. That negative result is arguably as valuable as the method.</p><p class="t-ko"><b>모든 축이 라우팅할 가치가 있는 건 아니다.</b> 논문 자신의 수치가 V-양자화는 레이어에 거의 평탄하고 양자화 라우팅은 ≈0을 더한다고 말한다 — 그래서 유용한 복잡성은 레이어별 <i>제거</i>다. 이 음성 결과는 방법 못지않게 값지다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><b>Cheap to add, degrades gracefully.</b> A 5 kB table + &lt;50 ms CPU solve, and the hetero patch collapses to the standard uniform kernel when the solver picks equal configs — so uniform methods are a strict special case, not a competitor to reimplement around.</p><p class="t-ko"><b>추가 비용이 싸고, 우아하게 퇴화한다.</b> 5 kB 테이블 + &lt;50 ms CPU 솔브, 그리고 솔버가 동일 설정을 고르면 hetero 패치가 표준 균일 커널로 붕괴한다 — 즉 균일 방법은 다시 구현할 경쟁자가 아니라 엄밀한 특수 케이스다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the evidence base is thin and self-flagged. Everything is on a <i>single</i> model (DeepSeek-R1-Distill-Qwen-7B) with a per-model calibration (~1 GPU-day to port); the uncompressed LongBench baseline scores only 11.5 (published Llama-3-8B baselines are 35–50) because of reasoning-style generation, so <i>only relative</i> gaps are meaningful and the n=50/n=30 confidence intervals are wide (±6–17 pts). There is <b>no matched-memory comparison to standard SnapKV/H2O</b> (deferred to a follow-up), and the hetero attention patch isn't FlashAttention-compatible, so at 16k prefill the O(T²) attention matrix — not the compressed KV — dominates memory, blunting the practical win. Treat "14×, no loss" as a promising single-model demonstration, not a settled result.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 증거 기반이 얇고, 저자도 이를 스스로 표시한다. 모든 실험이 <i>단일</i> 모델(DeepSeek-R1-Distill-Qwen-7B)에 모델별 보정(포팅에 ~1 GPU-day)이며; 비압축 LongBench 베이스라인 점수가 11.5뿐(공개된 Llama-3-8B는 35–50)이라 추론형 생성 탓에 <i>상대</i> 격차만 의미가 있고 n=50/n=30 신뢰구간은 넓다(±6–17점). <b>표준 SnapKV/H2O와의 동일 메모리 비교가 없고</b>(후속으로 연기), hetero 어텐션 패치는 FlashAttention과 호환되지 않아 16k 프리필에선 압축 KV가 아니라 O(T²) 어텐션 행렬이 메모리를 지배해 실전 이득이 무뎌진다. "14×, 무손실"은 유망한 단일 모델 시연이지, 확정된 결과가 아니다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2604.17695">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2604.17695">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2604.17695">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2604.17695">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Fallback · topic: Model Compression / KV Cache · policy: recent method that combines multiple compression axes; a mixture-of-experts framing that generalizes the per-layer KV work in this archive</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-02.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Fallback · 주제: 모델 압축 / KV 캐시 · 정책: 여러 압축 축을 결합하는 최신 방법; 이 아카이브의 레이어별 KV 연구를 일반화하는 mixture-of-experts 관점</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-02.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
