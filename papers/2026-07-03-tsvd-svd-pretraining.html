@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Efficient Pre-Training of LLMs through Truncated SVD Layers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank Pretraining</span><span class="t-ko">Model Compression · Low-rank Pretraining</span></span>
+      <span>2026.07.03</span>
+    </div>
+    <h1>Efficient Pre-Training of LLMs through Truncated SVD Layers<br>
+      <span class="glow t-en">— pretrain low-rank <i>and</i> strictly orthonormal, and match the dense model</span>
+      <span class="glow t-ko">— 저랭크로, 그러면서도 <i>매 스텝 직교정규성</i>을 유지하며 사전학습해 밀집 모델을 따라잡다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Kaivan Kamali</b> <span class="t-en">& 5 others (Schweighofer, Shahrzad, Francon, Hodjat, Miikkulainen)</span><span class="t-ko">외 5인 (Schweighofer, Shahrzad, Francon, Hodjat, Miikkulainen)</span></span>
+      <span>🏛 Cognizant AI Lab · UT Austin</span>
+      <span>🗓 2026-05-27</span>
+      <span>📄 <a href="https://arxiv.org/abs/2605.28573">arXiv:2605.28573</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en"><b>TSVD</b> replaces every linear layer in an LLM with a truncated-SVD layer <b>W = (1/√r)·UΣVᵀ</b>, where U and V are re-orthonormalized by a QR step on every forward pass and all scale lives in the diagonal Σ. A caching trick computes that QR <b>once per optimizer step</b> and reuses it across all gradient-accumulation micro-batches, so strict orthonormality costs almost nothing. With per-layer ranks chosen from a 95%-spectral-energy heuristic, TSVD pretrains LLaMA models from 60M to 1.3B on C4 with <b>24–51% fewer parameters</b> while <b>matching or beating</b> the dense baseline's perplexity.</p>
+    <p class="t-ko"><b>TSVD</b>는 LLM의 모든 선형 계층을 절단 SVD 계층 <b>W = (1/√r)·UΣVᵀ</b>로 교체한다. 순전파마다 QR 분해로 U, V를 직교정규 행렬로 다시 만들고, 모든 스케일은 대각 행렬 Σ에 몰아넣는다. 핵심은 캐싱 트릭이다 — 이 QR을 <b>옵티마이저 스텝당 한 번</b>만 계산하고 gradient-accumulation의 모든 마이크로배치에서 재사용하므로, "매 스텝 엄격한 직교정규성"이 사실상 공짜가 된다. 계층별 랭크는 95% 스펙트럼 에너지 휴리스틱으로 정하며, 이렇게 하면 C4에서 60M~1.3B LLaMA를 <b>파라미터 24–51% 적게</b> 쓰면서도 밀집 기준선의 perplexity를 <b>맞추거나 앞선다</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Low-rank weight factorization is the most direct way to cut the parameter count — and hence memory, gradients and optimizer state — of LLM <i>pretraining</i>. The catch: naïve low-rank pretraining almost always loses accuracy versus a dense model.</p>
+    <p class="lead t-ko">저랭크 가중치 분해는 LLM <i>사전학습</i>의 파라미터 수 — 나아가 메모리·그래디언트·옵티마이저 상태 — 를 줄이는 가장 직접적인 길이다. 문제는, 순진한 저랭크 사전학습이 거의 항상 밀집 모델보다 정확도를 잃는다는 점이다.</p>
+    <p class="t-en">The known cure is <b>orthonormality</b>: keeping the basis factors orthonormal stabilizes gradients, curbs overfitting and improves conditioning. But enforcing it has been too expensive — regularizers only approximate it and add a hyperparameter, and Riemannian methods (LORO) retract onto the manifold via SVD only every ~500 steps, so weights sit <i>off</i> the manifold most of the time. TSVD's contribution is to make strict, every-step orthonormality practically free by piggy-backing on gradient accumulation, then to pick each layer's rank from an energy heuristic rather than a fixed guess. The result is the first low-rank pretraining recipe that maintains orthonormality at <i>every</i> update and still matches dense perplexity.</p>
+    <p class="t-ko">알려진 해법은 <b>직교정규성</b>이다 — 기저 인자를 직교정규로 유지하면 그래디언트가 안정되고 과적합이 줄며 최적화 조건수가 좋아진다. 하지만 이를 강제하는 비용이 너무 컸다. 정규화 항은 근사만 할 뿐 하이퍼파라미터를 추가하고, 리만 최적화(LORO)는 ~500스텝마다 SVD로만 매니폴드에 사영하므로 대부분의 시간 동안 가중치가 매니폴드 <i>밖</i>에 놓인다. TSVD의 기여는 gradient accumulation에 얹어 "매 스텝 엄격한 직교정규성"을 사실상 공짜로 만든 것, 그리고 각 계층의 랭크를 고정 추측이 아니라 에너지 휴리스틱으로 고른 것이다. 그 결과 <i>매</i> 업데이트마다 직교정규성을 유지하면서도 밀집 perplexity를 따라잡는 최초의 저랭크 사전학습 레시피가 나왔다.</p>
+    <figure class="fig">
+      <img src="fig/2605.28573/x1.png" alt="Comparison of TSVD layer with Full-rank, Low-rank, and CoLA layers">
+      <figcaption class="t-en"><b>Figure 1.</b> Four layer types. (a) Full-rank stores W∈ℝ<sup>m×n</sup>; (b) Low-rank uses B∈ℝ<sup>m×r</sup>, A∈ℝ<sup>r×n</sup>; (c) CoLA adds a nonlinearity σ(Az); (d) <b>TSVD</b> keeps U and V strictly orthonormal (UᵀU=I<sub>r</sub>, VᵀV=I<sub>r</sub>) via QR, with all magnitude isolated in the diagonal Σ.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> 네 가지 계층 유형. (a) Full-rank는 W∈ℝ<sup>m×n</sup>를 그대로 저장; (b) Low-rank는 B∈ℝ<sup>m×r</sup>, A∈ℝ<sup>r×n</sup> 곱; (c) CoLA는 비선형 σ(Az)을 추가; (d) <b>TSVD</b>는 QR로 U, V를 엄격히 직교정규(UᵀU=I<sub>r</sub>, VᵀV=I<sub>r</sub>)로 유지하고 모든 크기(스케일)를 대각 Σ에 몰아넣는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2605.28573</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">51%</div><div class="l"><span class="t-en">fewer parameters at 1.3B (1,339M → 650M), at ≥ dense quality</span><span class="t-ko">1.3B에서 파라미터 51% 감소 (1,339M → 650M), 품질은 밀집 이상</span></div></div>
+      <div class="stat"><div class="n">7.59</div><div class="l"><span class="t-en">TSVD val PPL on LLaMA-1.3B — <b>beats</b> full-rank's 7.67</span><span class="t-ko">LLaMA-1.3B 검증 PPL — 밀집(7.67)을 <b>앞섬</b></span></div></div>
+      <div class="stat"><div class="n">1.3B</div><div class="l"><span class="t-en">largest model pretrained on C4 (13.1B tokens)</span><span class="t-ko">C4로 사전학습한 최대 모델 (토큰 13.1B)</span></div></div>
+      <div class="stat"><div class="n">1×</div><div class="l"><span class="t-en">QR decomposition per optimizer step — cached across all micro-batches</span><span class="t-ko">옵티마이저 스텝당 QR 1회 — 모든 마이크로배치에서 캐시 재사용</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The head-to-head table</span><span class="t-ko">정면 비교 표</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> C4 pretraining: validation perplexity (PPL ↓), parameters in millions (Param), and total memory in GB (Mem ↓, params+grads+activations). TSVD matches or beats full-rank at 24–51% fewer parameters.</caption>
+        <caption class="t-ko"><b>표 3.</b> C4 사전학습: 검증 perplexity(PPL ↓), 파라미터 수(백만, Param), 총 메모리(GB, Mem ↓ — 파라미터+그래디언트+활성값). TSVD는 파라미터를 24–51% 줄이면서 full-rank를 맞추거나 앞선다.</caption>
+        <thead><tr><th>Method</th><th>60M · PPL / Param</th><th>130M · PPL / Param</th><th>350M · PPL / Param</th><th>1.3B · PPL / Param / Mem</th></tr></thead>
+        <tbody>
+          <tr><td>Full-rank</td><td>15.93 / 58</td><td>12.07 / 134</td><td>9.15 / 368</td><td>7.67 / 1,339 / 9.98</td></tr>
+          <tr><td>Low-rank</td><td>14.98 / 42</td><td>11.72 / 94</td><td>9.23 / 185</td><td>7.71 / 609 / 4.53</td></tr>
+          <tr><td>CoLA</td><td>14.83 / 45</td><td>11.57 / 101</td><td>9.22 / 222</td><td>7.74 / 760 / 5.66</td></tr>
+          <tr><td><b>TSVD</b></td><td class="up">14.15 / 44</td><td class="up">11.30 / 90</td><td>9.16 / 176</td><td class="up">7.59 / 650 / 4.84</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core idea, two moves</span><span class="t-ko">핵심 아이디어, 두 수</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">Orthonormal-by-construction</span>
+        <h3>QR every forward pass, scale in Σ</h3>
+        <p class="t-en">The trainable params are unconstrained A<sub>U</sub>, A<sub>V</sub> and a vector ρ. Each forward pass sets U=qf(A<sub>U</sub>), V=qf(A<sub>V</sub>) (Q-factor of a reduced QR → exactly orthonormal) and Σ=diag(softplus(ρ)) (guaranteed positive). Then W=(1/√r)·UΣVᵀ. Because U, V have fixed unit norms, there is no hidden factor-rescaling ambiguity (AB<sup>⊤</sup>=(cA)(c⁻¹B)<sup>⊤</sup>) — all gain is isolated in Σ, killing the vanishing/exploding-gradient pathology of plain low-rank.</p>
+        <p class="t-ko">학습 파라미터는 제약 없는 A<sub>U</sub>, A<sub>V</sub>와 벡터 ρ이다. 순전파마다 U=qf(A<sub>U</sub>), V=qf(A<sub>V</sub>)(축소 QR의 Q인자 → 정확히 직교정규), Σ=diag(softplus(ρ))(양수 보장)로 만든 뒤 W=(1/√r)·UΣVᵀ. U, V의 노름이 1로 고정되므로 저랭크 특유의 인자 재스케일 모호성(AB<sup>⊤</sup>=(cA)(c⁻¹B)<sup>⊤</sup>)이 사라진다 — 모든 크기가 Σ에 격리되어 그래디언트 소실/폭주 병리를 제거한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Adaptive rank</span>
+        <h3>Rank = spectral energy of a pretrained model</h3>
+        <p class="t-en">Instead of a fixed rank, run SVD on a small pretrained model's weights and pick, per matrix, the smallest rank that keeps ≥95% of the spectral energy. Empirically Q/K need the least, V/out ~50% more, MLP ~2×; these <i>proportions</i> stay nearly constant across model scales (and GQA is accountable), so ranks measured on a tiny model predict good ranks at larger scale — chosen once, before training.</p>
+        <p class="t-ko">고정 랭크 대신, 작은 사전학습 모델의 가중치에 SVD를 돌려 각 행렬마다 스펙트럼 에너지의 95% 이상을 유지하는 최소 랭크를 고른다. 경험적으로 Q/K가 가장 낮고, V/out은 약 50% 더, MLP는 약 2배가 필요하며, 이 <i>비율</i>은 모델 규모가 커져도 거의 일정하다(GQA도 설명 가능). 따라서 아주 작은 모델에서 잰 랭크가 큰 모델의 좋은 랭크를 예측하고, 학습 전에 한 번 정해진다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Pick per-layer ranks. </span><span class="t-ko">계층별 랭크 결정. </span></b><span class="t-en">SVD a small pretrained model; per weight matrix take the min rank preserving ≥95% energy (Alg. 2). Q/K low, V/out ~1.5×, MLP ~2×.</span><span class="t-ko">작은 사전학습 모델에 SVD를 돌려 가중치마다 에너지 95%↑ 유지 최소 랭크를 취한다(Alg. 2). Q/K 낮음, V/out ~1.5×, MLP ~2×.</span></li>
+      <li><b><span class="t-en">Swap in TSVD layers. </span><span class="t-ko">TSVD 계층으로 교체. </span></b><span class="t-en">Replace attention & MLP linear layers with TSVD layers holding trainable A<sub>U</sub>, A<sub>V</sub>, ρ.</span><span class="t-ko">어텐션·MLP의 선형 계층을 학습 가능한 A<sub>U</sub>, A<sub>V</sub>, ρ를 가진 TSVD 계층으로 바꾼다.</span></li>
+      <li><b><span class="t-en">Forward once, cache. </span><span class="t-ko">한 번 순전파, 캐시. </span></b><span class="t-en">On the first micro-batch of a step, compute U=qf(A<sub>U</sub>), V=qf(A<sub>V</sub>), Σ=diag(softplus(ρ)) and cache (Uᵀ, V, Σ).</span><span class="t-ko">스텝의 첫 마이크로배치에서 U=qf(A<sub>U</sub>), V=qf(A<sub>V</sub>), Σ=diag(softplus(ρ))를 계산해 (Uᵀ, V, Σ)를 캐시한다.</span></li>
+      <li><b><span class="t-en">Reuse across micro-batches. </span><span class="t-ko">마이크로배치마다 재사용. </span></b><span class="t-en">Every subsequent micro-batch reads the cache and builds W=(1/√r)·UΣVᵀ — the QR cost is amortized across the whole accumulation window.</span><span class="t-ko">이후 마이크로배치는 캐시를 읽어 W=(1/√r)·UΣVᵀ를 구성한다 — QR 비용이 누적 구간 전체에 분산된다.</span></li>
+      <li><b><span class="t-en">Update & clear. </span><span class="t-ko">업데이트 후 캐시 삭제. </span></b><span class="t-en">After the optimizer updates {A<sub>U</sub>, A<sub>V</sub>, ρ}, clear the caches so the next step re-orthonormalizes — strict orthonormality at every parameter update.</span><span class="t-ko">옵티마이저가 {A<sub>U</sub>, A<sub>V</sub>, ρ}를 갱신하면 캐시를 비워 다음 스텝에서 다시 직교정규화한다 — 매 파라미터 업데이트마다 엄격한 직교정규성.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Low-rank pretraining <i>can</i> match or beat dense — but only if you keep the factors strictly orthonormal. Conditioning, not capacity, was the missing piece.</p><p class="t-ko">저랭크 사전학습도 밀집을 맞추거나 앞설 수 <i>있다</i> — 단, 인자를 엄격히 직교정규로 유지할 때만. 빠진 조각은 표현력이 아니라 최적화 조건수였다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The enabling trick is mundane and portable: amortize the expensive QR across gradient-accumulation micro-batches, so "orthonormal every step" is basically free at scale.</p><p class="t-ko">이를 가능케 한 트릭은 단순하고 이식성이 좋다 — 비싼 QR을 gradient-accumulation 마이크로배치에 분산해, "매 스텝 직교정규"를 대규모에서 사실상 공짜로 만든다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Rank isn't one-size-fits-all: a 95%-energy heuristic on a tiny model gives per-layer ranks (Q/K &lt; V/out &lt; MLP) whose proportions transfer across scales and even GQA.</p><p class="t-ko">랭크는 획일적이지 않다 — 작은 모델의 95% 에너지 휴리스틱이 계층별 랭크(Q/K &lt; V/out &lt; MLP)를 주고, 그 비율은 규모와 심지어 GQA에도 전이된다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The evidence tops out at 1.3B params / 13.1B tokens — well below where pretraining cost actually hurts — and evaluation is C4 <i>perplexity only</i>, with no downstream or zero-shot tasks. The "efficiency win" is wall-clock and only appears at high gradient-accumulation; at G=1 TSVD is <i>slower</i> than dense. And the full-rank/low-rank/CoLA baselines were re-run in a "modernized" HF stack the authors admit "significantly improved" results, so the head-to-head may not reproduce the original papers' numbers.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 증거는 1.3B 파라미터 / 13.1B 토큰에서 멈춘다 — 사전학습 비용이 실제로 아픈 규모에 한참 못 미친다 — 게다가 평가는 C4 <i>perplexity 뿐</i>이고 다운스트림·제로샷 과제가 없다. "효율 이득"은 벽시계 기준이며 gradient-accumulation이 클 때만 나타난다. G=1에서는 TSVD가 밀집보다 <i>더 느리다</i>. 또한 full-rank/low-rank/CoLA 기준선을 저자들이 "결과가 크게 향상됐다"고 인정한 "현대화된" HF 스택에서 재실행했으므로, 정면 비교가 원 논문 수치를 재현하지 않을 수 있다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2605.28573">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2605.28573">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2605.28573">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2605.28573">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>on the Low-rank Decomposition axis: a fresh angle (efficient pretraining, not KV cache) that makes strict orthonormal low-rank training practically free and matches dense LLMs</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-03.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Low-rank Decomposition 축: KV 캐시가 아닌 효율적 사전학습이라는 신선한 각도로, 엄격한 직교정규 저랭크 학습을 사실상 공짜로 만들어 밀집 LLM을 따라잡음</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-03.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
