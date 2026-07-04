@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Optimal Brain Decomposition (OBD-LLM)</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-Rank Decomposition</span><span class="t-ko">Model Compression · Low-Rank Decomposition</span></span>
+      <span>2026 · 07 · 04</span>
+    </div>
+    <h1>Optimal Brain Decomposition<br>
+      <span class="glow t-en">— whiten <i>both</i> sides of the weight, not just the input</span>
+      <span class="glow t-ko">— 가중치를 입력 쪽만이 아니라 <i>양쪽</i> 모두 화이트닝하기</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Yuhang Li</b> <span class="t-en">, Donghyun Lee, Ruokai Yin, Priyadarshini Panda</span><span class="t-ko">, Donghyun Lee, Ruokai Yin, Priyadarshini Panda</span></span>
+      <span>🏛 Yale University · USC</span>
+      <span>🗓 2026-04-01</span>
+      <span>📄 <a href="https://arxiv.org/abs/2604.00821">arXiv:2604.00821</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Low-rank SVD compression of LLM weights got a big boost when SVD-LLM started whitening each weight matrix with the <b>input-activation</b> covariance. OBD-LLM shows this is only half the story: a rigorous K-FAC factorization of the task-loss Hessian proves the error also depends on the <b>output-gradient</b> covariance. Whitening <i>both</i> sides — a closed-form "bi-directional whitening" — cuts decomposition error <b>20–40%</b> versus SVD-LLM, at only 4–7% extra runtime.</p>
+    <p class="t-ko">LLM 가중치의 저랭크 SVD 압축은 SVD-LLM이 <b>입력 활성값</b> 공분산으로 각 가중치 행렬을 화이트닝하면서 크게 좋아졌다. OBD-LLM은 그것이 절반짜리였음을 보인다: 태스크 손실 헤시안을 K-FAC로 엄밀히 분해하면 오차가 <b>출력 그래디언트</b> 공분산에도 의존함이 드러난다. <i>양쪽</i>을 모두 화이트닝하는 닫힌 형태의 "양방향 화이트닝"은 SVD-LLM 대비 분해 오차를 <b>20–40%</b> 줄이며, 추가 런타임은 4–7%뿐이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Every practical low-rank compressor of the last two years — ASVD, SVD-LLM, and friends — only looks "backwards" at what flows <i>into</i> a layer. OBD-LLM says the layer's <i>future</i> matters just as much, and derives it from first principles.</p>
+    <p class="lead t-ko">지난 2년의 실용적 저랭크 압축기들 — ASVD, SVD-LLM 등 — 은 모두 레이어로 <i>들어오는</i> 정보만 "뒤돌아" 본다. OBD-LLM은 그 레이어의 <i>미래</i>도 그만큼 중요하다고 말하고, 이를 원리에서부터 유도한다.</p>
+    <p class="t-en">SVD alone (Eckart–Young) minimizes Frobenius error on the raw weight, which is blind to how the model actually uses it. SVD-LLM fixed part of this by whitening with the input-activation covariance C<sub>x</sub> — a loss-aware step that made it state of the art. But that quietly assumes the output-gradient covariance is the identity. OBD-LLM revisits the classic <b>Optimal Brain Surgeon</b> idea: write the loss increase as a quadratic form in the weight error, ∆L = tr(∆W<sup>⊤</sup> C<sub>g</sub> ∆W C<sub>x</sub>), where the Hessian factorizes (via K-FAC) into an input covariance C<sub>x</sub> <b>and</b> an output-gradient covariance C<sub>g</sub>. Ignoring C<sub>g</sub> is exactly what everyone did — and it is provably suboptimal.</p>
+    <p class="t-ko">SVD 단독(Eckart–Young)은 원시 가중치의 Frobenius 오차를 최소화하지만, 모델이 그것을 실제로 어떻게 쓰는지는 보지 못한다. SVD-LLM은 입력 활성 공분산 C<sub>x</sub>로 화이트닝하여 일부를 고쳤고 — 손실을 고려하는 이 단계 덕에 SOTA가 됐다 — 하지만 이는 출력 그래디언트 공분산이 항등행렬이라고 조용히 가정한다. OBD-LLM은 고전적 <b>Optimal Brain Surgeon</b> 아이디어로 돌아가, 손실 증가를 가중치 오차의 이차형식 ∆L = tr(∆W<sup>⊤</sup> C<sub>g</sub> ∆W C<sub>x</sub>) 로 쓴다. 여기서 헤시안은 (K-FAC로) 입력 공분산 C<sub>x</sub> <b>와</b> 출력 그래디언트 공분산 C<sub>g</sub> 로 분해된다. C<sub>g</sub>를 무시한 것이 바로 모두가 한 일이며, 이는 증명 가능하게 최적이 아니다.</p>
+    <figure class="fig">
+      <img src="fig/2604.00821/pipeline.png" alt="OBD-LLM compression pipeline: input-activation and output-gradient covariances both Cholesky-factorized and used to whiten the weight before SVD, then colored back.">
+      <figcaption class="t-en"><b>Fig 2.</b> The pipeline. For each layer, collect the input-activation covariance (top, blue) and the output-gradient covariance (bottom, purple); Cholesky-factorize both and use them to <b>whiten the weight on both sides</b>; run SVD in that whitened space; then "color" the low-rank factors back with the inverse Cholesky. The result is a closed-form optimal low-rank decomposition.</figcaption>
+      <figcaption class="t-ko"><b>Fig 2.</b> 파이프라인. 각 레이어마다 입력 활성 공분산(위, 파랑)과 출력 그래디언트 공분산(아래, 보라)을 모으고, 둘 다 Cholesky 분해하여 <b>가중치를 양쪽에서 화이트닝</b>한 뒤 그 공간에서 SVD를 수행하고, 역 Cholesky로 저랭크 인자를 원래 공간으로 "컬러링"한다. 결과는 닫힌 형태의 최적 저랭크 분해다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.00821</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">20–40%</div><div class="l"><span class="t-en">lower decomposition error vs SVD-LLM</span><span class="t-ko">SVD-LLM 대비 분해 오차 감소</span></div></div>
+      <div class="stat"><div class="n">167 vs 680</div><div class="l"><span class="t-en">LLaMA3-8B wiki2 ppl @40% (OBD vs SVD-LLM)</span><span class="t-ko">LLaMA3-8B wiki2 ppl @40% (OBD vs SVD-LLM)</span></div></div>
+      <div class="stat"><div class="n">128</div><div class="l"><span class="t-en">calibration sequences needed</span><span class="t-ko">필요한 캘리브레이션 시퀀스</span></div></div>
+      <div class="stat"><div class="n">4–7%</div><div class="l"><span class="t-en">extra runtime over plain SVD</span><span class="t-ko">순수 SVD 대비 추가 런타임</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Perplexity vs prior SVD methods</span><span class="t-ko">기존 SVD 방법 대비 Perplexity</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> WikiText-2 perplexity (↓) for <b>LLaMA3-8B</b> low-rank-decomposed at 10–40% weight compression, 128 C4 calibration samples, uniform rank truncation. OBD-LLM (ours) is the rightmost column.</caption>
+        <caption class="t-ko"><b>Table 1.</b> <b>LLaMA3-8B</b>을 10–40% 가중치 압축으로 저랭크 분해했을 때의 WikiText-2 perplexity (↓). 128개 C4 캘리브레이션 샘플, 균일 랭크 절단. OBD-LLM(제안)이 맨 오른쪽 열.</caption>
+        <thead><tr><th><span class="t-en">Compression</span><span class="t-ko">압축률</span></th><th>ASVD</th><th>SVD-LLM</th><th>OBD-LLM (Ours)</th></tr></thead>
+        <tbody>
+          <tr><td>10%</td><td>29.68</td><td>21.23</td><td class="up">15.73</td></tr>
+          <tr><td>20%</td><td>121.3</td><td>49.88</td><td class="up">32.92</td></tr>
+          <tr><td>30%</td><td>927.2</td><td>160.3</td><td class="up">70.83</td></tr>
+          <tr><td>40%</td><td>2253</td><td>679.8</td><td class="up">167.3</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas</span><span class="t-ko">두 가지 핵심 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">Loss-space objective</span>
+        <h3>Hessian = input ⊗ output</h3>
+        <p class="t-en">Instead of the raw Frobenius error, measure decomposition damage in the <b>task-loss geometry</b>. For a linear layer, the loss Hessian is a Kronecker product H<sub>w</sub> = C<sub>x</sub> ⊗ C<sub>g</sub> of the input-activation covariance and the output-gradient covariance — a K-FAC approximation the authors verify is tight (input–gradient correlation ρ ≤ 0.1 in every LLaMA-3-8B layer).</p>
+        <p class="t-ko">원시 Frobenius 오차 대신, 분해로 인한 손상을 <b>태스크 손실 기하</b>에서 측정한다. 선형 레이어의 손실 헤시안은 입력 활성 공분산과 출력 그래디언트 공분산의 크로네커 곱 H<sub>w</sub> = C<sub>x</sub> ⊗ C<sub>g</sub> 이며 — 저자들은 이 K-FAC 근사가 타이트함을 검증한다(모든 LLaMA-3-8B 레이어에서 입력–그래디언트 상관 ρ ≤ 0.1).</p>
+      </div>
+      <div class="m">
+        <span class="tag">Bi-directional whitening</span>
+        <h3>Closed-form optimum</h3>
+        <p class="t-en">The objective collapses to ‖L<sub>g</sub><sup>⊤</sup> ∆W L<sub>x</sub>‖<sub>F</sub><sup>2</sup>, where L<sub>x</sub>, L<sub>g</sub> are Cholesky factors of the two covariances. So: whiten the weight on both sides, take the plain SVD there, then invert the whitening ("coloring"). SVD-LLM is exactly the special case where you drop L<sub>g</sub>.</p>
+        <p class="t-ko">목적함수는 ‖L<sub>g</sub><sup>⊤</sup> ∆W L<sub>x</sub>‖<sub>F</sub><sup>2</sup> 로 정리된다. 여기서 L<sub>x</sub>, L<sub>g</sub>는 두 공분산의 Cholesky 인자다. 즉 가중치를 양쪽에서 화이트닝하고 그 공간에서 순수 SVD를 취한 뒤, 화이트닝을 역변환("컬러링")한다. SVD-LLM은 L<sub>g</sub>를 빼버린 특수한 경우일 뿐이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Collect covariances.</span><span class="t-ko">공분산 수집.</span></b><span class="t-en">Feed 128 calibration sequences; gather the input-activation covariance C<sub>x</sub> and the output-gradient covariance C<sub>g</sub> (from a next-token-prediction loss). ~3 minutes total.</span><span class="t-ko">128개 캘리브레이션 시퀀스를 통과시켜 입력 활성 공분산 C<sub>x</sub>와 (다음 토큰 예측 손실로부터) 출력 그래디언트 공분산 C<sub>g</sub>를 모은다. 전체 약 3분.</span></li>
+      <li><b><span class="t-en">Cholesky-factorize both.</span><span class="t-ko">양쪽 Cholesky 분해.</span></b><span class="t-en">C<sub>x</sub> = L<sub>x</sub>L<sub>x</sub><sup>⊤</sup> and C<sub>g</sub> = L<sub>g</sub>L<sub>g</sub><sup>⊤</sup>, with 10% diagonal dampening for numerical stability.</span><span class="t-ko">C<sub>x</sub> = L<sub>x</sub>L<sub>x</sub><sup>⊤</sup>, C<sub>g</sub> = L<sub>g</sub>L<sub>g</sub><sup>⊤</sup>. 수치 안정성을 위해 대각에 10% 댐핑.</span></li>
+      <li><b><span class="t-en">Whiten → SVD → truncate.</span><span class="t-ko">화이트닝 → SVD → 절단.</span></b><span class="t-en">Form W̃ = L<sub>g</sub><sup>⊤</sup> W L<sub>x</sub>, run standard SVD, keep the top-r singular directions.</span><span class="t-ko">W̃ = L<sub>g</sub><sup>⊤</sup> W L<sub>x</sub> 를 만들어 표준 SVD를 수행하고 상위 r개 특이 방향만 남긴다.</span></li>
+      <li><b><span class="t-en">Color back.</span><span class="t-ko">컬러링(역변환).</span></b><span class="t-en">Recover the factors in the original space via inverse Cholesky — done with an O(n²) triangular solve, never an explicit inverse.</span><span class="t-ko">역 Cholesky로 원래 공간의 인자를 복원한다 — 명시적 역행렬 없이 O(n²) 삼각 해법(triangular solve)으로 처리.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">It's a drop-in on any linear layer, and the same bi-directional whitening also improves quant/prune + low-rank compensation (beats EoRA) and low-rank KV-cache compression (beats PaLU: 32.3 vs 30.8 LongBench at 50%).</p><p class="t-ko">어떤 선형 레이어에도 바로 적용되고, 같은 양방향 화이트닝이 양자화/프루닝 + 저랭크 보상(EoRA 능가)과 저랭크 KV 캐시 압축(PaLU 능가: 50%에서 LongBench 32.3 vs 30.8)까지 개선한다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The conceptual takeaway: for compression, a layer's <i>output-side</i> gradient statistics carry as much information as its input activations. Whitening only the input (SVD-LLM) leaves accuracy on the table.</p><p class="t-ko">개념적 교훈: 압축에서 레이어의 <i>출력 쪽</i> 그래디언트 통계는 입력 활성만큼의 정보를 담는다. 입력만 화이트닝(SVD-LLM)하면 정확도를 그냥 버리는 셈이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">It's nearly free: the extra Cholesky and triangular-solve add only 4–7% latency because the O(n³) SVD dominates anyway.</p><p class="t-ko">비용은 거의 없다: 추가 Cholesky와 삼각 해법은 지연을 4–7%만 늘리는데, 어차피 O(n³) SVD가 지배적이기 때문이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The evidence stops at LLaMA2-7B and LLaMA3-8B — no larger, MoE, or multimodal models, and no head-to-head against the wave of newer 2026 SVD compressors (Swift-SVD, IO-SVD, TSVD). And "closing the gap" is relative: even OBD-LLM's LLaMA3-8B perplexity at 40% compression is 167, still worlds away from the ~6 of the full model, so the aggressive-compression regime remains unusable in absolute terms.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 실험이 LLaMA2-7B와 LLaMA3-8B에서 멈춘다 — 더 큰 모델, MoE, 멀티모달이 없고, 2026년에 쏟아진 최신 SVD 압축기들(Swift-SVD, IO-SVD, TSVD)과의 직접 비교도 없다. "격차를 좁힌다"는 것도 상대적이다: 40% 압축에서 OBD-LLM의 LLaMA3-8B perplexity조차 167로, 원본의 ~6과는 여전히 딴 세상이라 공격적 압축 영역은 절대적으로는 쓰기 어렵다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2604.00821">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2604.00821">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2604.00821">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2604.00821">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>on the Low-Rank Decomposition axis: a principled, second-order twist (bi-directional whitening from the K-FAC Hessian) that generalizes the SVD-LLM line and cleanly explains why "input-only" whitening was leaving 20–40% on the table</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-04.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Low-Rank Decomposition 축: SVD-LLM 계열을 일반화하는 원리적·2차 정보 기반 변주(K-FAC 헤시안에서 나온 양방향 화이트닝)로, "입력만" 화이트닝이 왜 20–40%를 버리고 있었는지 깔끔히 설명한다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-04.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
