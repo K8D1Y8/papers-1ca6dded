@@ -87,7 +87,8 @@ const DATA = {
         ['xKV','method','Cross-layer KV compression via aligned singular vectors','2503.18893'],
         ['KV-cache eviction','concept','Drop low-value cache entries to fit memory','2512.14946'],
         ['Prefix caching','concept','Reuse KV of shared context prefixes','2509.16857'],
-        ['E-mem','method','Multi-agent episodic context reconstruction for long-term agent memory · ICML 2026','2601.21714'] ]},
+        ['E-mem','method','Multi-agent episodic context reconstruction for long-term agent memory · ICML 2026','2601.21714'],
+        ['MEMO','method','Memory-augmented context optimization for multi-turn multi-agent LLM games','2603.09022'] ]},
       { name:'Protocols & Topology', blurb:'Message formats and communication graphs for text-based collaboration.', nodes:[
         ['A2A protocol','concept','Agent-to-Agent standard for task delegation','2505.02279'],
         ['Agora','method','Scalable communication protocol for LLM networks','2410.11905'],
@@ -95,7 +96,9 @@ const DATA = {
         ['Topology priors','method','Transferable learned communication topologies','2605.17359'],
         ['AgentsNet','benchmark','Benchmark for coordination at scale','2507.08616'],
         ['ProtocolBench','benchmark','Evaluates multi-agent communication protocols','2510.17149'],
-        ['Graph-of-Agents','method','Graph-structured framework organizing multi-agent LLM collaboration','2604.17148'] ]},
+        ['Graph-of-Agents','method','Graph-structured framework organizing multi-agent LLM collaboration','2604.17148'],
+        ['MAS-Squared','method','Self-generative, self-configuring, self-rectifying multi-agent system','2509.24323'],
+        ['RADAR','method','Redundancy-aware diffusion generates multi-agent communication structures','2605.09907'] ]},
       { name:'Latent Reasoning Relay', blurb:'Passing continuous thought vectors instead of text chains.', nodes:[
         ['Coconut','method','Reasoning in continuous latent space, not tokens','2412.06769'],
         ['Latent Thought Flow','method','Efficient latent reasoning past token-CoT bottleneck','2606.16222'],
@@ -129,12 +132,14 @@ const DATA = {
         ['TTT','method','Test-time-training layers with learnable hidden states','2407.04620'],
         ['TTT KV-Binding','method','Test-time training with KV binding is secretly learned linear attention · ICML 2026','2602.21204'],
         ['MesaNet','model','Sequence layer performing locally optimal test-time (mesa) optimization','2506.05233'],
-        ['Preconditioned DeltaNet','method','Curvature-aware preconditioning for delta-rule linear recurrences','2604.21100'] ]},
+        ['Preconditioned DeltaNet','method','Curvature-aware preconditioning for delta-rule linear recurrences','2604.21100'],
+        ['TTT Done Right','method','Corrected large-scale test-time-training layers for long-context modeling','2505.23884'] ]},
       { name:'Recurrent Alternatives', blurb:'RNN-style and retention-based transformer successors.', nodes:[
         ['RetNet','model','Retention with parallel, recurrent, chunkwise forms','2307.08621'],
         ['RWKV-7','model','Receptance weighted key-value, dynamic state','2503.14456'],
         ['Griffin / Hawk','model','Gated linear recurrences mixed with local attention','2402.19427'],
-        ['xLSTM','model','Exponential-gated LSTM revival with matrix memory','2405.04517'] ]},
+        ['xLSTM','model','Exponential-gated LSTM revival with matrix memory','2405.04517'],
+        ['PRISM','model','Sequence modeling as parallel residual iteration','2602.10796'] ]},
       { name:'Hybrid Architectures', blurb:'Interleaving attention with SSM/linear layers to recover recall.', nodes:[
         ['Jamba','model','Interleaved Transformer-Mamba MoE hybrid','2403.19887'],
         ['Nemotron-H','model','Production hybrid Mamba-Transformer family','2504.03624'],
@@ -149,7 +154,8 @@ const DATA = {
         ['MQAR','benchmark','Multi-query associative recall probing memory','2312.04927'],
         ['Long Range Arena','benchmark','Benchmark suite for long-sequence models','2011.04006'],
         ['Recall-throughput tradeoff','concept','Fixed-state recurrence trades recall for speed','2402.18668'],
-        ['Retrieval-Aware Distillation','method','Keep ~2% retrieval heads as attention, distill the rest to SSM · ICML 2026','2602.11374'] ]} ]},
+        ['Retrieval-Aware Distillation','method','Keep ~2% retrieval heads as attention, distill the rest to SSM · ICML 2026','2602.11374'],
+        ['Mamba Training Dynamics','concept','Theory of Mamba training: filtering relevant features for SSM generalization','2602.12499'] ]} ]},
 
     { key:'comp', subs:[
       { name:'Quantization', blurb:'Low-bit weights/activations, taming outliers via scaling/rotation.', nodes:[
@@ -168,7 +174,8 @@ const DATA = {
         ['ShortGPT','concept','Drop redundant layers by block influence','2403.03853'],
         ['N:M sparsity','concept','Hardware-friendly fine-grained sparse patterns',''],
         ['GHOST','method','Structured pruning of Mamba-2 states via a balanced-truncation proxy · ICML 2026','2602.11408'],
-        ['R-Sparse','method','Rank-aware activation sparsity for efficient LLM inference','2504.19449'] ]},
+        ['R-Sparse','method','Rank-aware activation sparsity for efficient LLM inference','2504.19449'],
+        ['ARMOR','method','High-performance semi-structured (N:M) pruning via adaptive matrix factorization','2510.05528'] ]},
       { name:'Low-Rank Decomposition', blurb:'Factorize weights into low-rank products via activation/loss-aware SVD.', nodes:[
         ['ASVD','method','Activation-aware SVD for post-training compression','2312.05821'],
         ['SVD-LLM','method','Truncation-aware SVD linking singulars to loss','2403.07378'],
@@ -178,7 +185,10 @@ const DATA = {
         ['Adaptive rank allocation','concept','Per-layer rank budgeting for SVD','2510.19389'],
         ['Swift-SVD','method','Closed-form activation-aware SVD compressing weights and KV cache · ICML 2026','2604.01609'],
         ['SigmaScale','method','SVD-based low-rank LLM compression with singular-value scaling','2606.07098'],
-        ['MLRA','method','Multi-head low-rank attention factorizing the attention projections','2603.02188'] ]},
+        ['MLRA','method','Multi-head low-rank attention factorizing the attention projections','2603.02188'],
+        ['SkipCat','method','Rank-maximized low-rank compression via shared projection and block skipping','2512.13494'],
+        ['OBD-LLM','method','Optimal brain decomposition: bi-directional whitening for optimal low-rank compression','2604.00821'],
+        ['TSVD','method','Efficient LLM pretraining via truncated-SVD orthonormal low-rank layers','2605.28573'] ]},
       { name:'Knowledge Distillation', blurb:'Transfer teacher behavior into a smaller student.', nodes:[
         ['MiniLLM','method','Reverse-KL on-policy white-box distillation','2306.08543'],
         ['GKD','method','Generalized on-policy distillation over samples','2306.13649'],
@@ -197,7 +207,9 @@ const DATA = {
         ['STAR-KV','method','Soft-threshold adaptive-rank control for low-rank KV-cache compression','2606.08382'],
         ['OjaKV','method','Context-aware online low-rank KV-cache compression via Oja\'s rule','2509.21623'],
         ['OBCache','method','Optimal-brain (Hessian) KV-cache pruning for long-context inference','2510.07651'],
-        ['MatryoshkaKV','method','Adaptive low-rank KV compression via trainable nested orthogonal projections','2410.14731'] ]} ]},
+        ['MatryoshkaKV','method','Adaptive low-rank KV compression via trainable nested orthogonal projections','2410.14731'],
+        ['CURDKV','method','Value-guided KV-cache compression via approximated CUR decomposition','2509.15038'],
+        ['MoE-nD','method','Per-layer mixture-of-experts routing for multi-axis KV-cache compression','2604.17695'] ]} ]},
 
     { key:'world', subs:[
       { name:'World-Model Foundations', blurb:'Single-agent latent-dynamics models that train policies in imagination.', nodes:[
@@ -210,14 +222,17 @@ const DATA = {
         ['VLAW','method','VLA policy and a video world model iteratively co-improve via synthetic rollouts · ICML 2026','2602.12063'],
         ['Latent Action World Models','method','Learn continuous latent actions from unlabeled in-the-wild video · ICML 2026','2601.05230'],
         ['Co-Evolving LAW','method','Latent action model and world model co-evolve from unlabeled video','2510.26433'],
-        ['villa-X','model','Enhances latent-action modeling within vision-language-action models','2507.23682'] ]},
+        ['villa-X','model','Enhances latent-action modeling within vision-language-action models','2507.23682'],
+        ['Olaf-World','method','Orienting latent actions for video world modeling','2602.10104'],
+        ['DiLA','method','Disentangled latent action world models','2605.15725'] ]},
       { name:'Multi-Agent World Models', blurb:'Model-based MARL with shared/factored latent dynamics.', nodes:[
         ['CoDreamer','method','Decentralized world models with learned comm','2406.13600'],
         ['COMBO','method','Compositional world models for embodied cooperation','2404.10775'],
         ['MATWM','model','Transformer world model for sample-efficient MARL','2506.18537'],
         ['MAMBA','method','Dreamer-style model-based MARL in imagination','2303.14745'],
         ['Diffusion MARL world model','method','Diffusion multi-agent modeling of joint dynamics','2505.20922'],
-        ['Agent modeling','concept','Predicting other agents within latent dynamics',''] ]},
+        ['Agent modeling','concept','Predicting other agents within latent dynamics',''],
+        ['SeqWM','method','Sequential world models empowering multi-robot cooperation','2509.13095'] ]},
       { name:'Generative Game World Models', blurb:'Action-conditioned video/diffusion models as playable simulators.', nodes:[
         ['Genie','model','Generative interactive environments from video','2402.15391'],
         ['GameNGen','model','Diffusion model as a real-time game engine','2408.14837'],
@@ -284,7 +299,24 @@ const DATA = {
     ['Less-Latent Relay','Coconut','latent reasoning relay'],
     ['Graph-of-Agents','Dynamic topology','per-query communication graph'],
     ['Co-Evolving LAW','Latent Action World Models','latent-action world model from video'],
-    ['villa-X','Latent Action World Models','latent action for VLA']
+    ['villa-X','Latent Action World Models','latent action for VLA'],
+    ['SkipCat','SVD-LLM','rank-maximized low-rank SVD compression'],
+    ['OBD-LLM','SVD-LLM','optimal low-rank weight decomposition'],
+    ['OBD-LLM','GPTQ','optimal-brain (Hessian) compression lineage'],
+    ['TSVD','SVD-LLM','truncated-SVD low-rank factorization'],
+    ['ARMOR','N:M sparsity','semi-structured N:M pruning via factorization'],
+    ['CURDKV','H2O','value-guided KV-cache compression / eviction'],
+    ['MoE-nD','MLA','multi-axis low-rank KV compression'],
+    ['MoE-nD','PyramidKV','per-layer KV budget allocation'],
+    ['TTT Done Right','TTT','corrected large-scale TTT layers'],
+    ['TTT Done Right','MesaNet','test-time optimization sequence layer'],
+    ['PRISM','DeltaNet','parallelizable linear recurrence'],
+    ['Mamba Training Dynamics','Mamba','training-dynamics analysis of selective SSM'],
+    ['RADAR','Dynamic topology','generating multi-agent communication topology'],
+    ['MEMO','E-mem','long-term multi-agent memory'],
+    ['SeqWM','MATWM','multi-agent world model for cooperation'],
+    ['Olaf-World','Latent Action World Models','latent-action video world model'],
+    ['DiLA','Latent Action World Models','disentangled latent actions from video']
   ]
 };
 
