@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Interlat — Agents that talk in latent space</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent Systems · Latent Communication · Efficient Collaboration</span><span class="t-ko">Multi-Agent Systems · Latent Communication · Efficient Collaboration</span></span>
+      <span>2026 · 07 · 06</span>
+    </div>
+    <h1>Interlat — telepathy for agents<br>
+      <span class="glow t-en">— let LLM agents pass raw hidden states instead of text, then compress that "thought" 24× without decoding a single token</span>
+      <span class="glow t-ko">— LLM 에이전트끼리 텍스트 대신 원시 은닉 상태를 주고받고, 그 "생각"을 토큰 하나 디코딩 없이 24× 압축한다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Zhuoyun Du</b> <span class="t-en">, Runze Wang (equal), Huiyu Bai, Zouying Cao, Xiaoyong Zhu, Yu Cheng, Bo Zheng, Wei Chen, Haochao Ying (corresponding)</span><span class="t-ko">, Runze Wang (공동 1저자), Huiyu Bai, Zouying Cao, Xiaoyong Zhu, Yu Cheng, Bo Zheng, Wei Chen, Haochao Ying (교신저자)</span></span>
+      <span>🏛 Zhejiang University · Alibaba (Future Living Lab) · SJTU</span>
+      <span>🗓 2025-11-12</span>
+      <span>📄 <a href="https://arxiv.org/abs/2511.09149">arXiv:2511.09149</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">When two LLM agents collaborate, they normally talk in <b>natural language</b> — which forces each agent to squeeze its rich internal state (~40,000 bits per hidden vector) down into discrete tokens (~15 bits each), throwing away every alternative reasoning path in the process. <b>Interlat</b> skips the language head entirely: the sender transmits its raw last-layer hidden states directly, and a small trainable <b>communication adapter</b> lets the receiver read them. A token→latent <b>curriculum</b> plus a <b>separation loss</b> teach the actor to actually use the latents instead of ignoring them. Then a separate reasoning model, trained with the actor <i>frozen</i>, autoregressively emits a <b>compact latent message</b> entirely in latent space — squeezing a full trajectory down to <b>8 steps</b> for a <b>24× latency drop</b> (9.19s → 0.39s) with almost no accuracy loss. It beats fine-tuned Chain-of-Thought on ALFWorld, works <b>across model families</b> (Qwen latents → LLaMA actor), and even wins on the hardest MATH Level-5 problems.</p>
+    <p class="t-ko">두 LLM 에이전트가 협업할 때 보통 <b>자연어</b>로 대화한다 — 이는 각 에이전트가 풍부한 내부 상태(은닉 벡터당 ~40,000비트)를 이산 토큰(개당 ~15비트)으로 짜내게 만들어, 그 과정에서 대안적 추론 경로를 전부 버린다. <b>Interlat</b>는 언어 헤드를 통째로 건너뛴다: 송신자가 마지막 층 은닉 상태를 그대로 전송하고, 작은 학습형 <b>communication adapter</b>가 수신자가 그것을 읽게 한다. 토큰→잠재 <b>커리큘럼</b>과 <b>분리 손실</b>이 액터로 하여금 잠재값을 무시하지 않고 실제로 쓰도록 학습시킨다. 그다음 액터를 <i>동결</i>한 채 학습된 별도 추론 모델이, 잠재 공간에서만 자기회귀적으로 <b>압축된 잠재 메시지</b>를 생성한다 — 전체 궤적을 <b>8스텝</b>으로 줄여 정확도 손실 거의 없이 <b>24× 지연 감소</b>(9.19초 → 0.39초). ALFWorld에서 미세조정된 Chain-of-Thought를 이기고, <b>모델 계열을 넘나들며</b>(Qwen 잠재 → LLaMA 액터) 작동하며, 가장 어려운 MATH Level-5 문제에서도 앞선다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Text is a terrible bottleneck for AI-to-AI communication. Every message a multi-agent system passes is a lossy re-encoding: decode the sender's state into words, then re-read those words on the other side. Interlat asks a blunt question — what if agents never decoded at all?</p>
+    <p class="lead t-ko">텍스트는 AI-대-AI 통신에서 끔찍한 병목이다. 멀티에이전트 시스템이 주고받는 모든 메시지는 손실 있는 재인코딩이다 — 송신자의 상태를 단어로 디코딩하고, 반대편에서 그 단어를 다시 읽는다. Interlat는 무뚝뚝한 질문을 던진다: 에이전트가 아예 디코딩을 하지 않는다면?</p>
+    <p class="t-en">Natural language is human-readable, but for an LLM it is a downsampling channel: a hidden state carries roughly <b>40k bits</b>, a token roughly <b>15</b>. Forcing thought through tokens exposes only a single linear chain-of-thought and collapses the "superposition" of parallel hypotheses the model was holding — a documented source of coordination failures in multi-agent systems. Interlat treats an agent's sequence of last-layer hidden states as its "thought" and ships it verbatim. The twist that makes this practical is the <b>compression</b> step: full latent trajectories are long and slow to transmit, so a second model learns to think in latent space and emit a short, information-preserving prefix — cutting latency ~24× while keeping the parallel hypotheses that make latents worth sending in the first place.</p>
+    <p class="t-ko">자연어는 사람이 읽을 수 있지만, LLM에게는 다운샘플링 채널이다: 은닉 상태는 약 <b>40k비트</b>, 토큰은 약 <b>15비트</b>를 담는다. 생각을 토큰으로 강제하면 단일한 선형 chain-of-thought만 노출되고, 모델이 품고 있던 병렬 가설들의 "중첩"이 붕괴한다 — 멀티에이전트 조정 실패의 알려진 원인이다. Interlat는 에이전트의 마지막 층 은닉 상태 시퀀스를 그 "생각"으로 보고 그대로 전송한다. 이를 실용적으로 만드는 반전은 <b>압축</b> 단계다: 전체 잠재 궤적은 길어 전송이 느리므로, 두 번째 모델이 잠재 공간에서 사고하여 짧고 정보 보존적인 프리픽스를 내보내도록 학습한다 — 잠재값을 보낼 가치가 있게 만드는 병렬 가설을 유지하면서 지연을 ~24× 줄인다.</p>
+    <figure class="fig">
+      <img src="fig/2511.09149/interlat-fig1.png" alt="Two-row diagram. Top: language-space communication — a reasoning model emits discrete tokens (about 15 bits per token, constrained expressive range) that a raw actor model re-encodes. Bottom: Interlat latent-space communication — the reasoning model's last hidden states (about 40k bits per state, information rich) pass through a multi-head-attention plus projector communication adapter and are fed directly as input embeddings, bracketed by beginning-of-prompt and end-of-prompt tokens, to a latent-space actor model.">
+      <figcaption class="t-en"><b>Fig 1.</b> Language vs latent communication. <b>Top:</b> the standard path — the reasoning agent decodes its thought into discrete tokens (≈15 bits/token, a "constrained expressive range") that the actor must re-encode. <b>Bottom (Interlat):</b> the reasoning agent's sequence of last hidden states H (≈40k bits/state, "information rich") is passed through a small communication adapter (self-attention + projector) and fed <i>directly</i> as input embeddings to the actor, bracketed by learned &lt;bop&gt;/&lt;eop&gt; markers — no decoding, no re-encoding.</figcaption>
+      <figcaption class="t-ko"><b>Fig 1.</b> 언어 통신 vs 잠재 통신. <b>위:</b> 표준 경로 — 추론 에이전트가 자기 생각을 이산 토큰(≈15비트/토큰, "제한된 표현 범위")으로 디코딩하고 액터가 다시 인코딩해야 한다. <b>아래(Interlat):</b> 추론 에이전트의 마지막 은닉 상태 시퀀스 H(≈40k비트/상태, "정보 풍부")가 작은 communication adapter(self-attention + projector)를 거쳐 학습된 &lt;bop&gt;/&lt;eop&gt; 마커 사이에 <i>직접</i> 액터의 입력 임베딩으로 들어간다 — 디코딩도, 재인코딩도 없다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure (Figure 1)</span><span class="t-ko">출처: 논문 원본 그림 (Figure 1)</span> · arXiv:2511.09149</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">24×</div><div class="l"><span class="t-en">latency drop from 8-step compressed latents (9.19s → 0.39s)</span><span class="t-ko">8스텝 압축 잠재의 지연 감소 (9.19초 → 0.39초)</span></div></div>
+      <div class="stat"><div class="n">~40k : 15</div><div class="l"><span class="t-en">bits per hidden state vs per token — the channel Interlat unlocks</span><span class="t-ko">은닉 상태당 vs 토큰당 비트 — Interlat가 여는 채널</span></div></div>
+      <div class="stat"><div class="n">70.48%</div><div class="l"><span class="t-en">ALFWorld seen success (Qwen2.5-7B) vs 67.14% for fine-tuned CoT</span><span class="t-ko">ALFWorld seen 성공률 (Qwen2.5-7B) vs 미세조정 CoT 67.14%</span></div></div>
+      <div class="stat"><div class="n">8</div><div class="l"><span class="t-en">latent steps a full reasoning trajectory compresses into (~1.8% of length)</span><span class="t-ko">전체 추론 궤적이 압축되는 잠재 스텝 수 (길이의 ~1.8%)</span></div></div>
+      <div class="stat"><div class="n">71.39%</div><div class="l"><span class="t-en">unseen success with Qwen→LLaMA cross-family latents</span><span class="t-ko">Qwen→LLaMA 계열 간 잠재의 unseen 성공률</span></div></div>
+      <div class="stat"><div class="n">15.80</div><div class="l"><span class="t-en">MATH Level-5 accuracy — beats CoT's 15.05 on the hardest tier</span><span class="t-ko">MATH Level-5 정확도 — 가장 어려운 등급에서 CoT의 15.05 초과</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The headline result</span><span class="t-ko">핵심 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> ALFWorld success rate (%), <b>seen</b> tasks, across three actor backbones. Interlat beats both fine-tuned Chain-of-Thought (a strong language upper bound) and the No-Comm ablation on every backbone. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 1.</b> ALFWorld 성공률(%), <b>seen</b> 과제, 세 가지 액터 백본. Interlat는 미세조정 Chain-of-Thought(강한 언어 상한선)와 통신 제거(No-Comm) 어블레이션을 모든 백본에서 이긴다. 높을수록 좋음.</caption>
+        <thead><tr><th><span class="t-en">Method</span><span class="t-ko">방법</span></th><th>Qwen2.5-7B</th><th>Qwen2.5-0.5B</th><th>LLaMA3.1-8B</th></tr></thead>
+        <tbody>
+          <tr><td><b>Interlat (Ours)</b></td><td class="up">70.48</td><td class="up">61.19</td><td class="up">70.71</td></tr>
+          <tr><td>CoT (full)</td><td>67.14</td><td>57.86</td><td>69.35</td></tr>
+          <tr><td>No-CoT</td><td>65.71</td><td>57.14</td><td>67.18</td></tr>
+          <tr><td>No-Comm (ablation)</td><td>62.14</td><td>50.48</td><td>63.57</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">The gains are real but not enormous — typically <b>+1.4 to +3.3 points</b> over the fine-tuned CoT upper bound. The more striking signal is <i>where</i> latents win: the biggest margin is on the tiny 0.5B model (+3.3), and on ALFWorld the actor takes <b>longer but more successful</b> trajectories, which the authors read as informed exploration from preserved parallel hypotheses rather than random wandering.</p>
+    <p class="t-ko">이득은 실재하지만 거대하진 않다 — 미세조정 CoT 상한선 대비 보통 <b>+1.4 ~ +3.3점</b>. 더 인상적인 신호는 잠재가 <i>어디서</i> 이기느냐다: 가장 큰 격차는 작은 0.5B 모델(+3.3)에서 나오고, ALFWorld에서 액터는 <b>더 길지만 더 성공적인</b> 궤적을 밟는다. 저자들은 이를 무작위 배회가 아니라 보존된 병렬 가설에서 나온 "정보에 기반한 탐험"으로 해석한다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three moving parts</span><span class="t-ko">세 가지 핵심 구성요소</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">Channel</span>
+        <h3><span class="t-en">Ship the hidden states, adapt on arrival</span><span class="t-ko">은닉 상태를 그대로, 도착 시 적응</span></h3>
+        <p class="t-en">The sender collects its last-layer hidden states H = [h₁…h_L] (one per generated token) and transmits the matrix, not the tokens. The receiver splices H into its own input embeddings between learned &lt;bop&gt;/&lt;eop&gt; markers; a lightweight <b>communication adapter</b> (self-attention + projection) rescales the foreign latents so the actor can read them.</p>
+        <p class="t-ko">송신자는 마지막 층 은닉 상태 H = [h₁…h_L](생성 토큰당 하나)를 모아 토큰이 아닌 그 행렬을 전송한다. 수신자는 학습된 &lt;bop&gt;/&lt;eop&gt; 마커 사이에 H를 자기 입력 임베딩으로 이어붙이고, 가벼운 <b>communication adapter</b>(self-attention + projection)가 외부 잠재값을 재조정해 액터가 읽게 한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Learning to listen</span>
+        <h3><span class="t-en">Curriculum + separation + alignment</span><span class="t-ko">커리큘럼 + 분리 + 정렬</span></h3>
+        <p class="t-en">Three signals stop the actor from ignoring the latents: a token→latent <b>curriculum</b> that gradually swaps plan tokens for hidden states; a <b>separation loss</b> that pushes apart the actor's output under matched vs mismatched (wrong-task) latents; and a <b>plan-alignment loss</b> that anchors latent-conditioned behavior to the corresponding language plan so the model can't cheat with idiosyncratic tokens.</p>
+        <p class="t-ko">액터가 잠재값을 무시하지 못하게 세 신호가 작동한다: 계획 토큰을 은닉 상태로 점진 교체하는 토큰→잠재 <b>커리큘럼</b>; 매칭 vs 미스매칭(다른 과제) 잠재 하의 액터 출력을 밀어내는 <b>분리 손실</b>; 잠재 조건 행동을 대응하는 언어 계획에 고정해 특이 토큰으로 속이지 못하게 하는 <b>계획 정렬 손실</b>.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Compression</span>
+        <h3><span class="t-en">A reasoning model that thinks in latent space</span><span class="t-ko">잠재 공간에서 사고하는 추론 모델</span></h3>
+        <p class="t-en">With the actor <b>frozen</b>, a second model autoregressively generates a short latent message by feeding its own hidden state back as the next input — no token decoding in the loop. Three losses keep it faithful: actor cross-entropy (utility), an uncertainty-weighted agreement loss vs the full latents, and a <b>latent-direction (geometry) loss</b> — ablations show geometry is the single most critical term.</p>
+        <p class="t-ko">액터를 <b>동결</b>한 채 두 번째 모델이 자기 은닉 상태를 다음 입력으로 되먹여 짧은 잠재 메시지를 자기회귀적으로 생성한다 — 루프 안에 토큰 디코딩이 없다. 세 손실이 충실도를 유지한다: 액터 교차엔트로피(유용성), 전체 잠재 대비 불확실성 가중 일치 손실, 그리고 <b>잠재 방향(기하) 손실</b> — 어블레이션에서 기하가 가장 결정적인 항이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Generate & capture.</span><span class="t-ko">생성과 포착.</span></b><span class="t-en"> The sender (reasoning) agent produces a plan; instead of its text, we grab the last-layer hidden state at every step to form the matrix H.</span><span class="t-ko"> 송신(추론) 에이전트가 계획을 생성한다. 그 텍스트 대신 매 스텝의 마지막 층 은닉 상태를 모아 행렬 H를 만든다.</span></li>
+      <li><b><span class="t-en">Transmit as embeddings.</span><span class="t-ko">임베딩으로 전송.</span></b><span class="t-en"> H is inserted into the receiver's prompt between &lt;bop&gt;/&lt;eop&gt; and passed through the communication adapter — no words are ever produced.</span><span class="t-ko"> H를 &lt;bop&gt;/&lt;eop&gt; 사이 수신자 프롬프트에 삽입하고 communication adapter를 통과시킨다 — 단어는 전혀 생성되지 않는다.</span></li>
+      <li><b><span class="t-en">Train the actor to use it.</span><span class="t-ko">액터가 쓰도록 학습.</span></b><span class="t-en"> Task loss + separation loss + plan-alignment loss under a token→latent curriculum; a sharp drop in the separation loss around ~2.2k steps marks the "aha" moment when the actor starts exploiting the latents.</span><span class="t-ko"> 토큰→잠재 커리큘럼 하에서 과제 손실 + 분리 손실 + 계획 정렬 손실. ~2.2k 스텝 부근에서 분리 손실이 급락하는 것이 액터가 잠재값을 활용하기 시작하는 "아하" 순간이다.</span></li>
+      <li><b><span class="t-en">Compress with a frozen actor.</span><span class="t-ko">동결 액터로 압축.</span></b><span class="t-en"> A separate reasoning model learns to emit K≪L latents (down to 8) that keep the actor's behavior — geometry-alignment loss prevents representational drift.</span><span class="t-ko"> 별도 추론 모델이 액터 행동을 유지하는 K≪L(최소 8개) 잠재값을 내보내도록 학습한다 — 기하 정렬 손실이 표현 드리프트를 막는다.</span></li>
+      <li><b><span class="t-en">Act, fast.</span><span class="t-ko">빠르게 행동.</span></b><span class="t-en"> The receiver conditions on the compact latent prefix and executes — 24× lower message latency, and it scales to 3-agent chain and tree topologies.</span><span class="t-ko"> 수신자는 압축 잠재 프리픽스를 조건으로 실행한다 — 메시지 지연 24× 감소, 3-에이전트 체인·트리 토폴로지로 확장된다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><b>Latents can be compressed hard and stay useful.</b> Trained 8-step messages hold accuracy while naive truncation collapses — the win is a learned information-preserving bottleneck, not just "send fewer vectors."</p><p class="t-ko"><b>잠재값은 강하게 압축해도 쓸모를 유지한다.</b> 학습된 8스텝 메시지는 정확도를 지키는 반면 단순 절단은 무너진다 — 핵심은 "벡터를 덜 보낸다"가 아니라 학습된 정보 보존 병목이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><b>Continuous > linear text on hard reasoning.</b> Latents preserve a superposition of hypotheses, so Interlat edges out CoT exactly where language forces "premature collapse" (MATH Level-5).</p><p class="t-ko"><b>어려운 추론에선 연속 표현 > 선형 텍스트.</b> 잠재값은 가설의 중첩을 보존하므로, 언어가 "조기 붕괴"를 강요하는 바로 그 지점(MATH Level-5)에서 Interlat가 CoT를 앞선다.</p></div>
+      <div class="t"><span class="ic">🔀</span><p class="t-en"><b>It transfers across model families.</b> Qwen-generated latents train a LLaMA actor and <i>improve</i> results — evidence of model-agnostic, task-level meaning rather than architecture-specific artifacts.</p><p class="t-ko"><b>모델 계열을 넘어 전이된다.</b> Qwen이 생성한 잠재값으로 LLaMA 액터를 학습해도 결과가 <i>향상</i>된다 — 아키텍처 특유의 인공물이 아닌 모델 불가지론적·과제 수준 의미의 증거다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the framing ("telepathy", "24×") outruns the deltas. The 24× is a latency ratio against a decode-heavy baseline, not a task-quality gain; accuracy improvements over fine-tuned CoT are usually 1–3 points, and CoT still wins <i>overall</i> on MATH and roughly ties on some unseen splits (LLaMA unseen: 70.90 vs CoT 70.82). More fundamentally, Interlat needs <b>white-box access to hidden states</b> (closed API models are out), is validated only on <b>2–3 agents with no tool use, retrieval, or debate</b>, and produces <b>uninterpretable</b> messages — there is no proposed way to debug or audit a latent conversation, which is a real deployment and safety gap.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 프레이밍("텔레파시", "24×")이 실제 차이를 앞선다. 24×는 디코딩이 무거운 베이스라인 대비 지연 비율이지 과제 품질 향상이 아니며, 미세조정 CoT 대비 정확도 향상은 대개 1~3점이고 MATH에선 CoT가 <i>전체적으로</i> 앞서며 일부 unseen 분할에선 거의 동률이다(LLaMA unseen: 70.90 vs CoT 70.82). 더 근본적으로 Interlat는 <b>은닉 상태에 대한 화이트박스 접근</b>이 필요하고(폐쇄 API 모델 불가), <b>도구 사용·검색·토론 없는 2~3 에이전트</b>에서만 검증됐으며, <b>해석 불가능한</b> 메시지를 만든다 — 잠재 대화를 디버그·감사할 방법이 제안되지 않았고, 이는 실제 배포·안전성 공백이다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2511.09149">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2511.09149">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2511.09149">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2511.09149">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>a concrete, well-ablated attempt at entirely-latent inter-agent communication, balancing this month's low-rank-compression streak with the multi-agent latent-communication axis</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-06.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>완전 잠재 공간 에이전트 통신에 대한 구체적이고 어블레이션이 탄탄한 시도로, 이달의 저랭크 압축 편중을 멀티에이전트 잠재 통신 축으로 균형 맞춤</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-06.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
