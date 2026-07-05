@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · LoRDS — Breaking the Blocks</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Quantization · Low-Rank Decomposition</span><span class="t-ko">Model Compression · Quantization · Low-Rank Decomposition</span></span>
+      <span>2026 · 07 · 05</span>
+    </div>
+    <h1>Breaking the Blocks (LoRDS)<br>
+      <span class="glow t-en">— make the quantization scale a low-rank matrix, and PTQ, QAT &amp; LoRA become one method</span>
+      <span class="glow t-ko">— 양자화 스케일을 저랭크 행렬로 만들면 PTQ·QAT·LoRA가 하나의 방법이 된다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Pingzhi Tang</b> <span class="t-en">, Ruijie Zhou, Fanxu Meng, Wenjie Pei, Muhan Zhang (corresponding)</span><span class="t-ko">, Ruijie Zhou, Fanxu Meng, Wenjie Pei, Muhan Zhang (교신저자)</span></span>
+      <span>🏛 Peking University · HIT (Shenzhen) · BIGAI</span>
+      <span>🗓 2026-01-30</span>
+      <span>📄 <a href="https://arxiv.org/abs/2601.22716">arXiv:2601.22716</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Nearly every LLM quantizer chops weights into blocks that share one static scaling factor — cheap, but too rigid to track outliers, and it collapses at ultra-low bit-widths. <b>LoRDS</b> replaces that block scale with a continuous low-rank matrix <b>S = BA</b> (a truncated SVD, rank chosen to exactly match the block-wise parameter budget). The same B, A then drive all three stages of the efficiency lifecycle: post-training quantization (iterative refinement), quantization-aware training (straight-through estimator), and fine-tuning (a <i>multiplicative</i> adapter that folds into the dequant scale for <b>zero</b> inference overhead). Result: <b>+8.4%</b> at 3-bit over LoftQ, <b>+9.6 points</b> on quantized PEFT over QLoRA, and a <b>1.5×</b> inference speedup.</p>
+    <p class="t-ko">거의 모든 LLM 양자화기는 가중치를 블록으로 나눠 하나의 정적 스케일을 공유시킨다 — 싸지만 너무 경직돼 이상치를 못 따라가고 초저비트에서 무너진다. <b>LoRDS</b>는 그 블록 스케일을 연속적 저랭크 행렬 <b>S = BA</b>(잘린 SVD, 랭크는 블록 방식의 파라미터 예산에 정확히 맞춰 선택)로 대체한다. 같은 B, A가 효율화 전 과정을 관통한다: 사후 양자화(반복 정제), 양자화 인식 학습(straight-through estimator), 미세조정(디퀀트 스케일에 흡수돼 추론 오버헤드 <b>0</b>인 <i>곱셈형</i> 어댑터). 결과: 3비트에서 LoftQ 대비 <b>+8.4%</b>, 양자화 PEFT에서 QLoRA 대비 <b>+9.6점</b>, 추론 <b>1.5×</b> 가속.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">For years, quantization, quantization-aware training (QAT), and parameter-efficient fine-tuning (PEFT) have been three separate toolboxes with three separate failure modes. LoRDS notices they all hinge on the same object — the scaling factor — and rewrites it once.</p>
+    <p class="lead t-ko">수년간 양자화, 양자화 인식 학습(QAT), 파라미터 효율 미세조정(PEFT)은 서로 다른 실패 양식을 가진 세 개의 별도 도구상자였다. LoRDS는 이들이 모두 같은 대상 — 스케일링 인자 — 에 달려 있음을 포착하고, 그것을 한 번에 다시 쓴다.</p>
+    <p class="t-en">Block-wise quantization (GPTQ, AWQ, NF4) stores one scale per block of weights. Stack those scales and you get a scaling matrix S that is piecewise-constant — mathematically it is <i>already</i> low-rank, just in the crudest possible way (a staircase). LoRDS's insight is to keep the same parameter count but spend it on a smooth low-rank factorization <b>S = BA</b> instead of a staircase, letting the scale vary per element and hug outliers. Because the scale is what turns integer codes back into weights (Ŵ = Q ⊙ BA), fine-tuning B and A is a <b>multiplicative</b> edit to the weights that never leaves the dequant path — so unlike QLoRA's <i>additive</i> adapter, there is nothing to merge and no extra matmul at inference. And because the edit multiplies a full-rank weight, its effective rank can far exceed the tiny rank r of B and A, breaking the low-rank ceiling that limits ordinary LoRA.</p>
+    <p class="t-ko">블록 단위 양자화(GPTQ, AWQ, NF4)는 가중치 블록마다 스케일 하나를 저장한다. 이를 쌓으면 조각별 상수인 스케일링 행렬 S가 되는데 — 수학적으로 <i>이미</i> 저랭크지만, 가장 조잡한 방식(계단)이다. LoRDS의 통찰은 같은 파라미터 수를 유지하되 계단 대신 매끄러운 저랭크 분해 <b>S = BA</b>에 쓰는 것이다. 그러면 스케일이 원소별로 변하며 이상치를 감쌀 수 있다. 스케일이 정수 코드를 다시 가중치로 되돌리는 장본인이므로(Ŵ = Q ⊙ BA), B와 A를 미세조정하는 것은 디퀀트 경로를 절대 벗어나지 않는 <b>곱셈형</b> 가중치 편집이다 — 따라서 QLoRA의 <i>덧셈형</i> 어댑터와 달리 병합할 것도, 추론 시 추가 행렬곱도 없다. 또 이 편집이 풀랭크 가중치를 곱하므로, 그 유효 랭크는 B·A의 작은 랭크 r을 훨씬 넘어설 수 있어 일반 LoRA의 저랭크 한계를 깬다.</p>
+    <figure class="fig">
+      <img src="fig/2601.22716/lords-arch.png" alt="LoRDS dequantization: a 2-bit integer weight matrix W is element-wise multiplied by a continuous scaling matrix S that is itself the low-rank product B times A with rank 2.">
+      <figcaption class="t-en"><b>Fig 1.</b> LoRDS in one picture. The low-bit integer weight matrix W (here 2-bit codes, left) is dequantized by element-wise multiplication (⊙) with a continuous scaling matrix S that is itself a low-rank product <b>B·A</b> (here rank 2, right). Block-wise methods would instead force S to be a coarse staircase of one scalar per block; LoRDS spends the same parameter budget on a smooth, per-element scale.</figcaption>
+      <figcaption class="t-ko"><b>Fig 1.</b> 한 장으로 본 LoRDS. 저비트 정수 가중치 행렬 W(여기선 2비트 코드, 왼쪽)는 연속 스케일 행렬 S와의 원소별 곱(⊙)으로 디퀀트되며, S 자체가 저랭크 곱 <b>B·A</b>(여기선 랭크 2, 오른쪽)다. 블록 방식은 S를 블록당 스칼라 하나의 거친 계단으로 강제하지만, LoRDS는 같은 파라미터 예산을 매끄러운 원소별 스케일에 쓴다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2601.22716</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+8.4%</div><div class="l"><span class="t-en">3-bit PTQ accuracy over LoftQ (Llama3-8B)</span><span class="t-ko">3비트 PTQ 정확도, LoftQ 대비 (Llama3-8B)</span></div></div>
+      <div class="stat"><div class="n">+9.6 pt</div><div class="l"><span class="t-en">quantized-PEFT avg over QLoRA (Llama3-8B)</span><span class="t-ko">양자화-PEFT 평균, QLoRA 대비 (Llama3-8B)</span></div></div>
+      <div class="stat"><div class="n">1.5×</div><div class="l"><span class="t-en">inference speedup vs QLoRA (RTX 4090)</span><span class="t-ko">추론 가속, QLoRA 대비 (RTX 4090)</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">extra inference overhead — adapter absorbed</span><span class="t-ko">추론 오버헤드 — 어댑터 흡수</span></div></div>
+      <div class="stat"><div class="n">&lt;30 min</div><div class="l"><span class="t-en">PTQ for an 8B model on one A100</span><span class="t-ko">8B 모델 PTQ, A100 1장</span></div></div>
+      <div class="stat"><div class="n">2.25-bit</div><div class="l"><span class="t-en">lowest bit-width still stable</span><span class="t-ko">안정 동작하는 최저 비트폭</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Quantized PEFT — same budget, higher accuracy, no inference tax</span><span class="t-ko">양자화 PEFT — 같은 예산, 더 높은 정확도, 추론 세금 0</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Quantized-PEFT on Llama3-8B at 4-bit, fine-tuned on Commonsense-170k for 3 epochs; average accuracy over 8 commonsense-reasoning tasks. LoRDS beats QLoRA by 9.6 points and LoftQ by 4.2, with fewer floating-point quantization parameters (#FP) and no added inference cost. (Paper Table 5.)</caption>
+        <caption class="t-ko"><b>Table 1.</b> Llama3-8B 4비트 양자화-PEFT, Commonsense-170k에서 3 에폭 미세조정; 8개 상식 추론 태스크 평균 정확도. LoRDS는 QLoRA를 9.6점, LoftQ를 4.2점 앞서며, 부동소수 양자화 파라미터(#FP)는 더 적고 추론 비용 추가도 없다. (논문 Table 5.)</caption>
+        <thead><tr><th>Method (4-bit)</th><th>#FP params</th><th>Extra infer cost</th><th>Commonsense avg (%)</th></tr></thead>
+        <tbody>
+          <tr><td>QLoRA</td><td>193M</td><td>Yes (additive adapter)</td><td>78.08</td></tr>
+          <tr><td>LoftQ</td><td>193M</td><td>Yes (additive adapter)</td><td>83.49</td></tr>
+          <tr><td><b>LoRDS (ours)</b></td><td>84M</td><td>None</td><td class="up">87.68</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Block-wise vs. LoRDS scaling</span><span class="t-ko">블록 방식 vs. LoRDS 스케일링</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,-apple-system,sans-serif">
+        <defs>
+          <linearGradient id="smooth" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#f4c69f"/>
+            <stop offset="0.5" stop-color="#dd7c48"/>
+            <stop offset="1" stop-color="#a63c0e"/>
+          </linearGradient>
+        </defs>
+        <!-- LEFT: block-wise staircase -->
+        <text x="135" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="#c94f1e">Block-wise scale</text>
+        <g>
+          <rect x="60" y="48" width="150" height="37" fill="#d8e6f4"/>
+          <rect x="60" y="85" width="150" height="37" fill="#a9c9e8"/>
+          <rect x="60" y="122" width="150" height="37" fill="#6ea6da"/>
+          <rect x="60" y="159" width="150" height="37" fill="#3d82c4"/>
+          <rect x="60" y="48" width="150" height="148" fill="none" stroke="#ffffff" stroke-width="2"/>
+          <line x1="97.5" y1="48" x2="97.5" y2="196" stroke="#ffffff" stroke-width="1.5"/>
+          <line x1="135" y1="48" x2="135" y2="196" stroke="#ffffff" stroke-width="1.5"/>
+          <line x1="172.5" y1="48" x2="172.5" y2="196" stroke="#ffffff" stroke-width="1.5"/>
+        </g>
+        <text x="135" y="220" text-anchor="middle" font-size="12.5" fill="#7a746b">one static scalar / block → coarse staircase S</text>
+        <!-- ARROW -->
+        <text x="360" y="130" text-anchor="middle" font-size="30" fill="#b9b2a8">→</text>
+        <!-- RIGHT: LoRDS S = B A -->
+        <text x="560" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="#c94f1e">LoRDS &nbsp;S = B · A</text>
+        <!-- B column -->
+        <rect x="470" y="48" width="20" height="148" fill="#c96a3a" rx="2"/>
+        <text x="480" y="212" text-anchor="middle" font-size="13" font-weight="700" fill="#a63c0e">B</text>
+        <text x="500" y="128" text-anchor="middle" font-size="16" fill="#8a8378">×</text>
+        <!-- smooth product -->
+        <rect x="512" y="48" width="148" height="148" fill="url(#smooth)" rx="3"/>
+        <!-- A row -->
+        <rect x="512" y="204" width="148" height="16" fill="#c96a3a" rx="2"/>
+        <text x="678" y="216" text-anchor="middle" font-size="13" font-weight="700" fill="#a63c0e">A</text>
+        <text x="586" y="240" text-anchor="middle" font-size="12.5" fill="#7a746b">continuous per-element scale · same param budget</text>
+      </svg>
+      <div class="cap t-en">Same bytes, different shape. Block-wise quantization forces the scaling matrix S into a coarse staircase (left): every weight in a block gets the identical scalar. LoRDS keeps the same parameter budget but writes S as a smooth low-rank product B·A (right), so the scale can bend to each element — the extra expressiveness is what pays off at ultra-low bit-widths.</div>
+      <div class="cap t-ko">같은 바이트, 다른 형태. 블록 양자화는 스케일 행렬 S를 거친 계단(왼쪽)으로 강제한다: 한 블록 안 모든 가중치가 동일한 스칼라를 받는다. LoRDS는 같은 파라미터 예산을 유지하되 S를 매끄러운 저랭크 곱 B·A(오른쪽)로 쓴다 — 그래서 스케일이 원소마다 휠 수 있고, 이 추가 표현력이 초저비트에서 값을 한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three ideas</span><span class="t-ko">세 가지 핵심 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">SCALE = BA</span>
+        <h3>Continuous low-rank scaling</h3>
+        <p class="t-en">A block-wise quantizer stores one scale per block; stacked, they form a crude piecewise-constant matrix S. LoRDS keeps the byte budget but reshapes S into a truncated-SVD product B·A with rank r = ⌊nm / B(n+m)⌋ — the exact rank that matches block-wise storage. The scale now varies continuously, from coarse (small r) to near per-element (large r).</p>
+        <p class="t-ko">블록 양자화기는 블록당 스케일 하나를 저장한다 — 쌓으면 조각별 상수인 거친 행렬 S가 된다. LoRDS는 바이트 예산은 유지하되 S를 잘린 SVD 곱 B·A로 재구성하며, 랭크 r = ⌊nm / B(n+m)⌋ 는 블록 저장량과 정확히 맞춘 값이다. 이제 스케일은 거친(작은 r) 것부터 거의 원소별(큰 r)까지 연속적으로 변한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">ONE → THREE</span>
+        <h3>One factorization, three stages</h3>
+        <p class="t-en">The same B, A power the whole efficiency lifecycle. PTQ: alternate nearest-code quantization Q with an AdamW update of B, A to minimize ‖W − Q⊙BA‖ (under 30 min for 8B). QAT: make round() differentiable with a straight-through estimator and jointly train W, B, A. No stage needs a bespoke method — they share one parameterization.</p>
+        <p class="t-ko">같은 B, A가 효율화 전 과정을 구동한다. PTQ: 최근접 코드 양자화 Q와 B, A의 AdamW 업데이트를 번갈아 ‖W − Q⊙BA‖ 를 최소화한다(8B에 30분 미만). QAT: round()를 STE로 미분 가능하게 만들어 W, B, A를 함께 학습한다. 어느 단계도 전용 방법이 필요 없다 — 하나의 파라미터화를 공유한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">× not +</span>
+        <h3>Multiplicative, zero-overhead PEFT</h3>
+        <p class="t-en">For a downstream task, fine-tune only B and A. The edit is ΔW = Q ⊙ (B'A' − BA) — multiplicative, living inside the dequant scale, so at deployment it simply becomes the new scale: no adapter to merge, no extra matmul, base-model latency. And multiplying a full-rank W means the effective rank of ΔW can far exceed r, so a LoRA-sized budget buys near-full-rank adaptation.</p>
+        <p class="t-ko">다운스트림 태스크에는 B와 A만 미세조정한다. 편집은 ΔW = Q ⊙ (B'A' − BA) — 곱셈형이며 디퀀트 스케일 안에 존재하므로 배포 시 그냥 새 스케일이 된다: 병합할 어댑터도, 추가 행렬곱도 없고 기본 모델 지연시간 그대로다. 게다가 풀랭크 W를 곱하므로 ΔW의 유효 랭크가 r을 훨씬 넘어설 수 있어, LoRA 크기 예산으로 거의 풀랭크 적응을 얻는다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Decompose the scale.</span><span class="t-ko">스케일을 분해.</span></b><span class="t-en"> SVD the block-wise scaling matrix into B·A, with rank r chosen to match the original block storage — initialization alone already matches NF4 accuracy.</span><span class="t-ko"> 블록 스케일 행렬을 B·A로 SVD하고, 랭크 r을 원래 블록 저장량에 맞춘다 — 초기화만으로 이미 NF4 정확도 수준.</span></li>
+      <li><b><span class="t-en">Refine (PTQ).</span><span class="t-ko">정제 (PTQ).</span></b><span class="t-en"> Alternate nearest-code quantization Q and an AdamW update of B, A to cut the Frobenius reconstruction error; on Llama3-8B this drops the residual nuclear norm 358 → 329.</span><span class="t-ko"> 최근접 코드 양자화 Q와 B, A의 AdamW 업데이트를 번갈아 Frobenius 복원 오차를 줄인다; Llama3-8B에서 잔차 핵노름 358 → 329.</span></li>
+      <li><b><span class="t-en">Optionally sharpen (QAT).</span><span class="t-ko">선택적 강화 (QAT).</span></b><span class="t-en"> Push round() through a straight-through estimator and jointly train W, B, A so the model absorbs quantization noise.</span><span class="t-ko"> round()를 STE로 통과시키고 W, B, A를 함께 학습해 모델이 양자화 잡음을 흡수하게 한다.</span></li>
+      <li><b><span class="t-en">Adapt multiplicatively (PEFT).</span><span class="t-ko">곱셈형 적응 (PEFT).</span></b><span class="t-en"> Freeze W, fine-tune only B, A; the update ΔW = Q⊙(B'A'−BA) is effectively high-rank yet costs a LoRA-sized budget.</span><span class="t-ko"> W는 동결하고 B, A만 미세조정; 업데이트 ΔW = Q⊙(B'A'−BA)는 사실상 고랭크지만 LoRA 크기 예산이면 된다.</span></li>
+      <li><b><span class="t-en">Deploy at base speed.</span><span class="t-ko">기본 속도로 배포.</span></b><span class="t-en"> B'A' folds back into the dequant scale; a custom Triton kernel serves 1.5× QLoRA throughput with no adapter to merge.</span><span class="t-ko"> B'A'는 디퀀트 스케일에 다시 접히고, 커스텀 Triton 커널이 병합할 어댑터 없이 QLoRA 대비 1.5× 처리량을 낸다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">If you already ship a block-wise quantized model, LoRDS is a drop-in: identical storage, a strictly more expressive scale, and a single code path for compression, QAT, and fine-tuning.</p><p class="t-ko">이미 블록 양자화 모델을 배포 중이라면 LoRDS는 그대로 끼워 넣을 수 있다: 동일한 저장량, 엄밀히 더 표현력 있는 스케일, 그리고 압축·QAT·미세조정을 위한 단일 코드 경로.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The reframing is the contribution — "the scaling factor was always a low-rank matrix, so make it a good one." It costs nothing in memory and recasts quantization and adaptation as edits to the same object.</p><p class="t-ko">재해석 자체가 기여다 — "스케일링 인자는 원래 저랭크 행렬이었으니, 제대로 된 것으로 만들자." 메모리 비용 0이며 양자화와 적응을 같은 대상에 대한 편집으로 다시 본다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Multiplicative adapters are an under-explored alternative to additive LoRA: zero merge cost and effectively high rank. Expect follow-ups that test them outside the quantized setting.</p><p class="t-ko">곱셈형 어댑터는 덧셈형 LoRA의 잘 안 탐구된 대안이다: 병합 비용 0에 사실상 고랭크. 양자화 밖 설정에서 이를 시험하는 후속 연구가 예상된다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The wins are real but uneven. The 4-bit PTQ margin over LoftQ is only ~0.5 point; the eye-catching numbers cluster at ultra-low bits (3 / 2.5 / 2.25-bit) and in PEFT — regimes many teams don't deploy yet. Everything is 4–8B Llama/Qwen (no ≥70B, no MoE), the QAT gain over plain INT4-QAT is within noise (65.99 vs 65.85), and the "zero-overhead / 1.5×" claim leans on hand-written Triton kernels versus stock bitsandbytes/peft — so part of the speedup is kernel engineering, not the algorithm.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이득은 실재하나 고르지 않다. 4비트 PTQ의 LoftQ 대비 여유는 ~0.5점뿐이고, 눈에 띄는 수치는 초저비트(3 / 2.5 / 2.25비트)와 PEFT에 몰려 있다 — 아직 많은 팀이 배포하지 않는 영역이다. 전부 4–8B Llama/Qwen(≥70B·MoE 없음)이고, 평범한 INT4-QAT 대비 QAT 이득은 잡음 수준(65.99 vs 65.85)이며, "오버헤드 0 / 1.5×" 주장은 기성 bitsandbytes/peft 대비 손수 짠 Triton 커널에 기대므로 가속의 일부는 알고리즘이 아니라 커널 엔지니어링이다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2601.22716">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2601.22716">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2601.22716">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2601.22716">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>on the Model Compression × Low-Rank Decomposition axis: a clean reframing that makes the quantization scaling factor itself a low-rank matrix (S = BA), unifying PTQ, QAT and PEFT under one parameterization and yielding multiplicative, zero-overhead adapters</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-05.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Model Compression × Low-Rank Decomposition 축: 양자화 스케일링 인자 자체를 저랭크 행렬(S = BA)로 만드는 깔끔한 재해석으로, PTQ·QAT·PEFT를 하나의 파라미터화로 통합하고 곱셈형·오버헤드 0 어댑터를 제공한다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-05.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
