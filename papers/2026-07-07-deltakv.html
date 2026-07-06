@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<!-- 5-min paper summary · DeltaKV · bilingual (EN default / KO toggle) · noindex -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · DeltaKV: Residual-Based KV Cache Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache</span><span class="t-ko">모델 압축 · KV 캐시</span></span>
+      <span>2026.07.07</span>
+    </div>
+    <h1>DeltaKV: Residual-Based KV Cache Compression via Long-Range Similarity<br>
+      <span class="glow t-en">— store only the residual left after subtracting a globally-retrieved reference</span>
+      <span class="glow t-ko">— 전역에서 찾은 참조 토큰을 빼고 남은 잔차(residual)만 저장한다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Jitai Hao</b> <span class="t-en">, Qiang Huang†, Yaowei Wang, Min Zhang, Jun Yu†</span><span class="t-ko">, Qiang Huang†, Yaowei Wang, Min Zhang, Jun Yu† (†교신저자)</span></span>
+      <span>🏛 Harbin Institute of Technology (Shenzhen)</span>
+      <span>🗓 Feb 8, 2026</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.08005">arXiv:2602.08005</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">The KV cache is the memory wall for long-context LLMs. DeltaKV notices that a token's KV state is mostly a <b>shared, high-norm "background"</b> plus a tiny token-specific part — and that the most similar past token is usually <b>far away</b>, not adjacent. So it retrieves a handful of global reference tokens, subtracts their mean, and compresses only the small <b>residual</b>. Paired with sparse attention (OmniKV) and a custom <b>Sparse-vLLM</b> engine, it shrinks the KV cache to <b>45%</b> (or <b>29%</b> with 4-bit) at <b>near-zero accuracy loss</b> and up to <b>2× decode throughput</b> at 512k context.</p>
+    <p class="t-ko">KV 캐시는 롱컨텍스트 LLM의 메모리 병목이다. DeltaKV는 각 토큰의 KV 상태가 대부분 <b>여러 토큰이 공유하는 큰 배경 성분</b> + 아주 작은 토큰 고유 성분으로 이루어졌고, 가장 비슷한 과거 토큰은 <b>바로 옆이 아니라 멀리</b> 있다는 관찰에서 출발한다. 그래서 전역에서 참조 토큰 몇 개를 검색해 평균을 빼고, 남은 작은 <b>잔차</b>만 압축한다. 희소 어텐션(OmniKV) + 전용 <b>Sparse-vLLM</b> 엔진과 결합해 KV 캐시를 <b>45%</b>(4-bit 병용 시 <b>29%</b>)로 줄이면서 <b>정확도 손실은 거의 0</b>, 512k 컨텍스트에서 디코딩 처리량은 <b>최대 2배</b>다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">A Llama-3.1-8B model at 128k context with batch size 8 needs <b>&gt;130 GB</b> of KV cache — more than a single GPU holds. That linear-in-length growth, not the weights, is what kills long-context and agentic inference.</p>
+    <p class="lead t-ko">Llama-3.1-8B을 128k 컨텍스트·배치 8로 돌리면 KV 캐시만 <b>130 GB 이상</b> 필요하다 — GPU 한 장에 안 들어간다. 가중치가 아니라 길이에 선형으로 커지는 이 KV 캐시가 롱컨텍스트·에이전트 추론을 죽인다.</p>
+    <p class="t-en">Most fixes either <b>evict tokens</b> (risk dropping the one you need) or <b>project to low rank</b> assuming <i>local</i> similarity. DeltaKV's contribution is empirical honesty: it measures that KV redundancy is <b>global</b>, reframes compression as <b>residual coding against retrieved references</b>, and — crucially — ships a serving engine (Sparse-vLLM) so the paper savings become real wall-clock speedups instead of theoretical FLOP counts.</p>
+    <p class="t-ko">기존 방법은 대개 <b>토큰을 버리거나</b>(정작 필요한 토큰을 날릴 위험), <i>국소적</i> 유사성을 가정해 <b>저랭크로 투영</b>한다. DeltaKV의 기여는 측정에 근거한 정직함이다: KV 중복성이 <b>전역적</b>임을 실측하고, 압축을 <b>검색된 참조 대비 잔차 부호화</b>로 재정의하며, 무엇보다 서빙 엔진(Sparse-vLLM)까지 함께 내놔서 종이 위 절감이 아니라 실제 벽시계 속도 향상으로 이어지게 한다.</p>
+    <figure class="fig">
+      <img src="fig/2602.08005/x8.png" alt="Overview of DeltaKV: residual encoding against retrieved references, hybrid MSE+NTP training, and inference with sparse attention.">
+      <figcaption class="t-en"><b>Figure 3.</b> DeltaKV overview. <b>Top:</b> for each token, retrieve global reference tokens, take their mean, and encode the residual with a compressor MLP — trained with a hybrid MSE + next-token-prediction loss. <b>Bottom:</b> at inference it plugs into sparse attention (OmniKV), storing compressed residuals and reconstructing only the tokens the sparse mask actually needs.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> DeltaKV 개요. <b>위:</b> 각 토큰마다 전역 참조 토큰을 검색해 평균을 구하고, 남은 잔차를 압축 MLP로 인코딩한다 — MSE + 다음토큰예측(NTP) 하이브리드 손실로 학습. <b>아래:</b> 추론 시 희소 어텐션(OmniKV)에 결합되어, 압축된 잔차만 저장하고 희소 마스크가 실제로 필요로 하는 토큰만 복원한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.08005</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">45%</div><div class="l"><span class="t-en">KV cache kept — near-lossless</span><span class="t-ko">유지되는 KV 캐시 — 거의 무손실</span></div></div>
+      <div class="stat"><div class="n">29%</div><div class="l"><span class="t-en">KV memory with +4-bit quant</span><span class="t-ko">4-bit 양자화 병용 시 KV 메모리</span></div></div>
+      <div class="stat"><div class="n">2.0×</div><div class="l"><span class="t-en">decode throughput @ 512k ctx</span><span class="t-ko">512k 컨텍스트 디코딩 처리량</span></div></div>
+      <div class="stat"><div class="n">50.3</div><div class="l"><span class="t-en">LongBench avg (vs 50.0 full cache)</span><span class="t-ko">LongBench 평균 (풀 캐시 50.0 대비)</span></div></div>
+      <div class="stat"><div class="n">~8</div><div class="l"><span class="t-en">GPU-hours to train (7B/8B)</span><span class="t-ko">학습에 든 GPU-시간 (7B/8B)</span></div></div>
+      <div class="stat"><div class="n">0.92</div><div class="l"><span class="t-en">mean KV token cos-similarity</span><span class="t-ko">KV 토큰 평균 코사인 유사도</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Two observations that motivate the method</span><span class="t-ko">방법을 이끈 두 가지 관찰</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">WHERE is the redundancy?</span>
+        <h3>Long-range, not local</h3>
+        <p class="t-en">Prior low-rank / clustering methods assume similar tokens are neighbors. Measured on real KV caches, <b>over 60%</b> of a token's most-similar past token sits <b>more than 16 positions away</b>, with mean cosine similarity <b>0.92</b>. Compression must look globally, so DeltaKV retrieves references from the whole history — not just a local window.</p>
+        <p class="t-ko">기존 저랭크·클러스터링 기법은 비슷한 토큰이 이웃에 있다고 가정한다. 실제 KV 캐시에서 재보니, 각 토큰의 가장 비슷한 과거 토큰의 <b>60% 이상이 16칸 넘게 떨어져</b> 있고 평균 코사인 유사도는 <b>0.92</b>였다. 압축은 전역을 봐야 하며, DeltaKV는 국소 창이 아니라 전체 히스토리에서 참조를 검색한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">WHAT is compressible?</span>
+        <h3>Subtract the shared background</h3>
+        <p class="t-en">KV states are strongly anisotropic: a few dominant, high-norm directions encode common structure shared by many tokens. Subtracting a globally-retrieved reference removes that shared "background," leaving a <b>low-magnitude, near-zero, noise-like residual</b> — a much flatter spectrum that quantizes and compresses far more easily than the raw KV.</p>
+        <p class="t-ko">KV 상태는 강한 비등방성을 띤다 — 소수의 지배적·큰 노름 방향이 여러 토큰이 공유하는 공통 구조를 담는다. 전역에서 검색한 참조를 빼면 그 공유 "배경"이 제거되고, 남는 건 <b>크기가 작고 0 근처에 몰린 노이즈 같은 잔차</b>다. 스펙트럼이 훨씬 평평해져 원본 KV보다 양자화·압축이 훨씬 쉽다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">
+        <defs>
+          <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 Z" fill="#8a8f98"/>
+          </marker>
+        </defs>
+        <!-- reference set -->
+        <text x="20" y="30" font-size="13" font-weight="700" fill="#c9cdd4">Strided reference set 𝒯</text>
+        <rect x="20" y="42" width="26" height="26" rx="4" fill="#2b3550" stroke="#465066"/>
+        <rect x="54" y="42" width="26" height="26" rx="4" fill="#2b3550" stroke="#465066"/>
+        <rect x="88" y="42" width="26" height="26" rx="4" fill="#3a4a72" stroke="#5b6ea0"/>
+        <rect x="122" y="42" width="26" height="26" rx="4" fill="#2b3550" stroke="#465066"/>
+        <rect x="156" y="42" width="26" height="26" rx="4" fill="#3a4a72" stroke="#5b6ea0"/>
+        <text x="20" y="90" font-size="11" fill="#8a8f98">top-k nearest (L2), pre-RoPE</text>
+        <!-- mean reference -->
+        <path d="M195 60 L245 60" stroke="#8a8f98" stroke-width="1.6" marker-end="url(#ah)"/>
+        <rect x="250" y="44" width="120" height="30" rx="6" fill="#20304d" stroke="#5b6ea0"/>
+        <text x="310" y="63" font-size="12" text-anchor="middle" fill="#cfe0ff">KV_R = mean(refs)</text>
+        <!-- current token -->
+        <text x="250" y="120" font-size="13" font-weight="700" fill="#c9cdd4">Current token</text>
+        <rect x="250" y="128" width="120" height="30" rx="6" fill="#4a2b3a" stroke="#a05b74"/>
+        <text x="310" y="147" font-size="12" text-anchor="middle" fill="#ffd7e4">KV_i</text>
+        <!-- minus -->
+        <path d="M375 143 L470 90" stroke="#8a8f98" stroke-width="1.6" marker-end="url(#ah)"/>
+        <path d="M375 62 L470 90" stroke="#8a8f98" stroke-width="1.6" marker-end="url(#ah)"/>
+        <text x="420" y="70" font-size="20" fill="#e06666">−</text>
+        <!-- residual -->
+        <rect x="475" y="72" width="150" height="34" rx="6" fill="#2a3a2c" stroke="#5b8a5f"/>
+        <text x="550" y="93" font-size="12" text-anchor="middle" fill="#d7ffd9">residual z∆ (tiny)</text>
+        <text x="475" y="126" font-size="11" fill="#8a8f98">compressor MLP f_c · store this only</text>
+        <!-- reconstruct -->
+        <path d="M550 130 L550 175" stroke="#8a8f98" stroke-width="1.6" marker-end="url(#ah)"/>
+        <rect x="430" y="182" width="240" height="34" rx="6" fill="#20304d" stroke="#5b6ea0"/>
+        <text x="550" y="203" font-size="12" text-anchor="middle" fill="#cfe0ff">reconstruct: KV̂ = f_d(z∆) + KV_R</text>
+        <text x="430" y="240" font-size="11" fill="#8a8f98">only for tokens the sparse mask needs</text>
+      </svg>
+      <div class="cap t-en">Retrieve global references → subtract their mean → keep only the small residual. Reconstruction adds the reference back, and happens on-demand for just the tokens sparse attention selects.</div>
+      <div class="cap t-ko">전역 참조를 검색 → 평균을 빼고 → 작은 잔차만 보관. 복원은 참조를 다시 더하며, 희소 어텐션이 고른 토큰에 대해서만 필요할 때 수행된다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Retrieve global references.</span><span class="t-ko">전역 참조 검색.</span></b><span class="t-en"> Keep a strided sample of past KV states; for each new token, fetch its top-k nearest (by L2) and average them into KV_R. All done <b>pre-RoPE</b> so it's position-invariant and generalizes across lengths.</span><span class="t-ko"> 과거 KV 상태를 일정 간격(stride)으로 샘플링해 두고, 새 토큰마다 L2 기준 top-k 최근접을 뽑아 평균 KV_R을 만든다. 전 과정이 <b>RoPE 적용 전(pre-RoPE)</b>이라 위치 불변이고 길이 일반화가 된다.</span></li>
+      <li><b><span class="t-en">Encode the residual.</span><span class="t-ko">잔차 인코딩.</span></b><span class="t-en"> A 2-layer compressor MLP projects both KV_i and KV_R to a latent space; store only their difference z∆ — small, near-zero, and highly quantizable.</span><span class="t-ko"> 2층 압축 MLP가 KV_i와 KV_R을 잠재공간으로 투영하고, 그 차이 z∆만 저장한다 — 작고 0에 몰려 있어 양자화가 잘 된다.</span></li>
+      <li><b><span class="t-en">Train lightweight, keep the LLM frozen.</span><span class="t-ko">가볍게 학습, LLM은 동결.</span></b><span class="t-en"> Only the compressor/decompressor learn, with a hybrid <b>MSE + next-token-prediction</b> loss so attention-critical low-magnitude features survive. ~8 GPU-hours for a 7B/8B model.</span><span class="t-ko"> 압축기/복원기만 학습하며, <b>MSE + 다음토큰예측</b> 하이브리드 손실로 어텐션에 중요한 작은 특징까지 보존한다. 7B/8B 모델에 약 8 GPU-시간.</span></li>
+      <li><b><span class="t-en">Reconstruct on demand under sparse attention.</span><span class="t-ko">희소 어텐션 하에서 필요할 때만 복원.</span></b><span class="t-en"> Paired with OmniKV: a few "filter" layers keep full uncompressed KV, the rest store residuals and decompress <b>only the tokens the sparse mask selects</b> — KV̂ = f_d(z∆) + KV_R.</span><span class="t-ko"> OmniKV과 결합: 소수의 "필터" 층은 압축 없이 풀 KV를 유지하고, 나머지 층은 잔차를 저장했다가 <b>희소 마스크가 고른 토큰만</b> 복원한다 — KV̂ = f_d(z∆) + KV_R.</span></li>
+      <li><b><span class="t-en">Serve with Sparse-vLLM.</span><span class="t-ko">Sparse-vLLM로 서빙.</span></b><span class="t-en"> A custom engine decouples memory management from execution (tiered Full-Pool/Latent-Pool cache manager, fused L2-search + reconstruction kernels) so the compression becomes real throughput, not just fewer bytes.</span><span class="t-ko"> 메모리 관리와 실행을 분리한 전용 엔진(계층형 Full-Pool/Latent-Pool 캐시 매니저, L2 검색+복원 융합 커널)으로 압축을 바이트 절감이 아닌 실제 처리량으로 바꾼다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Accuracy vs. memory (LongBench, Llama-3.1-8B)</span><span class="t-ko">정확도 대 메모리 (LongBench, Llama-3.1-8B)</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (excerpt).</b> KR = KV-cache keep ratio (memory), CR = compute ratio. † = lightweight decompressor. DeltaKV keeps the <b>least</b> memory at the <b>best</b> average — even beating full cache slightly.</caption>
+        <caption class="t-ko"><b>Table 1 (발췌).</b> KR = KV 캐시 유지 비율(메모리), CR = 연산 비율. † = 경량 복원기. DeltaKV는 <b>가장 적은</b> 메모리로 <b>가장 높은</b> 평균을 낸다 — 풀 캐시도 소폭 앞선다.</caption>
+        <thead><tr><th><span class="t-en">Method</span><span class="t-ko">방법</span></th><th>KR&nbsp;↓</th><th>CR&nbsp;↓</th><th>LongBench&nbsp;Avg&nbsp;↑</th></tr></thead>
+        <tbody>
+          <tr><td>Full Cache</td><td>100</td><td>100</td><td>50.0</td></tr>
+          <tr><td>SnapKV <span class="t-en">(evict)</span><span class="t-ko">(제거)</span></td><td>30</td><td>30</td><td>49.8</td></tr>
+          <tr><td>OmniKV <span class="t-en">(select)</span><span class="t-ko">(선택)</span></td><td>100</td><td>30</td><td>50.2</td></tr>
+          <tr><td>OmniKV + DeltaKV</td><td>45</td><td>30</td><td>50.2</td></tr>
+          <tr><td><b>+ DeltaKV† + 4-bit</b></td><td class="up">29</td><td>30</td><td class="up">50.3</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">KV cache down to <b>45%</b> (or <b>29%</b> with 4-bit) at <b>near-zero</b> accuracy loss, plus ~<b>2×</b> decode throughput and <b>2×</b> the batch size at 512k. Practical, deployable compression — not a paper-only FLOP count.</p><p class="t-ko">KV 캐시를 <b>45%</b>(4-bit 병용 시 <b>29%</b>)로 줄이면서 정확도 손실 <b>거의 0</b>, 512k에서 디코딩 처리량 약 <b>2배</b>·배치 크기 <b>2배</b>. 종이 위 FLOP이 아니라 실제 배포 가능한 압축이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><b>Redundancy is global, not local.</b> Over 60% of a token's nearest neighbor is &gt;16 positions away — so "residual-vs-global-reference" beats local low-rank projection and windowed eviction on the same budget.</p><p class="t-ko"><b>중복성은 국소가 아니라 전역이다.</b> 각 토큰의 최근접 이웃 60% 이상이 16칸 넘게 떨어져 있다 — 같은 예산에서 "전역 참조 대비 잔차"가 국소 저랭크 투영·창 기반 제거를 이긴다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">The unsung contribution is <b>Sparse-vLLM</b>: a serving engine built for irregular sparse/compressed KV layouts. Many compression papers die on integration; co-designing the system is what turns theory into speed.</p><p class="t-ko">숨은 기여는 <b>Sparse-vLLM</b>이다 — 불규칙한 희소·압축 KV 레이아웃을 위한 서빙 엔진. 많은 압축 논문이 통합 단계에서 좌초하는데, 시스템까지 함께 설계한 것이 이론을 속도로 바꾼다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the near-lossless story leans on the <b>OmniKV pairing</b>, which keeps several full-attention "filter" layers <i>uncompressed</i> — so the headline 45%/29% is a <b>system-level average keep-ratio</b>, not pure per-token compression, and it isn't a standalone method. On the hardest retrieval stress test (SCBench Retrieval-KV) DeltaKV still drops from <b>79.0 → ~58–60</b> (far better than SnapKV's 0.4, but not free), and every speedup number requires the custom Sparse-vLLM engine rather than stock vLLM/SGLang.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판:</b> "거의 무손실" 서사는 <b>OmniKV 결합</b>에 기댄다 — 여러 풀 어텐션 "필터" 층을 <i>압축하지 않고</i> 남겨 두므로, 대표치 45%/29%는 순수 토큰별 압축이 아니라 <b>시스템 전체 평균 유지율</b>이고 단독 방법이 아니다. 가장 어려운 검색 스트레스 테스트(SCBench Retrieval-KV)에서 DeltaKV는 여전히 <b>79.0 → 약 58–60</b>으로 떨어지며(SnapKV의 0.4보다 훨씬 낫지만 공짜는 아님), 모든 속도 향상 수치는 순정 vLLM/SGLang이 아닌 전용 Sparse-vLLM 엔진을 전제로 한다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.08005">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.08005">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.08005">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.08005">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>a rare KV-compression paper that (1) measures redundancy is global not local, (2) reframes compression as residual coding against retrieved references, and (3) ships a real serving engine so the savings are wall-clock, not theoretical</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-07.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>중복성이 국소가 아니라 전역임을 실측하고, 압축을 "검색된 참조 대비 잔차 부호화"로 재정의하며, 전용 서빙 엔진까지 내놔 절감이 벽시계 속도로 이어지게 만든 보기 드문 KV 압축 논문</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-07.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
