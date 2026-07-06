@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · See What I See, Know What I Think</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent · Latent Communication</span><span class="t-ko">Multi-Agent · Latent Communication</span></span>
+      <span>2026 · 07 · 06</span>
+    </div>
+    <h1>See What I See, Know What I Think<br><span class="glow t-en">— Read another agent's KV-cache: both what it sees and how it thinks</span><span class="glow t-ko">— 다른 에이전트의 KV-cache를 읽는다: 그가 본 것과 생각한 것 모두</span></h1>
+    <div class="meta">
+      <span>👥 <b>Siyi Chen</b> <span class="t-en">et al.</span><span class="t-ko">외 9인</span></span>
+      <span>🏛 U. Michigan · NVIDIA</span>
+      <span>🗓 2026.06.11</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.13594">arXiv:2606.13594</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Multi-agent systems mostly talk in <b>text</b> — a lossy, expensive decode-and-re-encode at every hop. Passing the sender's <b>KV-cache</b> instead is cheaper, but prior work only did it between <em>identical</em> models. This paper asks whether <span class="hl">heterogeneous agents (different sizes) can be aligned well enough for real "mind reading"</span> — and finds a duality: when the receiver still sees the question, only a <b>sparse ~3.5%</b> of the cache matters; when it doesn't ("context-unaware"), you need a <b>dense ~87%</b>. Their lightweight cross-model adapter <span class="hl">densely aligns</span> the sender cache into the receiver's latent space, matching or beating text at <b>2–3× lower compute</b>, and staying strong in the context-unaware regime where text and prior cache methods <b>collapse to chance</b>.</p>
+    <p class="t-ko">멀티에이전트 시스템은 대개 <b>텍스트</b>로 소통한다 — 매 단계 손실 있고 값비싼 디코딩·재인코딩. 대신 송신자의 <b>KV-cache</b>를 넘기면 싸지만, 선행 연구는 <em>동일</em> 모델 사이에서만 했다. 이 논문은 <span class="hl">이질적 에이전트(크기가 다른)를 진짜 "독심술"이 가능할 만큼 정렬할 수 있는가</span>를 묻고, 이중성을 발견한다: 수신자가 질문을 여전히 볼 때는 캐시의 <b>희소한 ~3.5%</b>면 충분하지만, 못 볼 때("context-unaware")는 <b>조밀한 ~87%</b>가 필요하다. 이들의 경량 cross-model 어댑터는 송신 캐시를 수신자 잠재 공간으로 <span class="hl">조밀하게 정렬</span>해, 텍스트를 <b>2~3× 낮은 연산</b>으로 동등·능가하고, 텍스트·기존 캐시 기법이 <b>우연 수준으로 붕괴</b>하는 context-unaware 영역에서도 견고하다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The real bottleneck isn't "which latent to send" — it's whether two <em>different</em> models can share a latent language at all.</p>
+    <p class="lead t-ko">진짜 병목은 "어떤 잠재를 보내냐"가 아니라, <em>서로 다른</em> 두 모델이 애초에 잠재 언어를 공유할 수 있느냐다.</p>
+    <p class="t-en">KV-cache communication lets a receiver absorb a sender's context without parsing natural language — no decode, no re-encode. But a cache is written in each model's <strong>private geometry</strong>: different layer counts, head dimensions, and RoPE conventions. Prior latent-communication work sidestepped this by using <strong>duplicate copies of one model</strong> (homogeneous), or by only using the transferred cache to lightly <strong>steer</strong> a receiver that still had the input. This paper takes on the harder question — <strong>dense, cross-model alignment</strong> — and reframes it around <em>how much</em> information the channel must actually carry.</p>
+    <p class="t-ko">KV-cache 통신은 수신자가 자연어를 파싱하지 않고 송신자의 맥락을 흡수하게 한다 — 디코딩도, 재인코딩도 없다. 그러나 캐시는 각 모델의 <strong>사적인 기하</strong>로 쓰여 있다: 층 수·헤드 차원·RoPE 방식이 다르다. 선행 잠재 통신 연구는 이를 <strong>한 모델의 복제본</strong>(동질)이나, 입력을 여전히 가진 수신자를 가볍게 <strong>조종(steering)</strong>하는 데만 캐시를 써서 회피했다. 이 논문은 더 어려운 질문 — <strong>조밀한 cross-model 정렬</strong> — 을 정면으로 다루고, 채널이 실제로 <em>얼마나</em> 많은 정보를 날라야 하는지로 재정의한다.</p>
+    <figure class="fig">
+      <img src="fig/2606.13594/x1.png" alt="Context-aware and context-unaware radar charts and accuracy-compute trade-off">
+      <figcaption class="t-en"><b>Figure 1.</b> Dense alignment (orange) vs text (Text-to-Text, blue) and the prior cache method (Cache-to-Cache, purple), across six benchmarks. <b>Left/mid:</b> context-aware and context-unaware accuracy — Ours dominates C2C by +14.2% / +69.9% on average. <b>Right:</b> accuracy–compute trade-off — Ours sits at lower TFLOPs than text.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 조밀 정렬(주황) vs 텍스트(Text-to-Text, 파랑) 및 기존 캐시 기법(Cache-to-Cache, 보라), 6개 벤치마크. <b>좌/중:</b> context-aware·context-unaware 정확도 — Ours가 C2C 대비 평균 +14.2% / +69.9%. <b>우:</b> 정확도–연산 트레이드오프 — Ours가 텍스트보다 낮은 TFLOPs.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.13594</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">2–3×</div><div class="l"><span class="t-en">Lower compute<br>than text (TFLOPs)</span><span class="t-ko">텍스트 대비<br>낮은 연산(TFLOPs)</span></div></div>
+      <div class="stat"><div class="n">3.5% → 87%</div><div class="l"><span class="t-en">Cache needed:<br>context-aware → unaware (~25×)</span><span class="t-ko">필요 캐시:<br>aware → unaware (~25×)</span></div></div>
+      <div class="stat"><div class="n">6 / 6</div><div class="l"><span class="t-en">Directions where Ours<br>≥ text on in-domain tasks</span><span class="t-ko">Ours가 in-domain에서<br>텍스트 ≥ 인 방향</span></div></div>
+      <div class="stat"><div class="n">+20.4pp</div><div class="l"><span class="t-en">Max MATH-500 gain<br>over text (context-aware)</span><span class="t-ko">MATH-500 최대 향상<br>텍스트 대비(aware)</span></div></div>
+      <div class="stat"><div class="n">0–10pp</div><div class="l"><span class="t-en">Context-unaware drop<br>vs own context-aware</span><span class="t-ko">context-unaware 하락<br>자기 aware 대비</span></div></div>
+      <div class="stat"><div class="n">6.6</div><div class="l"><span class="t-en">TFLOPs (8B→4B, unaware)<br>&lt; bare 4B receiver (9.2)</span><span class="t-ko">TFLOPs (8B→4B, unaware)<br>&lt; 순수 4B 수신자 (9.2)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core finding — sparse to reason, dense to know</span><span class="t-ko">핵심 발견 — 추론엔 희소, 앎엔 조밀</span></h2>
+    <p class="t-en">Before designing anything, the authors ask an information question with a <strong>compressed-sensing</strong> probe: perturb the sender's attention heads with 200 random masks, use Lasso to score which KV groups actually carry the signal, then sweep how many of the 288 groups you must keep. The answer splits sharply by regime.</p>
+    <p class="t-ko">무언가를 설계하기 전에, 저자들은 <strong>압축 센싱(compressed sensing)</strong> 프로브로 정보 질문을 던진다: 송신자 어텐션 헤드를 200개 랜덤 마스크로 교란하고, Lasso로 어떤 KV 그룹이 실제로 신호를 나르는지 점수 매긴 뒤, 288개 그룹 중 몇 개를 남겨야 하는지 훑는다. 답은 영역에 따라 극명하게 갈린다.</p>
+    <figure class="fig">
+      <img src="fig/2606.13594/sparse_dense_contrast.png" alt="Accuracy vs number of KV groups kept, context-aware vs context-unaware">
+      <figcaption class="t-en"><b>Figure 5.</b> Accuracy vs. KV groups kept (of 288), Qwen3-4B self-communication. <b>Blue (context-aware):</b> near-ceiling by <b>K=10 (~3.5%)</b> — a sparse reasoning signal. <b>Red (context-unaware):</b> stuck near chance until <b>K&gt;150</b>, reaching the ceiling only at <b>K=250 (87%)</b> — dense knowledge. CS-ranked heads (solid) beat random selection (dashed) by up to +28pp at low K.</figcaption>
+      <figcaption class="t-ko"><b>Figure 5.</b> 유지한 KV 그룹 수(288 중) 대비 정확도, Qwen3-4B 자기통신. <b>파랑(context-aware):</b> <b>K=10 (~3.5%)</b>에서 이미 천장 — 희소한 추론 신호. <b>빨강(context-unaware):</b> <b>K&gt;150</b>까지 우연 수준, <b>K=250 (87%)</b>에서야 천장 — 조밀한 지식. CS로 순위 매긴 헤드(실선)가 무작위 선택(점선)을 낮은 K에서 최대 +28pp 능가.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.13594</div>
+    </figure>
+    <p class="t-en">This duality is the paper's thesis: <strong>context-aware evaluation is a weak test</strong> (the receiver already holds the answer's context, so the channel only nudges it), while <strong>context-unaware is the honest one</strong> — the cache must be a self-contained carrier of both evidence and reasoning. A good heterogeneous adapter therefore has to preserve <em>dense</em> information, not just steer.</p>
+    <p class="t-ko">이 이중성이 논문의 논지다: <strong>context-aware 평가는 약한 시험</strong>(수신자가 이미 답의 맥락을 쥐고 있어 채널은 살짝 밀 뿐)이고, <strong>context-unaware가 정직한 시험</strong> — 캐시가 증거와 추론 모두의 자족적 운반체여야 한다. 따라서 좋은 이질 어댑터는 단순 조종이 아니라 <em>조밀한</em> 정보를 보존해야 한다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Sender (e.g. 8B)</span><span class="t-ko">송신자 (예: 8B)</span></div>
+          <div class="sub"><span class="t-en">encode question → KV cache</span><span class="t-ko">질문 인코딩 → KV 캐시</span></div>
+          <div class="latent"><span class="t-en">no decoding (ℓdec = 0)</span><span class="t-ko">디코딩 없음 (ℓdec = 0)</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Transform 𝒯θ</span><span class="t-ko">변환 𝒯θ</span></div>
+          <div class="sub"><span class="t-en">de-RoPE · align layers · gate heads</span><span class="t-ko">RoPE 해제 · 층 정렬 · 헤드 게이팅</span></div>
+          <div class="latent"><span class="t-en">dense receiver-native cache</span><span class="t-ko">조밀한 수신자 native 캐시</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Receiver (e.g. 4B)</span><span class="t-ko">수신자 (예: 4B)</span></div>
+          <div class="sub"><span class="t-en">answer from cache alone</span><span class="t-ko">캐시만으로 답변</span></div>
+          <div class="latent"><span class="t-en">no re-encoding of text</span><span class="t-ko">텍스트 재인코딩 없음</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Translate, don't re-read</b> — the adapter rewrites the sender's cache into the receiver's own latent geometry, so the receiver attends to it as if it had thought those tokens itself.</div>
+      <div class="cap t-ko"><b>다시 읽지 말고 번역하라</b> — 어댑터가 송신 캐시를 수신자 고유의 잠재 기하로 다시 써주어, 수신자가 마치 자기가 그 토큰을 생각한 듯 그것에 어텐션한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: a cross-model cache transformation</span><span class="t-ko">아이디어: cross-model 캐시 변환</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 정렬</span>
+        <h3>Position-disentangled, layer-mapped</h3>
+        <p class="t-en">RoPE entangles content with position, so the sender cache is first passed through <span class="term">RemoveRoPE</span>; after transformation the receiver's own <span class="term">AddRoPE</span> restores native positions. Different depths are bridged by a monotonic map <span class="term">a(l) = round(l·(L<sub>S</sub>−1)/(L<sub>R</sub>−1))</span>, keeping the low→high feature progression.</p>
+        <p class="t-ko">RoPE는 내용과 위치를 얽으므로, 송신 캐시를 먼저 <span class="term">RemoveRoPE</span>에 통과시키고, 변환 후 수신자의 <span class="term">AddRoPE</span>가 native 위치를 복원한다. 서로 다른 깊이는 단조 사상 <span class="term">a(l) = round(l·(L<sub>S</sub>−1)/(L<sub>R</sub>−1))</span>로 이어, 저→고 특징 진행을 유지한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 변환 + 선택</span>
+        <h3>Per-head gated MLPs</h3>
+        <p class="t-en">Each receiver KV group gets its own per-token MLPs for keys and values that <span class="term">expand the head dim 16×</span> then project to the receiver's dimension, with a learnable <span class="term">gate γ∈[0,1]</span> that lets the model prioritize the reasoning-carrying heads the compressed-sensing analysis flagged — dense capacity, selective emphasis.</p>
+        <p class="t-ko">각 수신자 KV 그룹은 key·value 각각에 대해 토큰별 MLP를 가지며 <span class="term">헤드 차원을 16× 확장</span> 후 수신자 차원으로 사영한다. 학습형 <span class="term">게이트 γ∈[0,1]</span>가 압축 센싱이 짚은 추론 담당 헤드를 우선하게 한다 — 조밀한 용량에 선택적 강조.</p>
+      </div>
+    </div>
+    <figure class="fig">
+      <img src="fig/2606.13594/x5.png" alt="Dense alignment architecture: sender cache through position disentanglement, layer alignment, head transformation, information selection into receiver cache">
+      <figcaption class="t-en"><b>Figure 6.</b> The pipeline: the sender's KV cache 𝒞<sub>S</sub>(X) passes through 𝒯<sub>θ</sub> — position disentanglement → layer alignment → head transformation → information selection — into a receiver-compatible cache Ĉ<sub>R</sub>(X) that the receiver decodes into an answer.</figcaption>
+      <figcaption class="t-ko"><b>Figure 6.</b> 파이프라인: 송신자 KV 캐시 𝒞<sub>S</sub>(X)가 𝒯<sub>θ</sub> — 위치 분리 → 층 정렬 → 헤드 변환 → 정보 선택 — 를 거쳐 수신자 호환 캐시 Ĉ<sub>R</sub>(X)가 되고, 수신자가 이를 답으로 디코딩한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.13594</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Sender encodes, never decodes</span><span class="t-ko">송신자는 인코딩만, 디코딩 안 함</span></b><span class="t-en">The sender runs a prefill over the question to build its KV cache but generates no chain-of-thought (ℓ<sub>S</sub><sup>dec</sup>=0) — the whole reasoning cost of a text sender disappears.</span><span class="t-ko">송신자는 질문에 대해 prefill로 KV 캐시만 만들고 사고 사슬을 생성하지 않는다(ℓ<sub>S</sub><sup>dec</sup>=0) — 텍스트 송신자의 추론 비용 전체가 사라진다.</span></li>
+      <li><b><span class="t-en">Transform into receiver geometry</span><span class="t-ko">수신자 기하로 변환</span></b><span class="t-en">𝒯<sub>θ</sub> de-RoPEs, maps layers, and applies per-head gated MLPs to turn the sender cache into one the receiver can attend to natively.</span><span class="t-ko">𝒯<sub>θ</sub>가 RoPE를 풀고 층을 사상하며 헤드별 게이트 MLP를 적용해, 송신 캐시를 수신자가 native로 어텐션할 수 있는 캐시로 바꾼다.</span></li>
+      <li><b><span class="t-en">Phase I — reconstruct</span><span class="t-ko">1단계 — 재구성</span></b><span class="t-en">Train the adapter to reproduce the receiver's <em>own</em> cache on the same input (L2 on K and V), forcing dense information preservation.</span><span class="t-ko">같은 입력에서 수신자의 <em>자기</em> 캐시를 재현하도록 어댑터를 학습(K·V에 L2)해, 조밀한 정보 보존을 강제한다.</span></li>
+      <li><b><span class="t-en">Phase II — make it actionable</span><span class="t-ko">2단계 — 실행 가능하게</span></b><span class="t-en">Fine-tune with a generation loss on receiver-self traces, sampling context-aware and context-unaware prompts 50/50 so one adapter serves both the sparse and the dense regime.</span><span class="t-ko">수신자 자기 트레이스에 대한 생성 손실로 미세조정하되, context-aware·unaware 프롬프트를 50/50으로 샘플링해 하나의 어댑터가 희소·조밀 영역 모두를 감당하게 한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — cheaper than text, and it holds when text collapses</span><span class="t-ko">결과 — 텍스트보다 싸고, 텍스트가 붕괴할 때도 버틴다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt (4B→14B).</b> Context-aware accuracy (%) and total compute. Ours beats text on 5 of 6 benchmarks at <b>&lt;40%</b> of its FLOPs; C2C is cheap but far less accurate.</caption>
+        <caption class="t-ko"><b>표 1 발췌 (4B→14B).</b> Context-aware 정확도(%)와 총 연산. Ours는 텍스트 FLOPs의 <b>&lt;40%</b>로 6개 중 5개에서 능가; C2C는 싸지만 훨씬 부정확.</caption>
+        <thead><tr><th>Method</th><th>GSM8K</th><th>MATH-500</th><th>ARC-C</th><th>MMLU-R</th><th>MedQA</th><th>OBQA</th><th>TFLOPs↓</th></tr></thead>
+        <tbody>
+          <tr><td>Receiver-only</td><td>83.70</td><td>46.40</td><td>92.60</td><td>71.80</td><td>64.70</td><td>91.80</td><td>31.16</td></tr>
+          <tr><td>Text-to-Text</td><td>92.34</td><td>77.80</td><td>92.00</td><td class="up">82.87</td><td>71.17</td><td>92.00</td><td>56.24</td></tr>
+          <tr><td>Cache-to-Cache</td><td>82.34</td><td>44.20</td><td>92.43</td><td>72.76</td><td>63.00</td><td>87.00</td><td class="up">6.64</td></tr>
+          <tr><td><b>Ours</b></td><td class="up">93.86</td><td class="up">86.00</td><td class="up">94.20</td><td>78.57</td><td class="up">71.96</td><td class="up">93.60</td><td>21.54</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap" style="margin-top:14px">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 excerpt (8B→4B, context-unaware).</b> Receiver never sees the question. Text and C2C collapse to chance/zero; Ours stays near its context-aware level — at just <b>6.56 TFLOPs</b>.</caption>
+        <caption class="t-ko"><b>표 2 발췌 (8B→4B, context-unaware).</b> 수신자가 질문을 전혀 못 봄. 텍스트·C2C는 우연/0으로 붕괴; Ours는 aware 수준 근처 유지 — 단 <b>6.56 TFLOPs</b>.</caption>
+        <thead><tr><th>Method</th><th>GSM8K</th><th>MATH-500</th><th>ARC-C</th><th>MedQA</th><th>TFLOPs↓</th></tr></thead>
+        <tbody>
+          <tr><td>Text-to-Text (unaware)</td><td>27.98</td><td>69.40</td><td>23.74</td><td>22.94</td><td>32.75</td></tr>
+          <tr><td>Cache-to-Cache (unaware)</td><td>0.38</td><td>2.40</td><td>10.35</td><td>7.23</td><td>14.76</td></tr>
+          <tr><td><b>Ours (unaware)</b></td><td class="up">91.36</td><td class="up">81.60</td><td class="up">93.60</td><td class="up">64.57</td><td class="up">6.56</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🔀</span><p class="t-en"><strong>Duality is the idea.</strong> "How much cache to send" has no single answer — it's sparse for steering, dense for standing alone. Naming this splits latent communication into two very different problems.</p><p class="t-ko"><strong>핵심은 이중성.</strong> "캐시를 얼마나 보낼까"엔 단일 답이 없다 — 조종엔 희소, 홀로 서기엔 조밀. 이를 명명하며 잠재 통신을 매우 다른 두 문제로 가른다.</p></div>
+      <div class="t"><span class="ic">🌉</span><p class="t-en"><strong>A real heterogeneous bridge.</strong> De-RoPE + layer map + per-head gates transfer a cache across different-sized models — no shared input assumed, unlike prior steering-only methods.</p><p class="t-ko"><strong>진짜 이질 다리.</strong> RoPE 해제 + 층 사상 + 헤드 게이트로 크기가 다른 모델 간 캐시를 전이한다 — 기존 조종 전용 기법과 달리 공유 입력을 가정하지 않는다.</p></div>
+      <div class="t"><span class="ic">⚡</span><p class="t-en"><strong>Cheaper because the sender never talks.</strong> Killing sender decoding and receiver re-encoding is where the 2–3× comes from — a structural win, not a tuning trick.</p><p class="t-ko"><strong>송신자가 말하지 않아 싸다.</strong> 송신자 디코딩과 수신자 재인코딩을 없앤 것이 2~3×의 출처 — 튜닝 요령이 아닌 구조적 이득.</p></div>
+      <div class="t"><span class="ic">🕵️</span><p class="t-en"><strong>Honest test, uncomfortable question.</strong> The context-unaware regime is a stricter benchmark the field mostly skipped — but transferring "what the sender sees" without the prompt is also a privacy surface.</p><p class="t-ko"><strong>정직한 시험, 불편한 질문.</strong> context-unaware는 분야가 대체로 건너뛴 더 엄격한 벤치마크다 — 다만 프롬프트 없이 "송신자가 본 것"을 넘기는 건 프라이버시 표면이기도 하다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> "Heterogeneous" here means three sizes of <em>one</em> family (Qwen3-4B/8B/14B) — same tokenizer, same architecture — so the hardest cross-family / cross-tokenizer case is untested. In-domain wins (GSM8K, MATH) are on the very tasks the adapter trained on; on held-out OOD sets Ours often only ties or slightly trails text. And a dense KV payload is <b>20–30 MB per message</b> vs. a few hundred bytes of text — a bandwidth cost the headline TFLOPs quietly excludes. See the Full Review for the full adversarial pass.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판:</b> 여기서 "이질"은 <em>한</em> 계열의 세 크기(Qwen3-4B/8B/14B) — 같은 토크나이저·같은 아키텍처 — 라서 가장 어려운 계열 간·토크나이저 간 경우는 미검증이다. in-domain 성과(GSM8K, MATH)는 어댑터가 학습한 바로 그 과제들이고, held-out OOD에선 Ours가 텍스트와 동률이거나 약간 뒤지는 일이 잦다. 게다가 조밀한 KV 페이로드는 텍스트 수백 바이트 대비 <b>메시지당 20~30 MB</b> — 헤드라인 TFLOPs가 조용히 뺀 대역폭 비용이다. 전체 적대적 검토는 풀 리뷰 참고.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.13594">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="../reviews/2606.13594.html">📖 <span class="t-en">Full Review</span><span class="t-ko">풀 리뷰</span></a>
+      <a href="https://arxiv.org/abs/2606.13594">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.13594">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.13594">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Requested · topic: Multi-Agent Latent Communication</b> (heterogeneous KV-cache).<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-07-06.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>요청 · 주제: Multi-Agent Latent Communication</b> (이질 KV-cache).<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-07-06.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
