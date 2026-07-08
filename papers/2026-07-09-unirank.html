@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · UniRank: Unified Rank Allocation for Low-Rank LLM Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-Rank Decomposition</span><span class="t-ko">Model Compression · Low-Rank Decomposition</span></span>
+      <span>2026.07.09</span>
+    </div>
+    <h1>UniRank: Unified Rank Allocation for Low-Rank LLM Compression<br>
+      <span class="glow t-en">— one global sort decides every layer's rank, no training, ~2&nbsp;min</span>
+      <span class="glow t-ko">— 전 층의 랭크를 한 번의 전역 정렬로 배분, 학습 없이 ~2분</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Chao Han</b> <span class="t-en">, Haozhe Hu, Fei Ma, Wei Zhang, Xiaoyu Shen (corresp.)</span><span class="t-ko">, Haozhe Hu, Fei Ma, Wei Zhang, Xiaoyu Shen (교신)</span></span>
+      <span>🏛 Eastern Institute of Technology (Ningbo) · Guangdong Lab of AI &amp; Digital Economy</span>
+      <span>🗓 20 Jun 2026</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.21847">arXiv:2606.21847</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Low-rank decomposition can shrink an LLM, but the real problem is <b>how many ranks to keep in each layer</b>: hand-written rules don't generalize and learning-based allocators cost hundreds of GPU-hours. UniRank scores every singular component with a simple <b>Local × Global</b> metric — its energy inside its own matrix, times how "functionally active" its module is (measured by input–output cosine similarity) — then <b>pools all components, sorts them once, and truncates to the budget</b>. Allocation takes ~2 minutes and needs no training. A rank-preserving fine-tuning step then avoids the "second SVD" that quietly throws away information in the usual LoRA-merge pipeline. Net: up to <b>50% lower one-shot perplexity</b> vs uniform/heuristic allocation, ~<b>+3</b> reasoning points, at negligible cost — and it plugs into SVD, AFM, AWSVD and learned decompositions alike.</p>
+    <p class="t-ko">저랭크 분해는 LLM을 줄일 수 있지만 진짜 어려운 건 <b>층마다 랭크를 몇 개 남길지</b>다: 수작업 규칙은 일반화가 안 되고, 학습 기반 배분기는 수백 GPU-시간이 든다. UniRank는 각 특이성분을 <b>Local × Global</b> 지표 — 자기 행렬 안에서의 에너지 비율 × 그 모듈이 얼마나 "기능적으로 활발한지"(입력–출력 코사인 유사도로 측정) — 로 점수 매긴 뒤, <b>모든 성분을 한데 모아 한 번 정렬하고 예산까지 잘라낸다</b>. 배분은 ~2분, 학습 불필요. 이어지는 랭크 보존 파인튜닝은 흔한 LoRA-병합 파이프라인이 정보를 몰래 버리는 "두 번째 SVD"를 없앤다. 결과: 균일·휴리스틱 배분 대비 원샷 perplexity 최대 <b>50%</b> 감소, 추론 정확도 ~<b>+3</b>점, 비용은 무시 가능 — SVD·AFM·AWSVD·학습형 분해에 모두 꽂아 쓸 수 있다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Every low-rank compressor faces the same fork: give all layers the same rank (uniform) and you waste budget on cheap layers while starving important ones, or learn a per-layer rank and pay a huge search bill. UniRank shows you can get learned-quality allocation for the price of a sort.</p>
+    <p class="lead t-ko">모든 저랭크 압축기는 같은 갈림길에 선다: 모든 층에 같은 랭크를 주면(균일) 값싼 층에 예산을 낭비하고 중요한 층은 굶기며, 층별 랭크를 학습하면 막대한 탐색 비용을 치른다. UniRank는 학습 수준의 배분을 "정렬 한 번" 값에 얻을 수 있음을 보인다.</p>
+    <p class="t-en">The trick is a physically-motivated importance score that unifies two ideas people usually treat separately — the energy of a singular value <i>within</i> a matrix, and the functional importance of the <i>module</i> that matrix belongs to. Because both live on the same scale, all singular components from all layers can be thrown into one pool, ranked, and cut. That reframes "rank allocation" from a search problem into a sorting problem — which is why it drops from hundreds of hours to minutes.</p>
+    <p class="t-ko">핵심은 보통 따로 다루던 두 관점 — 행렬 <i>안</i>에서 특이값의 에너지와, 그 행렬이 속한 <i>모듈</i>의 기능적 중요도 — 를 하나로 묶는 물리적 동기의 점수다. 둘이 같은 척도 위에 놓이므로, 모든 층의 모든 특이성분을 한 풀에 넣어 정렬하고 자를 수 있다. 이는 "랭크 배분"을 탐색 문제에서 정렬 문제로 바꾸며, 수백 시간이 수 분으로 줄어드는 이유다.</p>
+    <figure class="fig">
+      <img src="fig/2606.21847/x2.png" alt="UniRank framework: decompose, sort-and-truncate, rank-preserving fine-tune">
+      <figcaption class="t-en"><b>Figure 2.</b> UniRank in three stages. (1) SVD-decompose each weight into singular triplets (energy + vector). (2) <b>Sorting-and-Truncation</b> ranks all singular components by the Local×Global score and prunes those below the global budget. (3) <b>Rank-Preserving Fine-Tuning</b> tunes inside the kept subspace — "No second SVD, no information loss," unlike Standard LoRA which re-merges and re-truncates.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> UniRank의 3단계. (1) 각 가중치를 SVD로 특이 삼중항(에너지+벡터)으로 분해. (2) <b>Sorting-and-Truncation</b>이 모든 특이성분을 Local×Global 점수로 정렬해 전역 예산 아래를 가지치기. (3) <b>Rank-Preserving Fine-Tuning</b>은 남긴 부분공간 안에서 튜닝 — 다시 병합·절단하는 표준 LoRA와 달리 "두 번째 SVD 없음, 정보 손실 없음".</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.21847</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">≤ 50%</div><div class="l"><span class="t-en">one-shot PPL drop vs uniform/heuristic allocation</span><span class="t-ko">균일·휴리스틱 배분 대비 원샷 PPL 감소</span></div></div>
+      <div class="stat"><div class="n">~2 min</div><div class="l"><span class="t-en">rank-allocation cost (learned Dobi: 220 h)</span><span class="t-ko">랭크 배분 비용 (학습형 Dobi: 220시간)</span></div></div>
+      <div class="stat"><div class="n">+2.96</div><div class="l"><span class="t-en">reasoning acc. over LoRAP @25% sparsity (63.09→66.05)</span><span class="t-ko">LoRAP 대비 추론 정확도 @25% 희소도 (63.09→66.05)</span></div></div>
+      <div class="stat"><div class="n">−2.53</div><div class="l"><span class="t-en">WikiText-2 PPL over LoRAP @25% (12.82→10.29)</span><span class="t-ko">WikiText-2 PPL 개선 @25% (12.82→10.29)</span></div></div>
+      <div class="stat"><div class="n">r = 0.879</div><div class="l"><span class="t-en">Pearson: layer functional importance ↔ PPL drop</span><span class="t-ko">피어슨: 층 기능적 중요도 ↔ PPL 상승</span></div></div>
+      <div class="stat"><div class="n">~1.7×</div><div class="l"><span class="t-en">inference speedup @2048 tokens (0.178→0.105 s)</span><span class="t-ko">추론 가속 @2048토큰 (0.178→0.105초)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Plug-and-play across decomposition schemes</span><span class="t-ko">분해 방식을 가리지 않는 플러그앤플레이</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> UniRank as a drop-in rank allocator on top of four decomposition methods (Llama2-7b, 0.4 sparsity). It improves both zero-shot and fine-tuned quality — even over a learned allocator (Dobi). Lower WT2 PPL / higher reasoning acc. is better.</caption>
+        <caption class="t-ko"><b>Table 3.</b> 네 가지 분해 방식 위에 얹은 UniRank 랭크 배분기 (Llama2-7b, 희소도 0.4). 제로샷·파인튜닝 품질을 모두 개선 — 학습형 배분기(Dobi)보다도 낫다. WT2 PPL은 낮을수록, 추론 정확도는 높을수록 좋음.</caption>
+        <thead><tr><th>Decomp.</th><th>Alloc.</th><th>Zero-shot WT2 ↓</th><th>FT WT2 ↓</th><th>FT Rea. ↑</th></tr></thead>
+        <tbody>
+          <tr><td>SVD</td><td>Uniform</td><td>134.68</td><td>28.57</td><td>49.20%</td></tr>
+          <tr><td>SVD</td><td><b>+UniRank</b></td><td class="up">86.20</td><td class="up">26.10</td><td class="up">49.50%</td></tr>
+          <tr><td>AFM</td><td>Uniform</td><td>43.93</td><td>23.12</td><td>52.80%</td></tr>
+          <tr><td>AFM</td><td><b>+UniRank</b></td><td class="up">28.06</td><td class="up">22.01</td><td class="up">53.97%</td></tr>
+          <tr><td>AWSVD</td><td>Heuristic</td><td>28.05</td><td>23.90</td><td>53.67%</td></tr>
+          <tr><td>AWSVD</td><td><b>+UniRank</b></td><td class="up">26.75</td><td class="up">22.89</td><td class="up">54.02%</td></tr>
+          <tr><td>Dobi</td><td>Learning</td><td>/</td><td>14.10</td><td>61.10%</td></tr>
+          <tr><td>Dobi</td><td><b>+UniRank</b></td><td>/</td><td class="up">11.74</td><td class="up">63.05%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">
+        <style>
+          .lbl{font:600 13px system-ui,sans-serif;fill:#334}
+          .sub{font:400 11px system-ui,sans-serif;fill:#8894a6}
+          .bk{fill:#7aa2e3}.bp{fill:#e07a7a;opacity:.55}
+          .cut{stroke:#e07a7a;stroke-width:2;stroke-dasharray:5 4}
+          .cutlbl{font:600 11px system-ui,sans-serif;fill:#c0392b}
+        </style>
+        <!-- Pool: mixed heights unsorted -->
+        <text class="lbl" x="10" y="24">1 · Pool every singular component (all layers)</text>
+        <text class="sub" x="10" y="40">score s = (Iₗ)^α · σ²/‖Σ‖²  ·  Local energy × Global functional importance</text>
+        <g transform="translate(10,52)">
+          <rect class="bk" x="0"   y="34" width="14" height="26"/>
+          <rect class="bk" x="18"  y="12" width="14" height="48"/>
+          <rect class="bk" x="36"  y="44" width="14" height="16"/>
+          <rect class="bk" x="54"  y="4"  width="14" height="56"/>
+          <rect class="bk" x="72"  y="40" width="14" height="20"/>
+          <rect class="bk" x="90"  y="22" width="14" height="38"/>
+          <rect class="bk" x="108" y="50" width="14" height="10"/>
+          <rect class="bk" x="126" y="16" width="14" height="44"/>
+          <rect class="bk" x="144" y="46" width="14" height="14"/>
+          <rect class="bk" x="162" y="30" width="14" height="30"/>
+        </g>
+        <!-- arrow -->
+        <text x="205" y="92" style="font:700 22px system-ui;fill:#8894a6">→</text>
+        <!-- Sorted + cut -->
+        <text class="lbl" x="240" y="24">2 · Sort ↓ &nbsp; 3 · Truncate at global budget</text>
+        <text class="sub" x="240" y="40">keep top-k (blue) · prune the tail (red) — one pass</text>
+        <g transform="translate(240,52)">
+          <rect class="bk" x="0"   y="4"  width="14" height="56"/>
+          <rect class="bk" x="18"  y="12" width="14" height="48"/>
+          <rect class="bk" x="36"  y="16" width="14" height="44"/>
+          <rect class="bk" x="54"  y="22" width="14" height="38"/>
+          <rect class="bk" x="72"  y="30" width="14" height="30"/>
+          <rect class="bp" x="90"  y="34" width="14" height="26"/>
+          <rect class="bp" x="108" y="40" width="14" height="20"/>
+          <rect class="bp" x="126" y="44" width="14" height="16"/>
+          <rect class="bp" x="144" y="46" width="14" height="14"/>
+          <rect class="bp" x="162" y="50" width="14" height="10"/>
+          <line class="cut" x1="83" y1="0" x2="83" y2="66"/>
+          <text class="cutlbl" x="86" y="-2" transform="translate(0,72)">budget k</text>
+        </g>
+        <text class="sub" x="240" y="146">Functionally "quiet" layers (Y≈X, high input–output cos) get cut hardest.</text>
+      </svg>
+      <div class="cap t-en">Rank allocation = a single global sort-and-truncate over all singular components, scored by Local energy × Global functional importance. No per-layer search, no learned controller.</div>
+      <div class="cap t-ko">랭크 배분 = 모든 특이성분에 대한 단 한 번의 전역 정렬-절단. 점수는 Local 에너지 × Global 기능적 중요도. 층별 탐색도, 학습된 컨트롤러도 없다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core ideas</span><span class="t-ko">핵심 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">Local × Global score</span>
+        <h3>Two importances on one scale</h3>
+        <p class="t-en">Each singular component gets a score s = (Iₗ)^α · σ²/‖Σ‖²_F: the <b>Local</b> term is the singular value's energy share inside its matrix, the <b>Global</b> term Iₗ = 1 − 𝔼[cos(fₗ₋₁(x), fₗ(x))] is how much module ℓ actually transforms its input. Both are unit-free, so components from different layers become directly comparable.</p>
+        <p class="t-ko">각 특이성분은 점수 s = (Iₗ)^α · σ²/‖Σ‖²_F 를 받는다: <b>Local</b> 항은 행렬 안에서 특이값의 에너지 비중, <b>Global</b> 항 Iₗ = 1 − 𝔼[cos(fₗ₋₁(x), fₗ(x))] 은 모듈 ℓ이 입력을 실제로 얼마나 변형하는지다. 둘 다 무차원이라 서로 다른 층의 성분을 직접 비교할 수 있다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Geometric insight</span>
+        <h3>Quiet layers are compressible</h3>
+        <p class="t-en">In a residual block Y = X + f(X), a high input–output cosine similarity means f(X) is near-zero or collinear with X — either way, low effective rank. So "functionally quiet" layers (output ≈ input) can be truncated aggressively. The paper confirms this with a Pearson r = 0.879 between layer importance and perplexity damage.</p>
+        <p class="t-ko">잔차 블록 Y = X + f(X)에서 입력–출력 코사인 유사도가 높으면 f(X)가 거의 0이거나 X와 나란하다는 뜻 — 어느 쪽이든 유효 랭크가 낮다. 따라서 "기능적으로 조용한" 층(출력≈입력)은 과감히 잘라도 된다. 논문은 층 중요도와 perplexity 손상 사이 피어슨 r = 0.879로 이를 확인한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">S&amp;T pipeline</span>
+        <h3>Allocation = sort + truncate</h3>
+        <p class="t-en">Pool the scored singular components across every layer and module, sort descending, and keep the top ones until the global rank budget is met (accumulative rank preservation). One pass replaces both hand-tuned rules and expensive learned rank controllers.</p>
+        <p class="t-ko">모든 층·모듈의 점수화된 특이성분을 한데 모아 내림차순 정렬하고, 전역 랭크 예산을 채울 때까지 상위 것을 남긴다(누적 랭크 보존). 이 한 번의 통과가 수작업 규칙과 값비싼 학습형 랭크 컨트롤러를 모두 대체한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">RPFT</span>
+        <h3>Fine-tune without a second SVD</h3>
+        <p class="t-en">Standard LoRA-then-merge produces a weight of rank &gt; k_save, so it must re-truncate back to budget — discarding the tail energy ∑σ² you just trained. RPFT instead freezes the kept subspace basis and trains a slice inside it, so rank stays exactly k_save: no re-decomposition, no information loss.</p>
+        <p class="t-ko">표준 LoRA-병합은 랭크 &gt; k_save 인 가중치를 만들어 다시 예산까지 절단해야 하고, 방금 학습한 꼬리 에너지 ∑σ² 를 버린다. RPFT는 남긴 부분공간 기저를 고정하고 그 안의 일부만 학습해 랭크를 정확히 k_save 로 유지한다: 재분해 없음, 정보 손실 없음.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Decompose.</span><span class="t-ko">분해.</span></b><span class="t-en"> Factor each weight via SVD (or AFM / AWSVD / a learned scheme) into singular triplets σᵢ·uᵢvᵢᵀ.</span><span class="t-ko"> 각 가중치를 SVD(또는 AFM/AWSVD/학습형)로 특이 삼중항 σᵢ·uᵢvᵢᵀ 로 분해한다.</span></li>
+      <li><b><span class="t-en">Score.</span><span class="t-ko">점수화.</span></b><span class="t-en"> Compute each component's Local energy ratio, and each module's Global functional importance Iₗ from a small calibration set (input–output cosine).</span><span class="t-ko"> 각 성분의 Local 에너지 비율과, 소규모 보정셋으로 각 모듈의 Global 기능적 중요도 Iₗ(입력–출력 코사인)을 계산한다.</span></li>
+      <li><b><span class="t-en">Sort globally.</span><span class="t-ko">전역 정렬.</span></b><span class="t-en"> Pool all components across layers/modules and rank them by s = (Iₗ)^α · σ²/‖Σ‖²_F, descending.</span><span class="t-ko"> 모든 층·모듈의 성분을 모아 s = (Iₗ)^α · σ²/‖Σ‖²_F 로 내림차순 정렬한다.</span></li>
+      <li><b><span class="t-en">Truncate.</span><span class="t-ko">절단.</span></b><span class="t-en"> Keep the top components up to the global budget — this single cut IS the per-layer rank allocation.</span><span class="t-ko"> 전역 예산까지 상위 성분을 남긴다 — 이 한 번의 절단이 곧 층별 랭크 배분이다.</span></li>
+      <li><b><span class="t-en">RPFT (optional).</span><span class="t-ko">RPFT(선택).</span></b><span class="t-en"> Recover accuracy by LoRA-tuning inside the retained subspace, keeping rank fixed at k_save — no re-truncation, no loss.</span><span class="t-ko"> 남긴 부분공간 안에서 LoRA 튜닝으로 정확도를 회복하되 랭크를 k_save 로 고정 — 재절단도, 손실도 없다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Rank allocation can be a <b>free byproduct of one global sort</b> (~2 min) yet beat learned allocators that cost 220 GPU-hours — a strong efficiency-vs-quality point for anyone compressing LLMs.</p><p class="t-ko">랭크 배분은 <b>한 번의 전역 정렬의 공짜 부산물</b>(~2분)이 될 수 있으면서도 220 GPU-시간짜리 학습형 배분기를 이긴다 — LLM 압축자에게 효율 대 품질의 강력한 논점.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">"How much a layer changes its input" (input–output cosine, via the residual Y=X+f(X)) is a cheap, theoretically-grounded proxy for <b>how compressible</b> that layer is.</p><p class="t-ko">"층이 입력을 얼마나 바꾸는가"(잔차 Y=X+f(X)의 입력–출력 코사인)는 그 층의 <b>압축 가능성</b>에 대한 값싸고 이론적으로 근거 있는 대리 지표다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">When fine-tuning a compressed model, <b>stay inside the retained subspace</b>: the common merge-then-re-SVD step silently discards the energy you just trained.</p><p class="t-ko">압축 모델을 파인튜닝할 땐 <b>남긴 부분공간 안에 머물러라</b>: 흔한 병합-후-재SVD 단계는 방금 학습한 에너지를 조용히 버린다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the headline "up to 50%" lives mostly in the <i>no-fine-tune</i> regime; after full fine-tuning the margins shrink to &lt;1 PPL / ~1 pt in several settings (SVD FT 28.57→26.10; AWSVD FT 23.90→22.89). All evidence is on ≤8B LLaMA-family models with WikiText + seven reasoning tasks — no &gt;13B models, no instruction-following or long-context, and the code is "will be available" (not yet released), so generality and reproducibility remain open. The α exponent is also tuned per setting (grid finds 1.2 optimal but they ship 1.0), hinting at some sensitivity.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 수치 "최대 50%"는 대부분 <i>파인튜닝 없는</i> 영역의 것이다; 완전 파인튜닝 후엔 여러 설정에서 격차가 &lt;1 PPL / ~1점으로 줄어든다(SVD FT 28.57→26.10; AWSVD FT 23.90→22.89). 모든 근거는 ≤8B LLaMA 계열 + WikiText·추론 7과제뿐 — &gt;13B도, 지시수행·롱컨텍스트도 없고, 코드는 "공개 예정"(미공개)이라 일반성·재현성은 열려 있다. α 지수도 설정마다 튜닝되며(그리드는 1.2가 최적이나 1.0을 씀) 다소의 민감성을 시사한다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.21847">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.21847">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.21847">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.21847">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>wishlist queue exhausted; fallback pick on Low-Rank Decomposition — a training-free global rank allocator that beats learned allocators at ~2 min cost</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-09.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 소진 후 폴백; Low-Rank Decomposition 축 — 학습형 배분기를 ~2분 비용으로 이기는 학습-불요 전역 랭크 배분기</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-09.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
