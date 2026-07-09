@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Bernini: Latent Semantic Planning for Video Diffusion</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">World Models · Latent Semantic Planning</span><span class="t-ko">World Models · Latent Semantic Planning</span></span>
+      <span>2026 · 07 · 09</span>
+    </div>
+    <h1>Bernini: Latent Semantic Planning for Video Diffusion<br><span class="glow t-en">— The MLLM plans in latent space, the diffusion model just renders</span><span class="glow t-ko">— MLLM이 잠재 공간에서 계획하고, 디퓨전은 렌더링만 한다</span></h1>
+    <div class="meta">
+      <span>👥 <b>Bernini Team</b></span>
+      <span>🏛 ByteDance</span>
+      <span>🗓 2026.05.21</span>
+      <span>📄 <a href="https://arxiv.org/abs/2605.22344">arXiv:2605.22344</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Video generation and editing keep asking one model to do two very different jobs: <b>understand the instruction</b> and <b>paint the pixels</b>. Bernini splits them by a clean division of labor — a <b>Qwen2.5-VL-7B planner</b> predicts the <em>target semantics</em> directly in <span class="hl">ViT embedding space</span> (mask-based iterative refinement, no text bottleneck), and a <b>Wan2.2-A14B DiT renderer</b> turns that latent plan into pixels via flow matching, with source VAE features preserving details for editing. Because <span class="hl">semantics are the interface</span>, the two halves train separately and are only lightly co-trained. Result: SOTA video editing (<b>4.04 vs 3.18</b> next-best on OpenVE-Bench), wins over Kling O3 in human side-by-side, and T2V quality that stays at the Wan2.2 base level (<b>84.64 vs 84.79</b> VBench).</p>
+    <p class="t-ko">비디오 생성·편집은 한 모델에게 매우 다른 두 일 — <b>지시 이해</b>와 <b>픽셀 그리기</b> — 을 동시에 시켜왔다. Bernini는 이를 깔끔한 분업으로 가른다: <b>Qwen2.5-VL-7B 플래너</b>가 <em>목표 의미</em>를 <span class="hl">ViT 임베딩 공간</span>에서 직접 예측하고(마스크 기반 반복 정제, 텍스트 병목 없음), <b>Wan2.2-A14B DiT 렌더러</b>가 그 잠재 계획을 flow matching으로 픽셀화하며, 편집에선 소스 VAE 특징이 디테일을 보존한다. <span class="hl">의미가 인터페이스</span>이므로 두 반쪽은 따로 학습되고 가볍게만 공동 학습된다. 결과: 비디오 편집 SOTA(OpenVE-Bench <b>4.04 vs 차점 3.18</b>), 인간 평가에서 Kling O3에 승리, T2V 품질은 Wan2.2 기반 수준 유지(VBench <b>84.64 vs 84.79</b>).</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Text is a lossy interface between understanding and rendering — so stop translating the plan into words.</p>
+    <p class="lead t-ko">텍스트는 이해와 렌더링 사이의 손실 인터페이스다 — 계획을 굳이 말로 번역하지 마라.</p>
+    <p class="t-en">MLLMs are excellent at reasoning over multimodal inputs; diffusion models are excellent at photorealistic synthesis. Most "unified" systems couple them through a text prompt (rewriting) or fuse everything into one giant model that must learn both skills at once. Bernini's bet is that the right interface is the MLLM's <strong>native visual latent space</strong>: the planner reads text + source images/videos serialized into one sequence and directly outputs the <em>semantic embeddings of the target video</em>. The renderer never re-interprets language — it just executes the plan. This mirrors the latent-communication idea from multi-agent LLMs (skip decode-and-re-encode between heterogeneous models), applied to an understanding→generation pipeline.</p>
+    <p class="t-ko">MLLM은 멀티모달 입력 추론에, 디퓨전 모델은 사실적 합성에 뛰어나다. 대부분의 "통합" 시스템은 둘을 텍스트 프롬프트(재작성)로 잇거나, 두 능력을 동시에 배워야 하는 하나의 거대 모델로 합친다. Bernini의 베팅은 올바른 인터페이스가 MLLM의 <strong>고유 시각 잠재 공간</strong>이라는 것: 플래너는 텍스트 + 소스 이미지/비디오를 하나의 시퀀스로 직렬화해 읽고, <em>목표 비디오의 의미 임베딩</em>을 직접 출력한다. 렌더러는 언어를 재해석하지 않는다 — 계획을 실행할 뿐. 이는 멀티에이전트 LLM의 잠재 통신 아이디어(이질 모델 간 디코딩·재인코딩 생략)를 이해→생성 파이프라인에 적용한 꼴이다.</p>
+    <figure class="fig">
+      <img src="fig/2605.22344/x3.png" alt="Bernini overview: unified multimodal sequence, MLLM planner with iterative masked refinement, DiT renderer with SA-3D RoPE">
+      <figcaption class="t-en"><b>Figure 3.</b> The full pipeline. (A) Text and visual inputs serialize into one 1D sequence via ViT. (B) The MLLM planner fills fully-masked target tokens over K refinement steps into complete semantic embeddings z. (C) The DiT renderer cross-attends to z (plus T5 text and source VAE features) and flow-matches the output latent. (D–E) A segment-wise attention mask and SA-3D RoPE keep multiple visual inputs from blurring together.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> 전체 파이프라인. (A) 텍스트·시각 입력을 ViT로 하나의 1D 시퀀스로 직렬화. (B) MLLM 플래너가 전부 마스크된 타깃 토큰을 K번의 정제로 완전한 의미 임베딩 z로 채움. (C) DiT 렌더러가 z(+T5 텍스트·소스 VAE 특징)에 cross-attention하며 출력 잠재를 flow matching. (D–E) 세그먼트별 어텐션 마스크와 SA-3D RoPE가 여러 시각 입력의 뒤섞임을 방지.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2605.22344</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">4.04</div><div class="l"><span class="t-en">OpenVE-Bench overall<br>(next best 3.18)</span><span class="t-ko">OpenVE-Bench 종합<br>(차점 3.18)</span></div></div>
+      <div class="stat"><div class="n">3.49</div><div class="l"><span class="t-en">Bernini-V2V overall<br>vs Wan2.7 3.30 · Kling 3.05</span><span class="t-ko">Bernini-V2V 종합<br>vs Wan2.7 3.30 · Kling 3.05</span></div></div>
+      <div class="stat"><div class="n">84.64</div><div class="l"><span class="t-en">VBench T2V — base Wan2.2's<br>84.79 retained after unifying</span><span class="t-ko">VBench T2V — 통합 후에도<br>기반 Wan2.2의 84.79 유지</span></div></div>
+      <div class="stat"><div class="n">7B + A14B</div><div class="l"><span class="t-en">Qwen2.5-VL planner<br>+ Wan2.2 DiT renderer</span><span class="t-ko">Qwen2.5-VL 플래너<br>+ Wan2.2 DiT 렌더러</span></div></div>
+      <div class="stat"><div class="n">22 / 300</div><div class="l"><span class="t-en">Editing tasks / test cases<br>in new Bernini-Bench</span><span class="t-ko">신규 Bernini-Bench의<br>편집 과제 / 테스트 케이스</span></div></div>
+      <div class="stat"><div class="n">81.11</div><div class="l"><span class="t-en">VBench dynamic degree<br>(base Wan2.2: 69.72)</span><span class="t-ko">VBench 동적 정도<br>(기반 Wan2.2: 69.72)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Planner (MLLM 7B)</span><span class="t-ko">플래너 (MLLM 7B)</span></div>
+          <div class="sub"><span class="t-en">text + sources → target semantics</span><span class="t-ko">텍스트+소스 → 목표 의미</span></div>
+          <div class="latent"><span class="t-en">masked refinement in ViT space</span><span class="t-ko">ViT 공간 마스크 정제</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Semantic plan z</span><span class="t-ko">의미 계획 z</span></div>
+          <div class="sub"><span class="t-en">dense embeddings, no text</span><span class="t-ko">조밀 임베딩, 텍스트 없음</span></div>
+          <div class="latent"><span class="t-en">the only interface</span><span class="t-ko">유일한 인터페이스</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Renderer (DiT A14B)</span><span class="t-ko">렌더러 (DiT A14B)</span></div>
+          <div class="sub"><span class="t-en">cross-attend z + src VAE</span><span class="t-ko">z + 소스 VAE에 cross-attn</span></div>
+          <div class="latent"><span class="t-en">flow matching → pixels</span><span class="t-ko">flow matching → 픽셀</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Plan in semantics, render in pixels</b> — because the interface is a latent plan (not text), the two pretrained models keep their strengths and only need light co-training.</div>
+      <div class="cap t-ko"><b>의미로 계획하고 픽셀로 렌더링</b> — 인터페이스가 (텍스트가 아닌) 잠재 계획이라, 사전학습된 두 모델이 강점을 유지한 채 가벼운 공동 학습만 필요하다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: two mechanisms make the latent handoff work</span><span class="t-ko">아이디어: 잠재 핸드오프를 가능케 하는 두 장치</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 계획</span>
+        <h3>Mask-based semantic planning</h3>
+        <p class="t-en">Target visual tokens are <span class="term">dense ViT embeddings</span> (no discrete tokenizer loss). Training masks a Beta-sampled subset and the MLLM infers them from context; an MAR-style <span class="term">ViT embedding decoder</span> (MLP + ResNet head) recovers ground-truth embeddings with a flow-matching loss. Inference starts fully masked and decodes over K steps with a cosine mask schedule — bidirectional, unlike left-to-right AR. A latent <span class="term">chain-of-thought</span> lets the planner reason before emitting the plan.</p>
+        <p class="t-ko">타깃 시각 토큰은 <span class="term">조밀한 ViT 임베딩</span>(이산 토크나이저 손실 없음). 학습 시 Beta 분포로 뽑은 부분집합을 마스크하고 MLLM이 맥락으로 추론하며, MAR 스타일 <span class="term">ViT 임베딩 디코더</span>(MLP+ResNet 헤드)가 flow-matching 손실로 원 임베딩을 복원한다. 추론은 전부 마스크에서 시작해 코사인 스케줄로 K단계 디코딩 — 좌→우 AR과 달리 양방향. 잠재 <span class="term">chain-of-thought</span>로 플래너가 계획 전에 추론한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 렌더링</span>
+        <h3>SA-3D RoPE + grounded conditioning</h3>
+        <p class="t-en">With references, source video, and target in one sequence, tokens can share the same (t,h,w) — identity ambiguity. <span class="term">SA-3D RoPE</span> multiplies in a per-segment rotary phase so attention can tell segments apart (ablation: additive segment embeddings still leak reference details; phase modulation doesn't). The renderer takes the plan z through a <span class="term">zero-init MLP</span> concatenated with T5 text features — preserving Wan2.2's pretrained prior — plus source VAE features for pixel-level consistency.</p>
+        <p class="t-ko">레퍼런스·소스 비디오·타깃이 한 시퀀스에 있으면 토큰이 같은 (t,h,w)를 공유할 수 있다 — 정체성 모호. <span class="term">SA-3D RoPE</span>는 세그먼트별 회전 위상을 곱해 어텐션이 세그먼트를 구분하게 한다(ablation: 가산형 세그먼트 임베딩은 여전히 레퍼런스 디테일이 새지만, 위상 변조는 안 샌다). 렌더러는 계획 z를 <span class="term">zero-init MLP</span>로 받아 T5 텍스트 특징과 연결 — Wan2.2의 사전학습 prior 보존 — 하고 소스 VAE 특징으로 픽셀 수준 일관성을 더한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Serialize everything into one sequence</span><span class="t-ko">모든 것을 한 시퀀스로 직렬화</span></b><span class="t-en">Text, N source images/videos (as ViT embeddings), and the masked target are concatenated — one formulation covers T2V, subject-to-video, and image/video editing.</span><span class="t-ko">텍스트, N개 소스 이미지/비디오(ViT 임베딩), 마스크된 타깃을 이어붙인다 — 하나의 공식으로 T2V·subject-to-video·이미지/비디오 편집을 모두 포괄.</span></li>
+      <li><b><span class="t-en">Plan: iterative masked refinement</span><span class="t-ko">계획: 반복 마스크 정제</span></b><span class="t-en">From fully-masked target tokens, the MLLM progressively fills in semantic embeddings over K steps (cosine schedule), feeding predictions back as partial observations.</span><span class="t-ko">전부 마스크된 타깃 토큰에서 MLLM이 K단계(코사인 스케줄)에 걸쳐 의미 임베딩을 점진적으로 채우고, 예측을 부분 관측으로 되먹인다.</span></li>
+      <li><b><span class="t-en">Render: flow matching on VAE latents</span><span class="t-ko">렌더링: VAE 잠재의 flow matching</span></b><span class="t-en">The DiT cross-attends to the plan z (+T5 features; + source VAE features for editing) and denoises the target latent; SA-3D RoPE keeps segments distinct.</span><span class="t-ko">DiT가 계획 z(+T5 특징; 편집 시 +소스 VAE 특징)에 cross-attention하며 타깃 잠재를 denoise; SA-3D RoPE가 세그먼트를 구분 유지.</span></li>
+      <li><b><span class="t-en">Train separately, co-train lightly</span><span class="t-ko">따로 학습, 가볍게 공동 학습</span></b><span class="t-en">One weighted loss — NTP (keeps understanding) + flow matching in ViT space (planner) + flow matching in VAE space (renderer) — with each half mostly trained on its own.</span><span class="t-ko">가중 합 손실 하나 — NTP(이해 보존) + ViT 공간 flow matching(플래너) + VAE 공간 flow matching(렌더러) — 각 반쪽은 대부분 독립 학습.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — editing is where the plan pays off</span><span class="t-ko">결과 — 계획의 이득은 편집에서 터진다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 6 excerpt.</b> Bernini-V2V (MLLM-judged, 1–5): overall best, with the standout gap in <b>video consistency</b> — executing the edit while leaving everything else untouched.</caption>
+        <caption class="t-ko"><b>표 6 발췌.</b> Bernini-V2V(MLLM 평가, 1~5): 종합 최고이며, 격차가 가장 큰 축은 <b>비디오 일관성</b> — 편집만 수행하고 나머지는 건드리지 않는 능력.</caption>
+        <thead><tr><th>Method</th><th>Overall</th><th>Instr. Follow</th><th>Video Consist.</th><th>Gen. Quality</th></tr></thead>
+        <tbody>
+          <tr><td>UniVideo</td><td>2.44</td><td>2.58</td><td>3.30</td><td>3.16</td></tr>
+          <tr><td>Kling O3</td><td>3.05</td><td>3.25</td><td>3.09</td><td>3.44</td></tr>
+          <tr><td>Wan2.7</td><td>3.30</td><td>3.57</td><td>3.11</td><td class="up">3.56</td></tr>
+          <tr><td><b>Bernini</b></td><td class="up">3.49</td><td class="up">3.66</td><td class="up">3.51</td><td>3.49</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="margin-top:12px">On <strong>OpenVE-Bench</strong> (judged by Gemini 2.5 Pro) the margin is larger: overall <b>4.04</b> vs the next-best VINO's 3.18, with camera edits at <b>4.67 vs 2.81</b>. On VBench T2V, Bernini scores <b>84.64</b> — essentially the base Wan2.2-A14B's 84.79 — showing the unification didn't tax raw generation.</p>
+    <p class="t-ko" style="margin-top:12px"><strong>OpenVE-Bench</strong>(Gemini 2.5 Pro 평가)에선 격차가 더 크다: 종합 <b>4.04</b> vs 차점 VINO 3.18, 카메라 편집은 <b>4.67 vs 2.81</b>. VBench T2V에선 <b>84.64</b>로 기반 Wan2.2-A14B의 84.79와 사실상 동일 — 통합이 순수 생성력을 깎지 않았음을 보인다.</p>
+    <figure class="fig">
+      <img src="fig/2605.22344/x14.png" alt="GSB win rates of Bernini vs Kling O3 and Wan2.7 on V2V and RV2V">
+      <figcaption class="t-en"><b>Figure 13.</b> Human side-by-side (GSB) win rates. Vs <b>Kling O3</b> (orange): clear wins on every axis. Vs <b>Wan2.7</b> (red): roughly on par overall — the one consistent advantage is <b>video consistency</b>, the axis a planner-renderer split should help most.</figcaption>
+      <figcaption class="t-ko"><b>Figure 13.</b> 인간 나란히 비교(GSB) 승률. <b>Kling O3</b> 대비(주황): 전 축에서 확실한 승리. <b>Wan2.7</b> 대비(빨강): 종합적으론 대등 — 유일하게 일관된 우위가 <b>비디오 일관성</b>인데, 이는 플래너-렌더러 분리가 가장 도와야 할 축이다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2605.22344</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><strong>Semantics as the interface.</strong> The plan crosses from a 7B MLLM to a 14B-class DiT as dense ViT-space embeddings — a heterogeneous latent handoff, cousin to KV-cache communication in multi-agent LLMs.</p><p class="t-ko"><strong>의미가 인터페이스.</strong> 계획이 7B MLLM에서 14B급 DiT로 조밀한 ViT 공간 임베딩으로 건너간다 — 멀티에이전트 LLM의 KV-cache 통신과 사촌인 이질 잠재 핸드오프.</p></div>
+      <div class="t"><span class="ic">🧩</span><p class="t-en"><strong>Decoupling preserves pretraining.</strong> Separate training + zero-init connector + T5-feature retention means neither model's pretrained strength gets overwritten — and VBench confirms T2V didn't regress.</p><p class="t-ko"><strong>분리가 사전학습을 지킨다.</strong> 독립 학습 + zero-init 커넥터 + T5 특징 유지로 어느 모델의 사전학습 강점도 덮어써지지 않는다 — VBench가 T2V 무손상을 확인.</p></div>
+      <div class="t"><span class="ic">🎯</span><p class="t-en"><strong>Consistency is the dividend.</strong> The clearest, most repeated win is video consistency — plan-then-render changes what the instruction asks and nothing else.</p><p class="t-ko"><strong>배당금은 일관성.</strong> 가장 뚜렷하고 반복되는 승리는 비디오 일관성 — 계획-후-렌더링은 지시가 요구한 것만 바꾸고 나머지는 두지 않는다.</p></div>
+      <div class="t"><span class="ic">📐</span><p class="t-en"><strong>Positional identity is a real problem.</strong> SA-3D RoPE's multiplicative segment phase beats additive segment embeddings for keeping multiple visual inputs apart — a reusable trick for any multi-segment DiT.</p><p class="t-ko"><strong>위치 정체성은 실재하는 문제.</strong> SA-3D RoPE의 곱셈형 세그먼트 위상이 가산형 세그먼트 임베딩보다 여러 시각 입력을 잘 분리한다 — 모든 멀티 세그먼트 DiT에 재사용 가능한 기법.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline "SOTA" needs qualifiers. In human side-by-side evaluation Bernini is only <em>on par</em> with Wan2.7 (its wins concentrate in consistency), the compared systems' outputs were downsampled to Bernini's 480p/16fps setting, and results rely on an external LLM instruction rewriter — the authors themselves concede the planner's native reasoning "is not yet fully sufficient" and visual quality still trails closed-source Wan2.7. Team-branded paper with no per-author list also makes contributions hard to audit.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판:</b> 헤드라인 "SOTA"엔 단서가 필요하다. 인간 나란히 평가에서 Bernini는 Wan2.7과 <em>대등</em>할 뿐이고(승리는 일관성에 집중), 비교 시스템 출력은 Bernini의 480p/16fps 설정으로 다운샘플됐으며, 결과는 외부 LLM 지시 재작성기에 의존한다 — 저자들 스스로 플래너의 자체 추론이 "아직 충분치 않다"고 인정하고 시각 품질도 클로즈드소스 Wan2.7에 못 미친다. 저자 명단 없는 팀 명의 논문이라 기여 감사도 어렵다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2605.22344">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2605.22344">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2605.22344">📥 PDF</a>
+      <a href="https://bernini-ai.github.io/">🌐 Project page</a>
+      <a href="https://www.alphaxiv.org/overview/2605.22344">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Requested · topic: Latent Semantic Planning</b> (MLLM→DiT latent handoff for video).<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-07-09.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>요청 · 주제: Latent Semantic Planning</b> (비디오를 위한 MLLM→DiT 잠재 핸드오프).<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-07-09.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
