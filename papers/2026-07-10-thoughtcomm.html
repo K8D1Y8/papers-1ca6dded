@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Thought Communication in Multiagent Collaboration</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent Systems · Latent Communication</span><span class="t-ko">멀티에이전트 · 잠재 통신</span></span>
+      <span>2026 · 07 · 10</span>
+    </div>
+    <h1>Thought Communication in Multiagent Collaboration<br>
+      <span class="glow t-en">— agents share latent "thoughts", not tokens — with an identifiability proof</span>
+      <span class="glow t-ko">— 에이전트가 토큰이 아니라 잠재 "생각"을 주고받는다 — 식별가능성 증명과 함께</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Yujia Zheng</b> <span class="t-en">, Zhuokai Zhao, Zijian Li, Yaqi Xie, Mingze Gao, Lizhu Zhang, Kun Zhang</span><span class="t-ko">, Zhuokai Zhao, Zijian Li, Yaqi Xie, Mingze Gao, Lizhu Zhang, Kun Zhang</span></span>
+      <span>🏛 CMU · Meta AI · MBZUAI</span>
+      <span>🗓 Oct 23, 2025</span>
+      <span>🏆 NeurIPS 2025 (Spotlight)</span>
+      <span>📄 <a href="https://arxiv.org/abs/2510.20733">arXiv:2510.20733</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Multi-agent LLMs usually collaborate by passing natural-language messages — sequential, ambiguous, and lossy. <b>ThoughtComm</b> lets agents communicate through shared latent <i>thoughts</i> instead. The paper first <b>proves</b> that the shared and private thoughts underlying agents' hidden states — and who shares what — are <i>identifiable</i> without any supervision, then extracts them with a sparsity-regularized autoencoder and injects them back as prefix vectors. Across five LLMs on MATH and GSM8K it beats SOTA multiagent finetuning by ~19% relative (e.g. <b>93.0%</b> vs 75.8% accuracy on Qwen3-1.7B / MATH).</p>
+    <p class="t-ko">멀티에이전트 LLM은 보통 자연어 메시지를 주고받으며 협업하는데, 이는 순차적이고 모호하며 정보 손실이 크다. <b>ThoughtComm</b>은 그 대신 에이전트들이 공유된 잠재 <i>생각(thought)</i>으로 소통하게 한다. 이 논문은 먼저 에이전트 은닉상태 뒤에 있는 공유·개별 생각과 "누가 무엇을 공유하는지"가 지도 없이도 <i>식별 가능</i>함을 <b>증명</b>하고, 희소 정규화 오토인코더로 이를 추출한 뒤 프리픽스 벡터로 다시 주입한다. MATH·GSM8K에서 5개 LLM에 걸쳐 SOTA 멀티에이전트 파인튜닝 대비 상대 ~19% 향상(예: Qwen3-1.7B/MATH에서 <b>93.0%</b> vs 75.8%).</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">What if collaborating AI agents could stop <i>talking</i> and just think at each other?</p>
+    <p class="lead t-ko">협업하는 AI 에이전트가 <i>말하기</i>를 멈추고 서로에게 생각을 직접 건넬 수 있다면?</p>
+    <p class="t-en">Today's LLM multi-agent systems debate in natural language. But language is a narrow pipe: it is sequential, ambiguous, and can only express a compressed shadow of the reasoning behind it. Recent studies trace a large share of multi-agent failures to exactly this — vague message specification and inter-agent misalignment. Machines, unlike humans, are not forced to serialize thoughts into words; they could in principle exchange the latent reasoning directly. The hard part is not <i>sending</i> a hidden state — it is knowing <i>what</i> is actually in it. This paper's contribution is to make that question answerable: it gives the first identifiability theory for the "thoughts" that agents share, and turns it into a working communication method.</p>
+    <p class="t-ko">오늘날의 LLM 멀티에이전트 시스템은 자연어로 토론한다. 그러나 언어는 좁은 통로다 — 순차적이고 모호하며, 그 뒤에 있는 추론의 압축된 그림자만 전달할 수 있다. 최근 연구들은 멀티에이전트 실패의 상당수를 바로 이 지점 — 모호한 메시지와 에이전트 간 정렬 실패 — 에서 찾는다. 인간과 달리 기계는 생각을 단어로 직렬화할 필요가 없으므로, 원리상 잠재 추론을 직접 주고받을 수 있다. 어려운 부분은 은닉상태를 <i>보내는</i> 것이 아니라, 그 안에 <i>무엇</i>이 들어 있는지 아는 것이다. 이 논문의 기여는 그 질문에 답할 수 있게 만든 데 있다 — 에이전트가 공유하는 "생각"에 대한 최초의 식별가능성 이론을 제시하고, 이를 실제 통신 기법으로 구현한다.</p>
+    <figure class="fig">
+      <img src="fig/2510.20733/framework.png" alt="Overview of the ThoughtComm framework: agent model states are encoded into a shared latent space via a sparse autoencoder, latent thoughts are routed to relevant agents by the recovered dependency structure, then injected back as prefixes.">
+      <figcaption class="t-en"><b>Figure 2.</b> ThoughtComm in one picture. Each round, agents' model states H<sub>t</sub><sup>(i)</sup> are encoded into a shared latent space by a sparsity-regularized autoencoder, yielding thoughts Ẑ<sub>t</sub>. Each latent dimension is routed to the agents it actually drives (shared vs. private), then injected back as prefix vectors that steer generation.</figcaption>
+      <figcaption class="t-ko"><b>그림 2.</b> ThoughtComm 한 장 요약. 매 라운드마다 에이전트의 모델 상태 H<sub>t</sub><sup>(i)</sup>가 희소 정규화 오토인코더를 통해 공유 잠재공간으로 인코딩되어 생각 Ẑ<sub>t</sub>가 된다. 각 잠재 차원은 실제로 그것이 영향을 주는 에이전트들에게(공유 vs 개별) 라우팅된 뒤, 생성을 유도하는 프리픽스 벡터로 다시 주입된다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2510.20733</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">93.0%</div><div class="l"><span class="t-en">MATH accuracy, Qwen3-1.7B (vs 75.8% SOTA)</span><span class="t-ko">MATH 정확도, Qwen3-1.7B (SOTA 75.8% 대비)</span></div></div>
+      <div class="stat"><div class="n">+19.06%</div><div class="l"><span class="t-en">mean relative gain over SOTA finetuning</span><span class="t-ko">SOTA 파인튜닝 대비 평균 상대 향상</span></div></div>
+      <div class="stat"><div class="n">+67.23%</div><div class="l"><span class="t-en">mean relative gain over single-agent</span><span class="t-ko">단일 에이전트 대비 평균 상대 향상</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">identifiability theorems (shared · private · structure)</span><span class="t-ko">식별가능성 정리 (공유·개별·구조)</span></div></div>
+      <div class="stat"><div class="n">5</div><div class="l"><span class="t-en">LLMs tested, 0.6B → 8B</span><span class="t-ko">테스트한 LLM, 0.6B → 8B</span></div></div>
+      <div class="stat"><div class="n">&lt;5%</div><div class="l"><span class="t-en">accuracy swing over prefix length 1→16</span><span class="t-ko">프리픽스 길이 1→16 정확도 변동</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Head-to-head on MATH</span><span class="t-ko">MATH 정면 비교</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (excerpt).</b> MATH accuracy (%) across five LLMs. "Multiagent Finetuning" is the prior SOTA; ThoughtComm is this paper. Note that finetuning can even hurt (Phi-4, LLaMA-3) while thought communication consistently helps.</caption>
+        <caption class="t-ko"><b>표 1 (발췌).</b> 5개 LLM의 MATH 정확도(%). "Multiagent Finetuning"이 기존 SOTA, ThoughtComm이 본 논문. 파인튜닝은 오히려 성능을 해치기도 하지만(Phi-4, LLaMA-3), 생각 통신은 일관되게 향상시킨다.</caption>
+        <thead><tr><th><span class="t-en">Base model</span><span class="t-ko">기반 모델</span></th><th>Single Answer</th><th>Multiagent FT (SOTA)</th><th>ThoughtComm</th></tr></thead>
+        <tbody>
+          <tr><td>Qwen3-0.6B</td><td>45.80</td><td>71.20</td><td class="up">85.00</td></tr>
+          <tr><td>Qwen3-1.7B</td><td>43.60</td><td>75.80</td><td class="up">93.00</td></tr>
+          <tr><td>Phi-4-mini (3.84B)</td><td>63.80</td><td>60.20</td><td class="up">74.60</td></tr>
+          <tr><td>DeepSeek-R1-Distill-Llama-8B</td><td>42.60</td><td>72.40</td><td class="up">82.80</td></tr>
+          <tr><td>LLaMA3-8B-Instruct</td><td>36.20</td><td>39.68</td><td class="up">45.60</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto" font-family="system-ui,sans-serif">
+        <defs>
+          <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#888"/></marker>
+        </defs>
+        <!-- agent states -->
+        <rect x="16" y="30" width="140" height="40" rx="8" fill="#3b4a6b" opacity="0.18" stroke="#3b4a6b"/>
+        <text x="86" y="48" text-anchor="middle" font-size="12.5" font-weight="700" fill="#cfe">Agent 1 states</text>
+        <text x="86" y="63" text-anchor="middle" font-size="10.5" fill="#9ab">H₁ hidden</text>
+        <rect x="16" y="150" width="140" height="40" rx="8" fill="#6b3b4a" opacity="0.18" stroke="#6b3b4a"/>
+        <text x="86" y="168" text-anchor="middle" font-size="12.5" font-weight="700" fill="#fcd">Agent 2 states</text>
+        <text x="86" y="183" text-anchor="middle" font-size="10.5" fill="#caa">H₂ hidden</text>
+        <!-- autoencoder -->
+        <rect x="232" y="80" width="150" height="60" rx="10" fill="#2e7d6b" opacity="0.16" stroke="#2e7d6b"/>
+        <text x="307" y="104" text-anchor="middle" font-size="12.5" font-weight="700" fill="#7fe">Sparse autoencoder</text>
+        <text x="307" y="122" text-anchor="middle" font-size="10.5" fill="#9d9">Z = f⁻¹(H), ‖J_f‖₁</text>
+        <!-- latent thoughts -->
+        <rect x="440" y="24" width="120" height="30" rx="7" fill="#7a6a2e" opacity="0.22" stroke="#7a6a2e"/>
+        <text x="500" y="44" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fe9">private → A1</text>
+        <rect x="440" y="100" width="120" height="30" rx="7" fill="#2e6a7a" opacity="0.30" stroke="#2e6a7a"/>
+        <text x="500" y="120" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9ef">shared thought</text>
+        <rect x="440" y="176" width="120" height="30" rx="7" fill="#7a6a2e" opacity="0.22" stroke="#7a6a2e"/>
+        <text x="500" y="196" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fe9">private → A2</text>
+        <!-- prefixes back to agents -->
+        <rect x="600" y="80" width="104" height="60" rx="9" fill="#5a3b6b" opacity="0.20" stroke="#5a3b6b"/>
+        <text x="652" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#e9f">Prefixes</text>
+        <text x="652" y="122" text-anchor="middle" font-size="10.5" fill="#ccd">P = g(Z) → agents</text>
+        <!-- arrows -->
+        <path d="M156,50 C195,50 200,100 230,105" fill="none" stroke="#888" stroke-width="1.6" marker-end="url(#ah)"/>
+        <path d="M156,170 C195,170 200,120 230,115" fill="none" stroke="#888" stroke-width="1.6" marker-end="url(#ah)"/>
+        <path d="M382,100 L438,45" fill="none" stroke="#888" stroke-width="1.4" marker-end="url(#ah)"/>
+        <path d="M382,110 L438,115" fill="none" stroke="#888" stroke-width="1.4" marker-end="url(#ah)"/>
+        <path d="M382,120 L438,188" fill="none" stroke="#888" stroke-width="1.4" marker-end="url(#ah)"/>
+        <path d="M560,115 C580,115 585,110 598,110" fill="none" stroke="#888" stroke-width="1.6" marker-end="url(#ah)"/>
+        <text x="307" y="228" text-anchor="middle" font-size="10.5" fill="#789" font-style="italic">The Jacobian's sparsity pattern reveals which thought drives which agent — that's the identified structure.</text>
+      </svg>
+      <div class="cap t-en">Concatenated agent states are encoded to a shared latent space; the recovered Jacobian tells the system which thought is <i>shared</i> and which is <i>private</i> to an agent, and those routed thoughts return as prefixes.</div>
+      <div class="cap t-ko">연결된 에이전트 상태가 공유 잠재공간으로 인코딩되고, 복원된 야코비안이 어떤 생각이 <i>공유</i>이고 어떤 것이 특정 에이전트의 <i>개별</i>인지 알려준다. 라우팅된 생각은 프리픽스로 되돌아온다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas that make it work</span><span class="t-ko">작동을 가능케 하는 두 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">Theory</span>
+        <h3><span class="t-en">Thoughts are provably recoverable</span><span class="t-ko">생각은 증명 가능하게 복원된다</span></h3>
+        <p class="t-en">Model each agent's hidden state as an invertible mixing of latent thoughts, H = f(Z). The authors prove that under sparsity of the Jacobian J<sub>f</sub> (plus invertibility and smoothness), the <b>shared</b> thoughts between any two agents, the <b>private</b> thoughts of each, and the <b>whole sharing structure</b> (who holds which thought) are identifiable up to permutation — with no labels or auxiliary supervision.</p>
+        <p class="t-ko">각 에이전트의 은닉상태를 잠재 생각의 가역 혼합 H = f(Z)로 모델링한다. 저자들은 야코비안 J<sub>f</sub>의 희소성(그리고 가역성·매끄러움) 하에서, 두 에이전트 간 <b>공유</b> 생각, 각자의 <b>개별</b> 생각, 그리고 <b>공유 구조 전체</b>(누가 어떤 생각을 갖는지)가 순열을 제외하고 식별 가능함을 증명한다 — 라벨이나 보조 지도 없이.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Method</span>
+        <h3><span class="t-en">Route thoughts, then inject as prefixes</span><span class="t-ko">생각을 라우팅해 프리픽스로 주입</span></h3>
+        <p class="t-en">A sparsity-regularized autoencoder maps concatenated agent states into a shared latent space (loss ‖H − f(Z)‖² + ‖J<sub>f</sub>‖₁). The recovered Jacobian pattern says which thought each agent should receive; thoughts are reweighted by how many agents "agree" on them, converted to prefix vectors P = g(Z), and prepended to each agent's tokens — steering it without touching the base LLM's weights.</p>
+        <p class="t-ko">희소 정규화 오토인코더가 연결된 에이전트 상태를 공유 잠재공간으로 매핑한다(손실 ‖H − f(Z)‖² + ‖J<sub>f</sub>‖₁). 복원된 야코비안 패턴이 각 에이전트가 받아야 할 생각을 알려주고, 생각은 몇 개 에이전트가 "동의"하는지에 따라 재가중된 뒤 프리픽스 벡터 P = g(Z)로 변환되어 각 에이전트 토큰 앞에 붙는다 — 기반 LLM 가중치를 건드리지 않고 유도한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Why now</span>
+        <h3><span class="t-en">Language was the bottleneck</span><span class="t-ko">언어가 병목이었다</span></h3>
+        <p class="t-en">Natural-language debate is lossy and often the root cause of multi-agent failure. Communicating in latent space — "telepathy" for models — sidesteps serialization, but only becomes trustworthy once you can prove <i>what</i> is being shared. Identifiability is the missing piece that makes latent communication principled rather than a black box.</p>
+        <p class="t-ko">자연어 토론은 손실이 크고 멀티에이전트 실패의 근원인 경우가 많다. 잠재공간 통신 — 모델의 "텔레파시" — 은 직렬화를 우회하지만, <i>무엇</i>이 공유되는지 증명할 수 있을 때에만 신뢰할 수 있다. 식별가능성이 바로 잠재 통신을 블랙박스가 아닌 원리적 방법으로 만드는 빠진 조각이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Collect model states.</span><span class="t-ko">모델 상태 수집.</span></b><span class="t-en"> At each debate round, take every agent's hidden states H<sub>t</sub><sup>(i)</sup> as the observable signals of its reasoning.</span><span class="t-ko"> 매 토론 라운드에서 각 에이전트의 은닉상태 H<sub>t</sub><sup>(i)</sup>를 그 추론의 관측 신호로 취한다.</span></li>
+      <li><b><span class="t-en">Encode to shared latent thoughts.</span><span class="t-ko">공유 잠재 생각으로 인코딩.</span></b><span class="t-en"> Train a sparsity-regularized autoencoder to invert the mixing: Ẑ = f⁻¹(H), penalizing the Jacobian so each thought touches as few agents as possible.</span><span class="t-ko"> 희소 정규화 오토인코더로 혼합을 역변환: Ẑ = f⁻¹(H). 각 생각이 최대한 적은 에이전트에만 닿도록 야코비안을 벌점화한다.</span></li>
+      <li><b><span class="t-en">Recover the sharing structure.</span><span class="t-ko">공유 구조 복원.</span></b><span class="t-en"> Read the Jacobian's non-zero pattern to see which latent thought drives which agents — separating shared from private — then reweight each thought by agent agreement.</span><span class="t-ko"> 야코비안의 비영(non-zero) 패턴을 읽어 어떤 잠재 생각이 어떤 에이전트를 구동하는지 파악하고(공유 vs 개별), 각 생각을 에이전트 동의도로 재가중한다.</span></li>
+      <li><b><span class="t-en">Inject as prefixes.</span><span class="t-ko">프리픽스로 주입.</span></b><span class="t-en"> Map each agent's personalized thoughts to prefix vectors and prepend them to its token embeddings; a small adapter g is trained with a semantic-similarity loss so generation stays coherent.</span><span class="t-ko"> 각 에이전트의 개인화된 생각을 프리픽스 벡터로 변환해 토큰 임베딩 앞에 붙인다. 작은 어댑터 g는 의미 유사도 손실로 학습되어 생성이 일관되게 유지된다.</span></li>
+      <li><b><span class="t-en">Debate and answer.</span><span class="t-ko">토론하고 답한다.</span></b><span class="t-en"> Agents keep reasoning with injected thoughts across rounds; the majority/consensus over agents gives the final answer. Only the autoencoder + adapter are trained (500 examples), never the LLMs.</span><span class="t-ko"> 에이전트들은 주입된 생각으로 라운드에 걸쳐 계속 추론하고, 에이전트 다수결/합의로 최종 답을 낸다. 오토인코더 + 어댑터만 학습(500개 예제)하고 LLM은 건드리지 않는다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Thought-level communication lifts MATH accuracy from 75.8% (SOTA multiagent finetuning) to 93.0% on Qwen3-1.7B, averaging +19% relative over SOTA and +67% over single-agent across five LLMs.</p><p class="t-ko">생각 수준 통신은 Qwen3-1.7B의 MATH 정확도를 75.8%(SOTA 멀티에이전트 파인튜닝)에서 93.0%로 끌어올리며, 5개 LLM 평균 SOTA 대비 +19%, 단일 에이전트 대비 +67% 상대 향상.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The real headline is theoretical: the first proof that shared/private latent "thoughts" and their sharing graph are identifiable from agents' hidden states alone, with no supervision — turning latent communication from a hack into a principled operation.</p><p class="t-ko">진짜 핵심은 이론이다 — 에이전트 은닉상태만으로 공유·개별 잠재 "생각"과 그 공유 그래프가 지도 없이 식별 가능함을 최초로 증명해, 잠재 통신을 임시방편에서 원리적 연산으로 바꾼다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">It's training-light and modular: only a sparse autoencoder plus a small prefix adapter (500 examples), no base-model finetuning, and robust to prefix length (1→16 tokens, &lt;5% swing).</p><p class="t-ko">학습이 가볍고 모듈러하다 — 희소 오토인코더 + 작은 프리픽스 어댑터(500 예제)만 필요하고 기반 모델 파인튜닝이 없으며, 프리픽스 길이(1→16 토큰)에 강건하다(&lt;5% 변동).</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> ThoughtComm needs white-box access to every agent's hidden states, so it can't be applied to closed API-only models (the authors acknowledge this and only sketch an embedding-based workaround). Gains are also uneven — dramatic on Qwen3-1.7B (+17.2 pts) but marginal on LLaMA3-8B (36.2→45.6) — and evaluation is limited to two math benchmarks (MATH, GSM8K) with 500 examples each, so the "collective intelligence" claim beyond math reasoning is still untested.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> ThoughtComm은 모든 에이전트의 은닉상태에 대한 화이트박스 접근이 필요해, 폐쇄형 API 모델에는 적용할 수 없다(저자도 인정하며 임베딩 기반 우회책만 개략 제시). 향상 폭도 고르지 않다 — Qwen3-1.7B에선 극적(+17.2점)이지만 LLaMA3-8B에선 미미(36.2→45.6). 게다가 평가가 수학 벤치마크 2개(MATH, GSM8K, 각 500예제)에 한정되어, 수학 추론을 넘어선 "집단 지능" 주장은 아직 검증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2510.20733">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2510.20733">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2510.20733">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2510.20733">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>wishlist exhausted; fallback on the "multi-agent latent communication" axis surfaced a recent, accepted, theory-backed pick. venue: NeurIPS 2025 (Spotlight)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-10.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 소진 후 "멀티에이전트 잠재 통신" 축의 폴백 검색에서 최근·채택·이론 기반 논문을 선정. venue: NeurIPS 2025 (Spotlight)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-10.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
