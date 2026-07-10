@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · TriAttention: Efficient Long Reasoning with Trigonometric KV Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">KV Cache Compression · Long Reasoning</span><span class="t-ko">KV Cache Compression · Long Reasoning</span></span>
+      <span>2026 · 07 · 10</span>
+    </div>
+    <h1>TriAttention: Trigonometric KV Compression<br><span class="glow t-en">— Attention is (almost) a trigonometric series: predict which keys will matter from Q/K centers</span><span class="glow t-ko">— 어텐션은 (거의) 삼각급수다: Q/K 중심만으로 어떤 키가 중요해질지 예측한다</span></h1>
+    <div class="meta">
+      <span>👥 <b>Weian Mao</b> <span class="t-en">et al. (Song Han group)</span><span class="t-ko">외 7인 (Song Han 그룹)</span></span>
+      <span>🏛 MIT · NVIDIA · ZJU</span>
+      <span>🗓 2026.04.06</span>
+      <span>📄 <a href="https://arxiv.org/abs/2604.04921">arXiv:2604.04921</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">KV eviction methods score keys by attention from <b>recent post-RoPE queries</b> — but RoPE rotates queries with position, so only a tiny window (~25 queries) is representative, and keys that matter <em>later</em> get evicted, breaking long chains of thought. This paper finds that in the <span class="hl">pre-RoPE space, Q/K vectors concentrate tightly around fixed centers</span> (~90% of heads with R&gt;0.95). Substitute the centers into the RoPE formula and the attention logit collapses into a <span class="hl">trigonometric series in Q–K distance</span> — a closed-form prediction of which keys future queries will attend to. TriAttention scores keys with this series (+ an adaptive norm term), nearly <b>doubling R-KV's accuracy</b> at the same budget (AIME25 32.9 vs 17.5) and matching Full Attention with <b>2.5× throughput or 10.7× less KV memory</b>.</p>
+    <p class="t-ko">KV 퇴출 기법들은 <b>최근 post-RoPE 쿼리</b>의 어텐션으로 키를 점수 매긴다 — 그러나 RoPE는 쿼리를 위치에 따라 회전시켜 대표성 있는 창이 극히 좁고(~25 쿼리), <em>나중에</em> 중요해질 키가 퇴출되어 긴 사고 사슬이 끊긴다. 이 논문은 <span class="hl">pre-RoPE 공간에서 Q/K 벡터가 고정 중심 주위에 강하게 집중</span>됨을 발견한다(~90% 헤드가 R&gt;0.95). 중심을 RoPE 공식에 대입하면 어텐션 로짓이 <span class="hl">Q–K 거리의 삼각급수</span>로 붕괴한다 — 미래 쿼리가 어떤 키를 볼지의 닫힌형 예측. TriAttention은 이 급수(+적응형 norm 항)로 키를 점수 매겨, 같은 예산에서 <b>R-KV 정확도의 거의 2배</b>(AIME25 32.9 vs 17.5), Full Attention 대비 <b>2.5× 처리량 또는 10.7× KV 메모리 절감</b>으로 동일 정확도를 달성한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Every observation-based eviction method inherits the same flaw: the observer rotates.</p>
+    <p class="lead t-ko">관측 기반 퇴출 기법은 모두 같은 결함을 물려받는다: 관측자가 회전한다.</p>
+    <p class="t-en">Long reasoning generates 32K-token chains of thought, and the KV cache grows with them. SnapKV, H2O, R-KV and kin decide what to keep by watching which keys recent queries attend to. But under RoPE a query's orientation is position-dependent — older queries are stale evidence, and prior work shows enlarging the observation window <strong>stops helping past ~25 queries</strong>. Retrieval-head keys that lie dormant for thousands of tokens before becoming critical are exactly what this window misses. TriAttention's move is to stop observing and start <strong>predicting</strong>: find something position-invariant (pre-RoPE statistics) from which future attention is computable in closed form.</p>
+    <p class="t-ko">긴 추론은 32K 토큰짜리 사고 사슬을 낳고 KV 캐시도 함께 자란다. SnapKV·H2O·R-KV류는 최근 쿼리가 어떤 키를 보는지 관찰해 무엇을 남길지 정한다. 그러나 RoPE 하에서 쿼리 방향은 위치 의존적 — 오래된 쿼리는 낡은 증거이며, 선행 연구는 관측 창을 <strong>~25 쿼리 이상 늘려도 소용없음</strong>을 보였다. 수천 토큰 동안 잠자다 결정적이 되는 retrieval 헤드의 키가 바로 이 창이 놓치는 것들이다. TriAttention의 수는 관찰을 멈추고 <strong>예측</strong>하는 것: 위치 불변인 무언가(pre-RoPE 통계)를 찾아 미래 어텐션을 닫힌형으로 계산한다.</p>
+    <figure class="fig">
+      <img src="fig/2604.04921/fig1_tradeoff.png" alt="AIME25 trade-offs: throughput and memory vs accuracy">
+      <figcaption class="t-en"><b>Figure 1.</b> The headline trade-off on AIME25 (Qwen3-8B). (A) At the same 40.8% accuracy as Full Attention, TriAttention delivers 2.5× throughput; (B) or a 10.7× smaller KV cache. Baselines reach only about half the accuracy at this efficiency.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> AIME25(Qwen3-8B)의 헤드라인 트레이드오프. (A) Full Attention과 같은 40.8% 정확도에서 처리량 2.5×; (B) 또는 KV 캐시 10.7× 축소. 기준선들은 이 효율에선 정확도가 절반 수준.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.04921</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">~90%</div><div class="l"><span class="t-en">of heads with Q/K<br>concentration R &gt; 0.95</span><span class="t-ko">Q/K 집중도 R &gt; 0.95인<br>헤드 비율</span></div></div>
+      <div class="stat"><div class="n">2.5× / 10.7×</div><div class="l"><span class="t-en">Throughput / KV memory<br>at Full-Attention accuracy</span><span class="t-ko">동일 정확도에서<br>처리량 / KV 메모리</span></div></div>
+      <div class="stat"><div class="n">32.9 vs 17.5</div><div class="l"><span class="t-en">AIME25 @ 2048 budget<br>TriAttention vs R-KV</span><span class="t-ko">AIME25 @ 예산 2048<br>TriAttention vs R-KV</span></div></div>
+      <div class="stat"><div class="n">6.3×</div><div class="l"><span class="t-en">MATH-500 throughput<br>(1,405 vs 223 tok/s)</span><span class="t-ko">MATH-500 처리량<br>(1,405 vs 223 tok/s)</span></div></div>
+      <div class="stat"><div class="n">68.4%</div><div class="l"><span class="t-en">MATH-500 with 1,024 of<br>32K tokens kept (Full: 69.6)</span><span class="t-ko">32K 중 1,024 토큰만으로<br>MATH-500 (Full: 69.6)</span></div></div>
+      <div class="stat"><div class="n">r = 0.72</div><div class="l"><span class="t-en">Attention reconstructed by<br>the series (layer 1, head 1)</span><span class="t-ko">삼각급수의 어텐션 재구성<br>(1층 1헤드)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core finding — Q/K concentration</span><span class="t-ko">핵심 발견 — Q/K 집중</span></h2>
+    <p class="t-en">Before RoPE rotates them, query and key vectors in each frequency band cluster tightly around a <strong>fixed, non-zero center</strong> — stable across positions, inputs, and even domains (mean resultant length R = ‖E[q]‖/E[‖q‖] measures this; Math/Coding/Chat all give 0.977–0.980). If q ≈ q̄ and k ≈ k̄, the RoPE attention logit Σ<sub>f</sub>‖q<sub>f</sub>‖‖k<sub>f</sub>‖cos(ω<sub>f</sub>Δ+φ<sub>f</sub>) becomes a function of the <strong>distance Δ alone</strong> — a trigonometric series whose coefficients are the centers. Different centers produce different attention-vs-distance curves: some heads prefer near keys (local attention), others far ones (sinks). The series reconstructs real attention with Pearson r peaking at 0.6–0.9 across Qwen3, Qwen2.5, and Llama3 — and the same concentration holds on an MLA architecture (GLM-4.7-Flash: 96.6% of heads R&gt;0.95).</p>
+    <p class="t-ko">RoPE가 회전시키기 전, 각 주파수 대역의 쿼리·키 벡터는 <strong>고정된 비영(非零) 중심</strong> 주위에 강하게 뭉친다 — 위치·입력·도메인에 걸쳐 안정적이다(평균 합벡터 길이 R = ‖E[q]‖/E[‖q‖]로 측정; Math/Coding/Chat 모두 0.977~0.980). q ≈ q̄, k ≈ k̄이면 RoPE 어텐션 로짓 Σ<sub>f</sub>‖q<sub>f</sub>‖‖k<sub>f</sub>‖cos(ω<sub>f</sub>Δ+φ<sub>f</sub>)는 <strong>거리 Δ만의 함수</strong> — 계수가 중심으로 정해지는 삼각급수 — 가 된다. 중심이 다르면 어텐션-거리 곡선도 다르다: 어떤 헤드는 가까운 키(국소 어텐션), 어떤 헤드는 먼 키(싱크)를 선호한다. 이 급수는 Qwen3·Qwen2.5·Llama3에서 Pearson r 0.6~0.9 피크로 실제 어텐션을 재구성하고, MLA 아키텍처(GLM-4.7-Flash: 헤드 96.6%가 R&gt;0.95)에서도 같은 집중이 성립한다.</p>
+    <figure class="fig">
+      <img src="fig/2604.04921/fig2_concentration.png" alt="Q/K concentration: pre-RoPE clustering, RoPE dispersion into arcs, per-head R histogram, series reconstruction">
+      <figcaption class="t-en"><b>Figure 2.</b> (A) Pre-RoPE Q/K at the dominant band are tightly concentrated — three different input sequences overlap. (B) RoPE rotation smears them into arcs, which is why post-RoPE observation is unstable. (C) Concentration holds across nearly all heads. (D) The trigonometric series from the centers reconstructs actual attention logits (r = 0.72 on the very first head — no cherry-picking).</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> (A) 지배 대역의 pre-RoPE Q/K가 강하게 집중 — 서로 다른 세 입력 시퀀스가 겹친다. (B) RoPE 회전이 이를 호(arc)로 흩뜨린다 — post-RoPE 관측이 불안정한 이유. (C) 집중은 거의 모든 헤드에서 성립. (D) 중심으로 만든 삼각급수가 실제 어텐션 로짓을 재구성(첫 층 첫 헤드에서 r = 0.72 — 체리피킹 없음).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.04921</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Offline calibration</span><span class="t-ko">오프라인 캘리브레이션</span></div>
+          <div class="sub"><span class="t-en">E[q<sub>f</sub>], E[‖q<sub>f</sub>‖], R<sub>f</sub> per band</span><span class="t-ko">대역별 E[q<sub>f</sub>], E[‖q<sub>f</sub>‖], R<sub>f</sub></span></div>
+          <div class="latent"><span class="t-en">once per model, any data</span><span class="t-ko">모델당 1회, 데이터 불문</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Score each key</span><span class="t-ko">각 키 점수화</span></div>
+          <div class="sub"><span class="t-en">S<sub>trig</sub>(k,Δ) + (1−R<sub>f</sub>)·norm</span><span class="t-ko">S<sub>trig</sub>(k,Δ) + (1−R<sub>f</sub>)·norm</span></div>
+          <div class="latent"><span class="t-en">avg over future offsets 1…2¹⁶</span><span class="t-ko">미래 오프셋 1…2¹⁶ 평균</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Prune every 128 tok</span><span class="t-ko">128토큰마다 가지치기</span></div>
+          <div class="sub"><span class="t-en">keep top-B keys</span><span class="t-ko">상위 B개 키 유지</span></div>
+          <div class="latent"><span class="t-en">GQA: z-score → max over heads</span><span class="t-ko">GQA: z-score → 헤드 max</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Predict, don't observe</b> — the Q center stands in for all future queries, so a key's importance is computed from its own pre-RoPE vector and its distance, with no observation window at all.</div>
+      <div class="cap t-ko"><b>관찰하지 말고 예측하라</b> — Q 중심이 모든 미래 쿼리를 대신하므로, 키의 중요도는 관측 창 없이 자기 pre-RoPE 벡터와 거리만으로 계산된다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: two scores, balanced by concentration</span><span class="t-ko">아이디어: 집중도로 저울질하는 두 점수</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 거리 선호</span>
+        <h3>Trigonometric series score</h3>
+        <p class="t-en">For a cached key k at future distance Δ: <span class="term">S<sub>trig</sub>(k,Δ) = Σ<sub>f</sub> ‖E[q<sub>f</sub>]‖·‖k<sub>f</sub>‖·cos(ω<sub>f</sub>Δ+φ<sub>f</sub>)</span> — the attention this key is <em>expected</em> to receive from the average future query. Since a key can be queried from anywhere ahead, the score is averaged over geometrically-spaced offsets <span class="term">D = {1,2,4,…,2¹⁶}</span> (geometric beats linear spacing by +17.1pp).</p>
+        <p class="t-ko">캐시된 키 k, 미래 거리 Δ에 대해: <span class="term">S<sub>trig</sub>(k,Δ) = Σ<sub>f</sub> ‖E[q<sub>f</sub>]‖·‖k<sub>f</sub>‖·cos(ω<sub>f</sub>Δ+φ<sub>f</sub>)</span> — 이 키가 평균적 미래 쿼리로부터 받으리라 <em>기대되는</em> 어텐션. 키는 앞의 어느 위치에서든 조회될 수 있으므로 기하 간격 오프셋 <span class="term">D = {1,2,4,…,2¹⁶}</span>으로 평균한다(기하 간격이 선형보다 +17.1pp).</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 보정</span>
+        <h3>Concentration-gated norm score</h3>
+        <p class="t-en">The series assumes vectors sit exactly at their centers. Residual variation is caught by <span class="term">S<sub>norm</sub> = Σ<sub>f</sub> (1−R<sub>f</sub>)·E[‖q<sub>f</sub>‖]·‖k<sub>f</sub>‖</span>: when a band is highly concentrated (R<sub>f</sub>→1) the trig prediction is trusted; when it isn't, the norm term takes over. Removing S<sub>trig</sub> craters AIME24 from 42.1 to 18.8; removing the (1−R) gate also hurts — both signals earn their place.</p>
+        <p class="t-ko">급수는 벡터가 정확히 중심에 있다고 가정한다. 잔여 변동은 <span class="term">S<sub>norm</sub> = Σ<sub>f</sub> (1−R<sub>f</sub>)·E[‖q<sub>f</sub>‖]·‖k<sub>f</sub>‖</span>가 받는다: 대역이 강하게 집중되면(R<sub>f</sub>→1) 삼각 예측을 신뢰하고, 아니면 norm 항이 넘겨받는다. S<sub>trig</sub> 제거 시 AIME24가 42.1→18.8로 붕괴; (1−R) 게이트 제거도 성능 하락 — 두 신호 모두 제 몫을 한다.</p>
+      </div>
+    </div>
+    <figure class="fig">
+      <img src="fig/2604.04921/fig4_method.png" alt="Method overview: offline calibration, trig + norm scoring, pruned attention map">
+      <figcaption class="t-en"><b>Figure 4.</b> Offline calibration computes Q centers; at inference, S<sub>trig</sub> captures distance preference (down-weighting near keys here) while the norm score catches low-norm keys the series would overrate (the leftmost token). Together they reproduce which tokens full attention actually uses.</figcaption>
+      <figcaption class="t-ko"><b>Figure 4.</b> 오프라인 캘리브레이션이 Q 중심을 계산; 추론 시 S<sub>trig</sub>가 거리 선호를 잡고(여기선 가까운 키를 낮게), norm 점수가 급수가 과대평가할 저norm 키(맨 왼쪽 토큰)를 잡는다. 둘이 합쳐 full attention이 실제 쓰는 토큰을 재현한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.04921</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Calibrate once, offline</span><span class="t-ko">오프라인 1회 캘리브레이션</span></b><span class="t-en">Collect per-band Q statistics (center, mean norm, concentration R) from any ~50K–960K tokens — even Google-homepage HTML works (46.2 vs 46.7 for high-quality chat data), because the statistics are model-intrinsic.</span><span class="t-ko">아무 텍스트 ~50K~960K 토큰에서 대역별 Q 통계(중심·평균 norm·집중도 R)를 수집 — 구글 홈 HTML로도 된다(46.2 vs 고품질 채팅 46.7). 통계가 모델 고유 속성이기 때문.</span></li>
+      <li><b><span class="t-en">Score keys without queries</span><span class="t-ko">쿼리 없이 키 점수화</span></b><span class="t-en">Each cached key's pre-RoPE vector + its position give S<sub>trig</sub> and S<sub>norm</sub>; average over log-spaced future offsets for a holistic importance S̃(k).</span><span class="t-ko">캐시된 키의 pre-RoPE 벡터 + 위치만으로 S<sub>trig</sub>·S<sub>norm</sub>을 계산하고, 로그 간격 미래 오프셋으로 평균해 종합 중요도 S̃(k)를 얻는다.</span></li>
+      <li><b><span class="t-en">Prune in windows</span><span class="t-ko">윈도우 단위 가지치기</span></b><span class="t-en">Every β=128 generated tokens (same protocol as R-KV), score all keys and keep the top-B for the budget.</span><span class="t-ko">생성 β=128 토큰마다(R-KV와 동일 프로토콜) 전체 키를 점수화해 예산 내 상위 B개만 유지.</span></li>
+      <li><b><span class="t-en">Aggregate across GQA heads</span><span class="t-ko">GQA 헤드 간 집계</span></b><span class="t-en">Each shared KV head gets G scores (one per query head); z-score-normalize per head, then take the max — a key survives if <em>any</em> head wants it.</span><span class="t-ko">공유 KV 헤드는 쿼리 헤드당 하나씩 G개 점수를 받는다; 헤드별 z-score 정규화 후 max — <em>어느</em> 헤드라도 원하면 키는 살아남는다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — biggest wins where eviction hurts most</span><span class="t-ko">결과 — 퇴출이 가장 아픈 곳에서 최대 격차</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 1–2 excerpt (Qwen3-8B).</b> Accuracy (%) at a fixed KV budget (AIME: 2048, MATH-500: 512, generation up to 32K). TriAttention roughly doubles the best observation-based baseline on AIME but still trails Full Attention at this budget.</caption>
+        <caption class="t-ko"><b>표 1~2 발췌 (Qwen3-8B).</b> 고정 KV 예산(AIME 2048, MATH-500 512, 생성 최대 32K)의 정확도(%). TriAttention은 AIME에서 최고 관측 기반 기준선의 약 2배지만, 이 예산에선 Full Attention엔 아직 못 미친다.</caption>
+        <thead><tr><th>Method</th><th>AIME24</th><th>AIME25</th><th>MATH-500</th></tr></thead>
+        <tbody>
+          <tr><td>Full Attention</td><td>57.1</td><td>40.8</td><td>69.6</td></tr>
+          <tr><td>SnapKV</td><td>34.6</td><td>20.0</td><td>49.2</td></tr>
+          <tr><td>R-KV</td><td>25.4</td><td>17.5</td><td>46.4</td></tr>
+          <tr><td><b>TriAttention</b></td><td class="up">42.1</td><td class="up">32.9</td><td class="up">56.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="margin-top:12px">Give it a bit more budget and the gap closes: at 4096 tokens TriAttention reaches <b>43.3 on AIME25 — above Full Attention's 40.8</b>. Beyond math: best average on LongBench (48.1, winning 11/16 subtasks) and RULER (66.1 vs SnapKV's 55.6). On a recursion memory-stress benchmark, R-KV collapses from 61% to 31% at depth 16 while TriAttention tracks Full Attention — direct evidence it stops evicting keys that "wake up" later. It even lets a Qwen3-32B (INT4) agent run multi-turn on a single RTX 4090 where full attention OOMs.</p>
+    <p class="t-ko">예산을 조금 더 주면 격차가 닫힌다: 4096 토큰에서 <b>AIME25 43.3 — Full Attention의 40.8을 상회</b>. 수학 밖에서도: LongBench 평균 최고(48.1, 16개 중 11개 승리), RULER 66.1(SnapKV 55.6). 재귀 메모리 스트레스 벤치마크에선 깊이 16에서 R-KV가 61%→31%로 붕괴하는 동안 TriAttention은 Full Attention을 따라간다 — "나중에 깨어나는" 키를 퇴출하지 않는다는 직접 증거. Qwen3-32B(INT4) 에이전트를 RTX 4090 한 장에서 멀티턴 구동까지 가능케 한다(full attention은 OOM).</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🔭</span><p class="t-en"><strong>From observation to prediction.</strong> The field scored keys by watching recent queries; TriAttention derives future attention analytically from position-invariant statistics. That's a genuinely different paradigm for eviction.</p><p class="t-ko"><strong>관찰에서 예측으로.</strong> 지금까진 최근 쿼리를 지켜보며 키를 점수 매겼다; TriAttention은 위치 불변 통계로부터 미래 어텐션을 해석적으로 유도한다. 퇴출의 진짜 다른 패러다임.</p></div>
+      <div class="t"><span class="ic">📡</span><p class="t-en"><strong>Q/K concentration is a reusable discovery.</strong> Fixed pre-RoPE centers that survive across domains and even MLA — useful well beyond compression: RoPE analysis, attention-sink theory, head taxonomy.</p><p class="t-ko"><strong>Q/K 집중은 재사용 가능한 발견.</strong> 도메인과 MLA까지 가로지르는 고정 pre-RoPE 중심 — 압축 너머 RoPE 분석·어텐션 싱크 이론·헤드 분류에도 유용하다.</p></div>
+      <div class="t"><span class="ic">🧪</span><p class="t-en"><strong>Calibration that doesn't care about data.</strong> 50K tokens of junk HTML calibrates as well as curated chat — strong evidence the centers are properties of the weights, not the data.</p><p class="t-ko"><strong>데이터를 가리지 않는 캘리브레이션.</strong> 저품질 HTML 50K 토큰이 정제된 채팅만큼 잘 작동 — 중심이 데이터가 아닌 가중치의 속성이라는 강한 증거.</p></div>
+      <div class="t"><span class="ic">🧵</span><p class="t-en"><strong>Reasoning is the right stress test.</strong> The recursion benchmark shows eviction failures as chain-breaking, not just perplexity — the failure mode that actually matters for long CoT and agents.</p><p class="t-ko"><strong>추론이 올바른 스트레스 테스트.</strong> 재귀 벤치마크는 퇴출 실패를 perplexity가 아닌 사슬 단절로 보여준다 — 긴 CoT와 에이전트에서 실제로 중요한 실패 모드.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the "matches Full Attention" headline is budget-curated — at the default 2048 budget TriAttention still loses 15pp on AIME24 (42.1 vs 57.1), and the 2.5×/10.7× figures come from the budget where the curves happen to cross. AIME has 30 problems, no variance is reported, and the same nominal config appears as 42.1 / 45.8 / 48.8 in different tables. Scoring overhead also awaits a dedicated kernel. See the Full Review for the complete adversarial pass.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판:</b> "Full Attention과 동등" 헤드라인은 예산을 골라 만든 것이다 — 기본 2048 예산에선 AIME24에서 여전히 15pp 뒤지고(42.1 vs 57.1), 2.5×/10.7×는 곡선이 마침 교차하는 예산에서 나온 수치다. AIME는 30문제뿐인데 분산 보고가 없고, 같은 명목 설정이 표마다 42.1/45.8/48.8로 다르게 등장한다. 점수 계산 오버헤드도 전용 커널 개발을 기다리는 상태. 전체 적대적 검토는 풀 리뷰 참고.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2604.04921">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="../reviews/2604.04921.html">📖 <span class="t-en">Full Review</span><span class="t-ko">풀 리뷰</span></a>
+      <a href="https://arxiv.org/abs/2604.04921">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2604.04921">📥 PDF</a>
+      <a href="https://github.com/WeianMao/triattention">💻 Code</a>
+      <a href="https://www.alphaxiv.org/overview/2604.04921">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Requested · topic: KV Cache Compression</b> (long-reasoning eviction, Song Han group).<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-07-10.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>요청 · 주제: KV Cache Compression</b> (긴 추론 퇴출, Song Han 그룹).<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-07-10.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

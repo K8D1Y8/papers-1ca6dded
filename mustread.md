@@ -9,3 +9,4 @@
 2405.21060   # Transformers are SSMs / SSD — Mamba-2 (ICML 2024, _selected)
 2602.01053   # LRAgent — Efficient KV Cache Sharing for Multi-LoRA LLM Agents (via GitHub issue #2)
 2606.13594   # See What I See, Know What I Think — Dense Latent Comm. across Heterogeneous Agents (requested)
+2604.04921   # TriAttention — Trigonometric KV Compression for Long Reasoning (Song Han group, requested)
