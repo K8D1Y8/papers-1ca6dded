@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · KV Cache Transform Coding for Compact Storage in LLM Inference</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache</span><span class="t-ko">Model Compression · KV Cache</span></span>
+      <span>2026 · 07 · 11</span>
+    </div>
+    <h1>KV Cache Transform Coding (kvtc)<br><span class="glow t-en">— Treat the KV cache like a JPEG: decorrelate, quantize, entropy-code for 20× compact storage</span><span class="glow t-ko">— KV 캐시를 JPEG처럼: 탈상관 → 양자화 → 엔트로피 코딩으로 20× 압축 저장</span></h1>
+    <div class="meta">
+      <span>👥 <b>Konrad Staniszewski</b> <span class="t-en">&amp; Adrian Łańcucki</span><span class="t-ko">, Adrian Łańcucki (2인)</span></span>
+      <span>🏛 NVIDIA · University of Warsaw</span>
+      <span>🗓 2025.11.03</span>
+      <span>📄 <a href="https://arxiv.org/abs/2511.01815">arXiv:2511.01815</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Chat and code-editing reuse the same KV cache across turns, but stale caches eat GPU memory — you either offload them (transfer cost) or recompute them (an O(N²) prefill). kvtc borrows the <b>classical media-compression recipe</b> (as in JPEG): decorrelate features with a <span class="hl">PCA basis learned once on calibration data and reused for every cache</span>, allocate bits across principal components with an optimal <span class="hl">dynamic-programming quantizer</span>, then losslessly entropy-code with GPU DEFLATE. Unlike xKV/SVDq it needs <b>no per-prompt SVD</b> and leaves model weights untouched. Result: <b>~20× average compression</b> within &lt;1 point of the uncompressed model (up to 40×+ at modest cost), and because decompression beats recomputation it cuts <b>time-to-first-token up to 8×</b> on an 8K context.</p>
+    <p class="t-ko">채팅·코드 편집은 턴마다 같은 KV 캐시를 재사용하지만, 남은 캐시는 GPU 메모리를 잡아먹는다 — 오프로드하면 전송 비용, 버리면 O(N²) prefill 재계산이다. kvtc는 <b>고전 미디어 압축 레시피</b>(JPEG처럼)를 빌린다: <span class="hl">캘리브레이션 데이터에서 한 번 학습해 모든 캐시에 재사용하는 PCA 기저</span>로 특징을 탈상관하고, 최적 <span class="hl">동적 계획법 양자화기</span>로 주성분에 비트를 배분한 뒤, GPU DEFLATE로 무손실 엔트로피 코딩한다. xKV/SVDq와 달리 <b>프롬프트별 SVD가 불필요</b>하고 모델 가중치도 건드리지 않는다. 결과: 무압축 대비 &lt;1점 이내에서 <b>평균 약 20× 압축</b>(적은 손실 감수 시 40×+), 재계산보다 빠른 복원 덕에 8K 컨텍스트에서 <b>첫 토큰까지 시간(TTFT)을 최대 8× 단축</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Most KV-cache work optimizes the decode loop; kvtc optimizes the shelf the cache sits on when nobody is decoding.</p>
+    <p class="lead t-ko">대부분의 KV 캐시 연구는 디코드 루프를 최적화한다; kvtc는 아무도 디코딩하지 않을 때 캐시가 놓인 '선반'을 최적화한다.</p>
+    <p class="t-en">Serving systems treat KV caches as databases — block paging and prefix sharing reuse them across turns. But a Llama 3.1 8B cache costs 128 MiB per 1K tokens, so retained caches quickly overwhelm GPU HBM. The choices are all bad: keep it on-chip (blocks other users), offload to DRAM/network (transfer overhead), or discard and recompute (quadratic prefill). Runtime compressors — quantization (KIVI, GEAR), token eviction (H2O, TOVA) — are tuned for the tight-latency decode path, so they are brittle and don't combine well. kvtc instead asks a different question: how small can you make a cache <em>for storage</em>, where you can afford a one-time transform? By exploiting the strong low-rank structure and cross-head correlation of KV tensors, it hits far higher ratios than runtime methods while preserving accuracy — and it is complementary to them.</p>
+    <p class="t-ko">서빙 시스템은 KV 캐시를 데이터베이스처럼 다룬다 — 블록 페이징·프리픽스 공유로 턴 간 재사용한다. 그러나 Llama 3.1 8B 캐시는 1K 토큰당 128 MiB라, 남겨둔 캐시가 GPU HBM을 금세 가득 채운다. 선택지는 모두 나쁘다: 온칩 유지(다른 사용자 차단), DRAM/네트워크 오프로드(전송 오버헤드), 폐기 후 재계산(2차 prefill). 런타임 압축기 — 양자화(KIVI, GEAR), 토큰 퇴출(H2O, TOVA) — 는 빡빡한 디코드 지연에 맞춰져 있어 취약하고 서로 잘 조합되지 않는다. kvtc는 다른 질문을 던진다: 일회성 변환을 감당할 수 있는 <em>저장용</em> 캐시는 얼마나 작아질 수 있는가? KV 텐서의 강한 저랭크 구조와 헤드 간 상관을 활용해, 런타임 기법보다 훨씬 높은 압축비를 정확도 손실 없이 달성하며, 그것들과 상보적이다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">~20×</div><div class="l"><span class="t-en">avg compression within<br>&lt;1 pt of vanilla accuracy</span><span class="t-ko">무압축 대비 &lt;1점 이내<br>평균 압축비</span></div></div>
+      <div class="stat"><div class="n">40×+</div><div class="l"><span class="t-en">attainable at a modest<br>accuracy decrease</span><span class="t-ko">적은 정확도 손실로<br>도달 가능한 압축비</span></div></div>
+      <div class="stat"><div class="n">up to 8×</div><div class="l"><span class="t-en">time-to-first-token cut<br>vs recompute (8K ctx)</span><span class="t-ko">재계산 대비 첫 토큰<br>시간 단축 (8K 컨텍스트)</span></div></div>
+      <div class="stat"><div class="n">60–88×</div><div class="l"><span class="t-en">kvtc-64× range on<br>Llama 3.1 8B (after DEFLATE)</span><span class="t-ko">Llama 3.1 8B의 kvtc-64×<br>실측 범위 (DEFLATE 후)</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">model weights changed —<br>calibration-only, one time</span><span class="t-ko">모델 가중치 변경 —<br>일회성 캘리브레이션만</span></div></div>
+      <div class="stat"><div class="n">1.5B–70B</div><div class="l"><span class="t-en">models tested: Llama 3,<br>Mistral NeMo, R1-Qwen 2.5</span><span class="t-ko">검증 모델: Llama 3,<br>Mistral NeMo, R1-Qwen 2.5</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">① Decorrelate (PCA)</span><span class="t-ko">① 탈상관 (PCA)</span></div>
+          <div class="sub"><span class="t-en">D = (X − μ)V</span><span class="t-ko">D = (X − μ)V</span></div>
+          <div class="latent"><span class="t-en">basis V learned once, reused</span><span class="t-ko">기저 V 1회 학습, 재사용</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">② Quantize (DP)</span><span class="t-ko">② 양자화 (DP)</span></div>
+          <div class="sub"><span class="t-en">bits ∝ explained variance</span><span class="t-ko">비트 ∝ 설명분산</span></div>
+          <div class="latent"><span class="t-en">Frobenius-optimal allocation</span><span class="t-ko">Frobenius 최적 배분</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">③ Entropy-code</span><span class="t-ko">③ 엔트로피 코딩</span></div>
+          <div class="sub"><span class="t-en">DEFLATE via nvCOMP (GPU)</span><span class="t-ko">nvCOMP DEFLATE (GPU)</span></div>
+          <div class="latent"><span class="t-en">lossless, ~1.23× on top</span><span class="t-ko">무손실, 추가 ~1.23×</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Compact store</span><span class="t-ko">압축 저장</span></div>
+          <div class="sub"><span class="t-en">on-GPU / off-GPU</span><span class="t-ko">온-GPU / 오프-GPU</span></div>
+          <div class="latent"><span class="t-en">decompress = 8× faster TTFT</span><span class="t-ko">복원 = TTFT 8× 단축</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>The JPEG pipeline for KV tensors.</b> Feature decorrelation + adaptive scalar quantization + entropy coding — the same three stages behind classical image codecs, applied to a cache that turns out to be just as compressible. The PCA basis is calibrated once per model and never recomputed per prompt (this is what separates kvtc from SVDq/xKV).</div>
+      <div class="cap t-ko"><b>KV 텐서를 위한 JPEG 파이프라인.</b> 특징 탈상관 + 적응형 스칼라 양자화 + 엔트로피 코딩 — 고전 이미지 코덱의 세 단계를, 알고 보니 똑같이 압축 가능한 캐시에 적용. PCA 기저는 모델당 1회 캘리브레이션되고 프롬프트별로 재계산되지 않는다(이것이 kvtc와 SVDq/xKV의 차이).</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three ideas that make it work</span><span class="t-ko">작동을 만드는 세 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 재사용 기저</span>
+        <h3>A calibrated PCA basis, not per-prompt SVD</h3>
+        <p class="t-en">Prior low-rank methods (SVDq, xKV) run an SVD <em>for every prompt</em> — too slow to reuse across turns. kvtc computes one orthonormal basis <span class="term">V</span> on a small calibration set and applies it to all caches. Two tricks make the low-rank structure clean: strip RoPE before projecting (positional rotation hides the low rank of keys), and <b>exclude the first 4 "sink" tokens and a 128-token sliding window</b> from compression.</p>
+        <p class="t-ko">기존 저랭크 기법(SVDq, xKV)은 <em>프롬프트마다</em> SVD를 돌려 턴 간 재사용이 불가능할 만큼 느리다. kvtc는 작은 캘리브레이션 집합에서 직교 기저 <span class="term">V</span> 하나를 계산해 모든 캐시에 적용한다. 저랭크 구조를 깔끔히 드러내는 두 트릭: 투영 전 RoPE 제거(위치 회전이 키의 저랭크성을 가린다), 그리고 첫 4개 "싱크" 토큰과 128 토큰 슬라이딩 윈도우를 <b>압축에서 제외</b>.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 최적 비트 배분</span>
+        <h3>Dynamic-programming quantization</h3>
+        <p class="t-en">PCA orders components by variance, so higher-variance components deserve more bits. A DP algorithm minimizes Frobenius reconstruction error under a global bit budget — and because <span class="term">V</span> is orthonormal, the optimum can be solved directly in the decorrelated domain. It groups components (microscaling-style, sizes 1/16/64/256/1024) and, crucially, assigns <b>zero bits to trailing components</b>, which prunes both the payload and <span class="term">V</span> itself.</p>
+        <p class="t-ko">PCA는 성분을 분산 순으로 정렬하므로 고분산 성분에 더 많은 비트를 준다. DP 알고리즘이 전역 비트 예산 하에서 Frobenius 재구성 오차를 최소화한다 — <span class="term">V</span>가 직교이므로 최적해를 탈상관 영역에서 바로 구할 수 있다. 성분을 그룹화하고(마이크로스케일링 방식, 크기 1/16/64/256/1024), 결정적으로 <b>후미 성분에 0비트를 배정</b>해 페이로드와 <span class="term">V</span> 자체를 함께 가지친다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">③ 무손실 마무리</span>
+        <h3>GPU entropy coding</h3>
+        <p class="t-en">Quantized values are packed and compressed with DEFLATE, run in parallel on-GPU via NVIDIA's nvCOMP. This step is lossless and content-dependent, adding ~1.23× on average on top of quantization. The whole pipeline mirrors JPEG (DCT→quantize→Huffman); kvtc just swaps the DCT for a learned PCA and Huffman for DEFLATE.</p>
+        <p class="t-ko">양자화 값을 패킹해 DEFLATE로 압축하며, NVIDIA nvCOMP로 GPU에서 병렬 실행한다. 이 단계는 무손실·내용 의존적이며 양자화 위에 평균 ~1.23×를 더한다. 전체 파이프라인은 JPEG(DCT→양자화→허프만)를 그대로 닮았고, kvtc는 DCT를 학습된 PCA로, 허프만을 DEFLATE로 바꿨을 뿐이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Calibrate once, per model</span><span class="t-ko">모델당 1회 캘리브레이션</span></b><span class="t-en">Run a small 1:1 mix of short (1–8K) and long (8–32K) documents through the LLM, strip RoPE, sample token positions (skipping sinks + sliding window), and compute the PCA basis V by randomized SVD — minutes on one H100.</span><span class="t-ko">짧은(1–8K)·긴(8–32K) 문서를 1:1로 LLM에 통과시키고, RoPE를 제거한 뒤 토큰 위치를 샘플(싱크·슬라이딩 윈도우 제외)해 랜덤화 SVD로 PCA 기저 V를 계산 — H100 한 장에서 수 분.</span></li>
+      <li><b><span class="t-en">Solve the bit budget offline</span><span class="t-ko">비트 예산을 오프라인에서 결정</span></b><span class="t-en">The DP quantizer picks per-group bit widths and group sizes once, for the target compression ratio; trailing zero-bit components trim V for faster inference.</span><span class="t-ko">DP 양자화기가 목표 압축비에 맞춰 그룹별 비트폭·그룹 크기를 한 번 정한다; 0비트가 된 후미 성분은 V를 잘라 추론을 가속한다.</span></li>
+      <li><b><span class="t-en">Compress after attention</span><span class="t-ko">어텐션 후 압축</span></b><span class="t-en">Prefill stays vanilla; once self-attention is computed, project X→D=(X−μ)V, quantize, and DEFLATE. Runs on GPU or CPU, every c=16 tokens for a 128-token window.</span><span class="t-ko">prefill은 그대로; 셀프 어텐션 계산 후 X→D=(X−μ)V 투영·양자화·DEFLATE. GPU/CPU에서 128 윈도우 기준 c=16 토큰마다 실행.</span></li>
+      <li><b><span class="t-en">Decompress lazily to reuse</span><span class="t-ko">재사용 시 지연 복원</span></b><span class="t-en">When a shared prefix is hit again, reverse the pipeline layer-by-layer so early layers start generating before later ones finish — this is why reusing a stored cache beats recomputing it (up to 8× lower TTFT).</span><span class="t-ko">공유 프리픽스가 다시 나오면 파이프라인을 층별로 역실행해, 뒤 층이 끝나기 전에 앞 층이 생성을 시작한다 — 저장 캐시 재사용이 재계산을 이기는 이유(TTFT 최대 8× 단축).</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — holds accuracy where runtime methods break</span><span class="t-ko">결과 — 런타임 기법이 무너지는 지점에서 정확도 유지</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 excerpt (Llama 3.1 8B).</b> Accuracy at each method's compression ratio (CR). LITM = the "Lost in the Middle" long-context key-value retrieval task. Eviction (H2O) collapses on MMLU and LITM; quantization (KIVI) erodes LITM — kvtc holds all three at ~20× CR, and even at 64× only long-context begins to slip.</caption>
+        <caption class="t-ko"><b>표 2 발췌 (Llama 3.1 8B).</b> 각 기법의 압축비(CR)에서의 정확도. LITM = "Lost in the Middle" 장문 키-값 검색 과제. 퇴출(H2O)은 MMLU·LITM에서 붕괴, 양자화(KIVI)는 LITM을 깎는다 — kvtc는 ~20× CR에서 셋 다 유지하고, 64×에서도 장문만 서서히 하락.</caption>
+        <thead><tr><th>Method</th><th>CR</th><th>GSM8K</th><th>MMLU</th><th>LITM</th></tr></thead>
+        <tbody>
+          <tr><td>Vanilla (16-bit)</td><td>1×</td><td>56.8</td><td>60.5</td><td>99.4</td></tr>
+          <tr><td>KIVI 2-bit</td><td>5×</td><td>52.8</td><td>59.6</td><td>88.8</td></tr>
+          <tr><td>H2O (eviction)</td><td>8×</td><td>54.3</td><td>44.3</td><td>20.2</td></tr>
+          <tr><td>xKV (SVD)</td><td>1–5×</td><td>56.6</td><td>59.5</td><td>99.9</td></tr>
+          <tr><td><b>kvtc-16×</b></td><td class="up">18–22×</td><td class="up">56.9</td><td class="up">60.1</td><td class="up">99.3</td></tr>
+          <tr><td><b>kvtc-64×</b></td><td class="up">60–88×</td><td>57.2</td><td>60.7</td><td>90.2</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="margin-top:12px">The pattern repeats across Mistral NeMo 12B and MN-Minitron 8B. On reasoning models, R1-Qwen 2.5 7B keeps AIME24 at 52.5 vs 50.9 vanilla and LiveCodeBench at 36.5 vs 36.7 under kvtc-8× (CR 9–11×). Scaling up, a Llama 3.3 70B in 4-GPU pipeline parallel loses only 1.2 pts on MATH-500 at 10× and 3.0 pts at 20×. In a simulated multi-user vLLM+LMCache deployment, kvtc-16× sharply reduces response latency and TTFT as concurrency rises and vanilla is forced into recomputation.</p>
+    <p class="t-ko">이 패턴은 Mistral NeMo 12B·MN-Minitron 8B에서도 반복된다. 추론 모델에선 R1-Qwen 2.5 7B가 kvtc-8×(CR 9–11×)에서 AIME24 52.5(무압축 50.9), LiveCodeBench 36.5(무압축 36.7)를 유지한다. 규모를 키운 Llama 3.3 70B(4-GPU 파이프라인 병렬)는 MATH-500에서 10×에 1.2점, 20×에 3.0점만 하락. 다중 사용자 vLLM+LMCache 시뮬레이션에선 동시성이 오르고 무압축이 재계산으로 내몰릴 때 kvtc-16×가 응답 지연·TTFT를 크게 낮춘다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🗄</span><p class="t-en"><strong>Storage is a distinct problem from decode.</strong> By relaxing the tight-latency constraint of runtime compression, kvtc can afford a real transform and reaches far higher ratios — and it composes with eviction/quantization rather than competing.</p><p class="t-ko"><strong>저장은 디코드와 별개의 문제.</strong> 런타임 압축의 빡빡한 지연 제약을 풀어주면 kvtc는 제대로 된 변환을 감당해 훨씬 높은 압축비에 도달한다 — 퇴출·양자화와 경쟁이 아니라 조합된다.</p></div>
+      <div class="t"><span class="ic">📼</span><p class="t-en"><strong>Classical codec wisdom transfers.</strong> Decorrelate → quantize → entropy-code is 30 years of JPEG/MPEG engineering; KV tensors turn out to be a natural fit for it, which is a fertile analogy to keep mining.</p><p class="t-ko"><strong>고전 코덱의 지혜가 이식된다.</strong> 탈상관 → 양자화 → 엔트로피 코딩은 JPEG/MPEG 30년의 공학이다; KV 텐서가 여기에 잘 맞는다는 것은 계속 파낼 만한 비옥한 유비다.</p></div>
+      <div class="t"><span class="ic">♻️</span><p class="t-en"><strong>One reusable basis beats per-prompt SVD.</strong> Calibrate once, no weight changes, PCA overhead ~2.4% of a 70B model's params — cheap enough to be a default building block in a serving stack.</p><p class="t-ko"><strong>재사용 기저 하나가 프롬프트별 SVD를 이긴다.</strong> 1회 캘리브레이션, 가중치 무변경, PCA 오버헤드는 70B 파라미터의 ~2.4% — 서빙 스택의 기본 구성요소로 삼을 만큼 저렴하다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the "20×" headline blends a lossy quantization target (16×) with a <em>data-dependent</em> DEFLATE gain (~1.23× on average), so the realized ratio is content-dependent and not guaranteed — the reported 60–88× spread on a single model makes that clear. Long-context accuracy does erode at aggressive settings (LITM 90.2, Qasper 37.8 at 64×), and most downstream evals use a single seed with greedy decoding (only Qwen runs are averaged with std). kvtc also only pays off in <em>reuse</em> scenarios: for one-shot prompts the compress/decompress cost (hundreds of ms at 8K) is pure overhead.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판:</b> "20×" 헤드라인은 손실 양자화 목표(16×)와 <em>데이터 의존적</em> DEFLATE 이득(평균 ~1.23×)을 합친 값이라, 실현 압축비는 내용에 좌우되며 보장되지 않는다 — 단일 모델에서 60–88×로 벌어지는 범위가 이를 방증한다. 공격적 설정에선 장문 정확도가 실제로 하락하고(64×에서 LITM 90.2, Qasper 37.8), 대부분의 다운스트림 평가는 단일 시드·그리디 디코딩이다(Qwen만 표준편차와 함께 평균). 또 kvtc는 <em>재사용</em> 시나리오에서만 이득이다: 일회성 프롬프트에선 압축/복원 비용(8K에서 수백 ms)이 순수 오버헤드다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2511.01815">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2511.01815">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2511.01815">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2511.01815">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Fallback pick · topic: Model Compression / Low-rank Decomposition</b> · venue: ICLR 2026 (NVIDIA).<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-07-11.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>폴백 선정 · 주제: 모델 압축 / 저랭크 분해</b> · venue: ICLR 2026 (NVIDIA).<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-07-11.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
