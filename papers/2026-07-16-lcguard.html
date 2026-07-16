@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · LCGuard: Safe KV Sharing in Multi-Agent Systems</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent Systems · Latent Communication · Privacy</span><span class="t-ko">멀티에이전트 · 잠재 통신 · 프라이버시</span></span>
+      <span>2026 · 05 · 21</span>
+    </div>
+    <h1>LCGuard<br>
+      <span class="glow t-en">— when agents share KV caches, they leak secrets</span>
+      <span class="glow t-ko">— 에이전트가 KV 캐시를 공유하면 비밀이 샌다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Sadia Asif</b> <span class="t-en">, Mohammad M. Amiri, Momin Abbas, P. Sattigeri, K. N. Ramamurthy</span><span class="t-ko">, Mohammad M. Amiri, Momin Abbas, P. Sattigeri, K. N. Ramamurthy</span></span>
+      <span>🏛 Rensselaer Polytechnic Institute · IBM Research</span>
+      <span>🗓 2026-05-21</span>
+      <span>📄 <a href="https://arxiv.org/abs/2605.22786">arXiv:2605.22786</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Multi-agent LLMs are shifting from exchanging <i>text</i> to sharing <i>raw KV caches</i> directly — roughly <b>4× faster</b> and information-richer. LCGuard shows this "latent communication" is a silent privacy leak: because a KV cache densely encodes the inputs that produced it, an adversary can train a decoder to <b>reconstruct another agent's private input</b> from the shared cache — attack success <b>~0.87</b>. LCGuard inserts a tiny learned <span class="hl">residual-bottleneck transform</span> that <b>sanitizes each K/V before it is sent</b>, trained by an adversarial minimax against a reconstruction attacker. On Qwen3-4B / PrivacyLens it cuts attack success from <b>0.871 → 0.216</b> (~75%) while keeping <b>91%</b> of the task helpfulness and most of the speed (3.6× vs text).</p>
+    <p class="t-ko">멀티에이전트 LLM은 이제 <i>텍스트</i> 교환에서 <i>원시 KV 캐시</i>를 직접 공유하는 방식으로 옮겨가고 있다 — 약 <b>4배 빠르고</b> 정보 손실이 적다. LCGuard는 이 "잠재 통신"이 조용한 프라이버시 누수임을 보인다: KV 캐시는 그것을 만든 입력을 밀도 높게 인코딩하므로, 공격자는 디코더를 학습시켜 공유 캐시로부터 <b>다른 에이전트의 사적 입력을 복원</b>할 수 있다(공격 성공률 <b>~0.87</b>). LCGuard는 전송 직전 각 K/V를 <span class="hl">잔차 병목 변환</span>으로 <b>정화(sanitize)</b>하는 작은 학습 모듈을 끼워 넣고, 복원 공격자와의 적대적 미니맥스로 학습한다. Qwen3-4B / PrivacyLens에서 공격 성공률을 <b>0.871 → 0.216</b>(~75%)으로 낮추면서도 과제 유용성의 <b>91%</b>와 대부분의 속도(텍스트 대비 3.6배)를 유지한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Latent communication makes multi-agent LLMs fast — and quietly turns their shared memory into a wiretap.</p>
+    <p class="lead t-ko">잠재 통신은 멀티에이전트 LLM을 빠르게 만들지만, 그들의 공유 메모리를 조용히 도청선으로 바꿔 놓는다.</p>
+    <p class="t-en">The newest multi-agent systems (LatentMAS, KVComm) stop serializing thoughts into words and instead pass one agent's <b>key-value cache straight into the next</b>. It works: no re-tokenizing, no re-decoding, a ~4× speedup and richer signal. But a KV cache is not a neutral summary — it is a dense, high-dimensional imprint of <i>everything the agent read</i>, including a user's private context or a confidential document. Prior safety work guards the <i>outputs</i> agents emit; nobody guarded the <i>representations</i> they trade. LCGuard's first contribution is to name this as an attack surface and make it measurable: a cache is "unsafe" if a trained decoder can reverse it back into the sensitive input. Its second is a cheap fix that keeps the speed.</p>
+    <p class="t-ko">최신 멀티에이전트 시스템(LatentMAS, KVComm)은 생각을 단어로 직렬화하지 않고, 한 에이전트의 <b>키-값(KV) 캐시를 다음 에이전트에 그대로</b> 넘긴다. 효과는 확실하다 — 재토큰화·재디코딩이 없어 약 4배 빠르고 신호도 풍부하다. 그러나 KV 캐시는 중립적 요약이 아니라, 사용자의 사적 맥락이나 기밀 문서를 포함해 <i>에이전트가 읽은 모든 것</i>을 밀도 높게 새겨 넣은 흔적이다. 기존 안전 연구는 에이전트가 <i>내놓는 출력</i>을 지켰을 뿐, 그들이 주고받는 <i>내부 표현</i>은 아무도 지키지 않았다. LCGuard의 첫 기여는 이를 공격 표면으로 명명하고 측정 가능하게 만든 것이다 — 학습된 디코더가 캐시를 사적 입력으로 되돌릴 수 있다면 그 캐시는 "안전하지 않다". 둘째 기여는 속도를 지키는 값싼 해법이다.</p>
+    <figure class="fig">
+      <img src="fig/2605.22786/asr_vs_helpfulness.png" alt="Scatter plots of attack success rate (x, lower better) versus average helpfulness (y, higher better) across sequential, hierarchical and general topologies for Qwen-8B, LLaMA-8B and Gemma-9B. Vanilla KV sits at high ASR; ADAPT sits at low helpfulness; Full-System LCGuard reaches the desirable upper-left corner.">
+      <figcaption class="t-en"><b>Figure 2.</b> The privacy–utility frontier across three communication topologies. The desirable corner is <b>upper-left</b> (high helpfulness ↑, low attack success ↓). <b>Vanilla KV</b> is helpful but wide open (far right); <b>ADAPT</b> (DP noise) is private but useless (bottom); <b>PrivAct</b> (output filtering) barely moves the attack. Only <b>Full-System LCGuard</b> (stars) reaches the top-left across every topology and all three model families.</figcaption>
+      <figcaption class="t-ko"><b>그림 2.</b> 세 가지 통신 위상에서의 프라이버시–유용성 경계. 바람직한 지점은 <b>좌상단</b>(유용성 ↑ 높고 공격 성공률 ↓ 낮음)이다. <b>Vanilla KV</b>는 유용하지만 무방비(우측 끝), <b>ADAPT</b>(DP 잡음)는 안전하지만 쓸모없음(하단), <b>PrivAct</b>(출력 필터링)는 공격을 거의 못 막는다. 오직 <b>Full-System LCGuard</b>(별표)만 모든 위상과 세 모델군에서 좌상단에 도달한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2605.22786</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.871→0.216</div><div class="l"><span class="t-en">Attack success rate (Qwen3-4B, PrivacyLens seq)</span><span class="t-ko">공격 성공률 (Qwen3-4B, PrivacyLens 순차)</span></div></div>
+      <div class="stat"><div class="n">~75%</div><div class="l"><span class="t-en">relative cut in reconstruction attacks</span><span class="t-ko">복원 공격 상대적 감소폭</span></div></div>
+      <div class="stat"><div class="n">91%</div><div class="l"><span class="t-en">of task helpfulness retained (0.780→0.710)</span><span class="t-ko">과제 유용성 유지율 (0.780→0.710)</span></div></div>
+      <div class="stat"><div class="n">3.6×</div><div class="l"><span class="t-en">still faster than text-based MAS (raw KV = 4.1×)</span><span class="t-ko">텍스트 기반 MAS 대비 여전히 빠름 (원시 KV = 4.1배)</span></div></div>
+      <div class="stat"><div class="n">d<sub>k</sub>/4</div><div class="l"><span class="t-en">width of the sanitizing bottleneck</span><span class="t-ko">정화 병목의 폭</span></div></div>
+      <div class="stat"><div class="n">3×3×3</div><div class="l"><span class="t-en">LLM families × benchmarks × topologies tested</span><span class="t-ko">테스트한 LLM군 × 벤치마크 × 위상</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Head-to-head: privacy vs. utility</span><span class="t-ko">정면 비교: 프라이버시 vs 유용성</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Qwen3-4B, sequential PrivacyLens (4 agents). Privacy ↑ and helpfulness ↑ are better; attack success (ASR) ↓ is better. Vanilla KV is the unprotected latent-communication baseline; ADAPT adds DP noise; PrivAct filters outputs.</caption>
+        <caption class="t-ko"><b>표 1.</b> Qwen3-4B, 순차 PrivacyLens(에이전트 4). Privacy·Helpfulness는 높을수록, 공격 성공률(ASR)은 낮을수록 좋다. Vanilla KV는 보호 없는 잠재 통신 기준선, ADAPT는 DP 잡음 추가, PrivAct는 출력 필터링.</caption>
+        <thead><tr><th>Method</th><th>Privacy ↑</th><th>Helpful. ↑</th><th>ASR ↓</th></tr></thead>
+        <tbody>
+          <tr><td>Vanilla KV (LatentMAS)</td><td>0.420</td><td>0.780</td><td>0.871</td></tr>
+          <tr><td>PrivAct (output filter)</td><td>0.820</td><td>0.612</td><td>0.845</td></tr>
+          <tr><td>ADAPT (DP noise)</td><td>0.850</td><td>0.285</td><td>0.332</td></tr>
+          <tr><td>LCGuard · Per-Agent</td><td>0.773</td><td>0.650</td><td>0.259</td></tr>
+          <tr><td>LCGuard · Full-System</td><td>0.801</td><td>0.710</td><td class="up">0.216</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">Read the extremes: Vanilla KV keeps utility but is wide open (ASR 0.871); ADAPT slams the attack shut (0.332) but destroys helpfulness (0.285 — worse than useless). LCGuard is the only row that is <b>simultaneously</b> private and useful — and it does so at the representation level, which is why output-filtering PrivAct fails to move ASR at all.</p>
+    <p class="t-ko">양극단을 보라: Vanilla KV는 유용성은 지키지만 완전 무방비(ASR 0.871)이고, ADAPT는 공격은 막지만(0.332) 유용성을 파괴한다(0.285 — 쓸모없음). LCGuard는 프라이버시와 유용성을 <b>동시에</b> 만족하는 유일한 행이다. 이는 표현(representation) 수준에서 이뤄지기에, 출력만 거르는 PrivAct가 ASR을 전혀 못 낮추는 이유이기도 하다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">
+        <defs>
+          <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#79746A"/></marker>
+          <marker id="ahr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#c0563a"/></marker>
+        </defs>
+        <!-- Agent i -->
+        <rect x="18" y="60" width="150" height="74" rx="10" fill="#FBFAF6" stroke="#DCD6C8" stroke-width="1.5"/>
+        <text x="93" y="86" font-size="13" font-weight="700" text-anchor="middle" fill="#1A1915">Agent i</text>
+        <text x="93" y="107" font-size="12" text-anchor="middle" fill="#403C34">K_i , V_i</text>
+        <text x="93" y="124" font-size="10.5" text-anchor="middle" fill="#B5552F">read private s_i</text>
+        <!-- arrow to sanitizer -->
+        <path d="M170 97 L214 97" stroke="#79746A" stroke-width="1.8" marker-end="url(#ah)"/>
+        <!-- Sanitizer g -->
+        <rect x="216" y="56" width="168" height="82" rx="10" fill="rgba(217,119,87,.13)" stroke="#D97757" stroke-width="1.8"/>
+        <text x="300" y="80" font-size="13" font-weight="700" text-anchor="middle" fill="#B5552F">g_ij  · sanitize</text>
+        <text x="300" y="100" font-size="11" text-anchor="middle" fill="#403C34">residual bottleneck</text>
+        <text x="300" y="116" font-size="11" text-anchor="middle" fill="#403C34">K + Wσ(W·LN K),  d_b = d_k/4</text>
+        <text x="300" y="132" font-size="10" text-anchor="middle" fill="#79746A">residual keeps task · bottleneck sheds identity</text>
+        <!-- arrow to agent j -->
+        <path d="M386 97 L430 97" stroke="#79746A" stroke-width="1.8" marker-end="url(#ah)"/>
+        <text x="408" y="88" font-size="10.5" text-anchor="middle" fill="#79746A">m_ij</text>
+        <!-- Agent j -->
+        <rect x="432" y="60" width="150" height="74" rx="10" fill="#FBFAF6" stroke="#DCD6C8" stroke-width="1.5"/>
+        <text x="507" y="86" font-size="13" font-weight="700" text-anchor="middle" fill="#1A1915">Agent j</text>
+        <text x="507" y="107" font-size="12" text-anchor="middle" fill="#403C34">reads sanitized KV</text>
+        <text x="507" y="124" font-size="10.5" text-anchor="middle" fill="#3f6b40">task preserved ✓</text>
+        <!-- min label over g -->
+        <text x="300" y="44" font-size="11" font-weight="700" text-anchor="middle" fill="#B5552F">min_ϕ : keep task loss low, block leakage</text>
+        <!-- adversary tap -->
+        <path d="M408 108 L408 196" stroke="#c0563a" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ahr)"/>
+        <rect x="300" y="198" width="216" height="70" rx="10" fill="#FBEEE9" stroke="#c0563a" stroke-width="1.6"/>
+        <text x="408" y="222" font-size="13" font-weight="700" text-anchor="middle" fill="#a5432a">Adversary decoder D</text>
+        <text x="408" y="242" font-size="11" text-anchor="middle" fill="#a5432a">max_ψ : reconstruct ŝ_i from the channel</text>
+        <text x="408" y="259" font-size="11" text-anchor="middle" fill="#79746A">ŝ_i ≠ s_i  → reconstruction stays hard ✗</text>
+        <!-- minimax note -->
+        <text x="90" y="212" font-size="11" font-weight="700" fill="#1A1915">Adversarial minimax</text>
+        <text x="90" y="230" font-size="10.5" fill="#403C34">alternate: sharpen D,</text>
+        <text x="90" y="245" font-size="10.5" fill="#403C34">then update g to defeat it</text>
+        <text x="90" y="264" font-size="10.5" fill="#79746A">β trades utility ↔ privacy</text>
+      </svg>
+      <div class="cap t-en">Each agent's KV cache passes through a learned sanitizer g before it is sent. A minimax loop trains g against a reconstruction decoder D: D tries to recover the private input s_i from the shared cache; g learns to keep task-relevant structure while making that reconstruction fail. Full-System trains every g jointly so leakage can't recompose across hops.</div>
+      <div class="cap t-ko">각 에이전트의 KV 캐시는 전송 전 학습된 정화기 g를 거친다. 미니맥스 루프가 복원 디코더 D에 맞서 g를 학습시킨다 — D는 공유 캐시에서 사적 입력 s_i를 복원하려 하고, g는 과제 관련 구조는 남기되 그 복원을 실패시키도록 학습한다. Full-System은 모든 g를 함께 학습해 누수가 여러 홉을 거쳐 다시 조합되지 못하게 한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core idea</span><span class="t-ko">핵심 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">The leak</span>
+        <h3>KV caches are a covert channel</h3>
+        <p class="t-en">Shared caches form a high-bandwidth, opaque path in representation space. Unlike inspectable text, they implicitly carry the inputs, so an adversary who observes the channel can train a decoder to read private content back out — no decoding by the model required.</p>
+        <p class="t-ko">공유 캐시는 표현 공간의 고대역·불투명 통로를 이룬다. 검사 가능한 텍스트와 달리 입력을 암묵적으로 실어 나르므로, 채널을 관찰하는 공격자는 디코더를 학습시켜 사적 내용을 되읽을 수 있다 — 모델의 명시적 디코딩 없이도.</p>
+      </div>
+      <div class="m">
+        <span class="tag">The fix</span>
+        <h3>A residual-bottleneck sanitizer</h3>
+        <p class="t-en">Each g applies a lightweight residual transform to K and V, squeezing them through a d<sub>k</sub>/4 bottleneck. The residual connection preserves task-relevant semantics; the narrow bottleneck strips fine-grained, identity-revealing detail before the cache leaves the agent.</p>
+        <p class="t-ko">각 g는 K와 V에 가벼운 잔차 변환을 적용해 d<sub>k</sub>/4 병목으로 압착한다. 잔차 연결은 과제 관련 의미를 보존하고, 좁은 병목은 캐시가 에이전트를 떠나기 전에 신원을 드러내는 세부를 벗겨낸다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">The training</span>
+        <h3>Adversarial minimax</h3>
+        <p class="t-en">Defender (the g functions) and attacker (reconstruction decoders) play a min–max game: <code>min<sub>ϕ</sub> max<sub>ψ</sub> β·Σ L<sub>rec</sub> + L<sub>task</sub></code>. Alternating updates push toward caches that are useful for the task yet minimally informative about the secret; β sets the trade-off.</p>
+        <p class="t-ko">방어자(g 함수)와 공격자(복원 디코더)가 미니맥스 게임을 한다: <code>min<sub>ϕ</sub> max<sub>ψ</sub> β·Σ L<sub>rec</sub> + L<sub>task</sub></code>. 교대 업데이트는 과제엔 유용하되 비밀엔 최소한만 알려주는 캐시로 밀어붙이며, β가 절충점을 정한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">The scope</span>
+        <h3>System-level, not per-link</h3>
+        <p class="t-en">Leakage isn't confined to one edge — it aggregates and re-emerges across multi-hop paths. Full-System LCGuard jointly optimizes every communication function, and it beats the Per-Agent variant precisely for agents deeper in the pipeline where compositional leakage accumulates.</p>
+        <p class="t-ko">누수는 한 간선에 갇히지 않고 여러 홉을 거쳐 누적·재출현한다. Full-System LCGuard는 모든 통신 함수를 함께 최적화하며, 조합적 누수가 쌓이는 파이프라인 후반 에이전트에서 Per-Agent 변형을 정확히 앞선다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Threat model. </span><span class="t-ko">위협 모델. </span></b><span class="t-en">Each agent holds a task input x<sub>i</sub> and a private input s<sub>i</sub>, emits a KV cache, and communicates only in latent space as m<sub>ij</sub>=g(K<sub>i</sub>,V<sub>i</sub>). The adversary observes a subset of channel artifacts.</span><span class="t-ko">각 에이전트는 과제 입력 x<sub>i</sub>와 사적 입력 s<sub>i</sub>를 갖고 KV 캐시를 생성하며, 잠재 공간에서만 m<sub>ij</sub>=g(K<sub>i</sub>,V<sub>i</sub>)로 통신한다. 공격자는 채널 산출물의 일부를 관찰한다.</span></li>
+      <li><b><span class="t-en">Sanitize. </span><span class="t-ko">정화. </span></b><span class="t-en">g adds a low-dimensional residual bottleneck to K and V — keep the task signal in the residual, choke identity through the narrow path.</span><span class="t-ko">g는 K·V에 저차원 잔차 병목을 더한다 — 과제 신호는 잔차에 남기고, 신원은 좁은 경로로 조인다.</span></li>
+      <li><b><span class="t-en">Attack. </span><span class="t-ko">공격. </span></b><span class="t-en">An adversarial decoder D is trained to reconstruct s<sub>i</sub> from the observed (already-sanitized) caches; reconstruction loss is the operational measure of leakage.</span><span class="t-ko">적대적 디코더 D가 관찰된(이미 정화된) 캐시에서 s<sub>i</sub>를 복원하도록 학습된다. 복원 손실이 누수의 실질 척도다.</span></li>
+      <li><b><span class="t-en">Minimax. </span><span class="t-ko">미니맥스. </span></b><span class="t-en">Alternate: sharpen the attacker to reconstruct better, then update g to raise the attacker's reconstruction loss while keeping task loss low.</span><span class="t-ko">교대: 공격자를 더 날카롭게 만들고, 이어 g를 갱신해 과제 손실은 낮게 유지하면서 공격자의 복원 손실을 키운다.</span></li>
+      <li><b><span class="t-en">Deploy. </span><span class="t-ko">배포. </span></b><span class="t-en">At inference, agents exchange sanitized caches. Full-System trains all g together so the defense holds across the whole communication graph, not just one edge.</span><span class="t-ko">추론 시 에이전트들은 정화된 캐시를 교환한다. Full-System은 모든 g를 함께 학습해, 한 간선이 아니라 통신 그래프 전체에서 방어가 유지되게 한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">You can keep latent communication's speed and most of its utility while removing roughly three-quarters of the reconstruction risk — privacy doesn't force a retreat back to text.</p><p class="t-ko">잠재 통신의 속도와 유용성 대부분을 유지하면서도 복원 위험을 약 3/4 제거할 수 있다 — 프라이버시를 위해 텍스트로 후퇴할 필요가 없다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Sharing hidden states is itself an attack surface. Output-level guardrails (PrivAct) barely move ASR (0.845) — the leak lives in the representation, not in the words.</p><p class="t-ko">은닉 상태를 공유하는 것 자체가 공격 표면이다. 출력 수준 가드레일(PrivAct)은 ASR을 거의 못 낮춘다(0.845) — 누수는 단어가 아니라 표현에 있다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Privacy is a system property: Full-System beats Per-Agent because leakage aggregates and re-emerges across agents — a per-link patch leaves compositional holes.</p><p class="t-ko">프라이버시는 시스템 속성이다: 누수가 에이전트를 거쳐 누적·재출현하기에 Full-System이 Per-Agent를 앞선다 — 간선별 땜질은 조합적 구멍을 남긴다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the protection is empirical, not guaranteed — there is no differential-privacy bound, and the defense is only as strong as the decoder it trained against. The paper's own stronger-adversary ablation shows attack success climbs as the attacker is scaled up, so an adaptive attacker unseen during training could recover more. It also presumes the "sensitive" field is correctly labeled and available as paired data to train against — a real deployment rarely knows in advance exactly what to protect.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이 보호는 보장이 아니라 경험적이다 — 차등 프라이버시 같은 형식적 상한이 없고, 방어는 학습에 쓴 디코더만큼만 강하다. 논문 자체의 '강한 공격자' 실험에서 공격자를 키우면 성공률이 올라가므로, 학습 때 못 본 적응형 공격자는 더 많이 복원할 수 있다. 또한 '민감' 필드가 올바로 라벨링되어 학습용 쌍 데이터로 주어진다고 가정하는데, 실제 배포에서는 무엇을 지켜야 하는지 미리 정확히 아는 경우가 드물다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2605.22786">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2605.22786">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2605.22786">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2605.22786">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>wishlist exhausted; the "multi-agent latent communication" fallback axis surfaced a fresh pick that reframes KV-cache sharing as a privacy attack surface — a new angle after a run of pure KV-compression papers</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-16.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 소진 후 "멀티에이전트 잠재 통신" 폴백 축에서, KV 캐시 공유를 프라이버시 공격 표면으로 재해석하는 신선한 논문을 선정 — 순수 KV 압축 논문이 이어진 뒤의 새로운 각도</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-16.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
