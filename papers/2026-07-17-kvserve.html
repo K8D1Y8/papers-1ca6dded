@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · KVServe: Service-Aware KV Cache Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache · Disaggregated Serving</span><span class="t-ko">모델 압축 · KV 캐시 · 분산 서빙</span></span>
+      <span>2026 · 05 · 13</span>
+    </div>
+    <h1>KVServe<br>
+      <span class="glow t-en">— KV compression isn't an algorithm choice, it's a control problem</span>
+      <span class="glow t-ko">— KV 압축은 알고리즘 선택이 아니라 제어 문제다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Zedong Liu</b>, <b>Xinyang Ma</b> <span class="t-en">(equal) … Dingwen Tao, Guangming Tan</span><span class="t-ko">(공동 1저자) … Dingwen Tao, Guangming Tan</span></span>
+      <span>🏛 ICT, Chinese Academy of Sciences · UCAS · SJTU</span>
+      <span>🗓 2026-05-13</span>
+      <span>🏆 SIGCOMM 2026</span>
+      <span>📄 <a href="https://arxiv.org/abs/2605.13734">arXiv:2605.13734</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Once you split LLM serving across machines — prefill on one node, decode on another, or the KV cache parked in a remote pool — the KV cache stops being private GPU state and becomes <b>a payload on the wire</b>, eating up to <b>60%</b> of job completion time. Every existing KV compressor (CacheGen, KIVI, KVQuant) is <i>statically configured</i>, but KVServe's measurements show the latency-optimal choice <b>flips with workload and bandwidth</b> — and past a threshold, compressing actively makes things <span class="hl">slower</span> than sending raw BF16. So KVServe stops treating compression as a fixed algorithm and treats it as a <b>constrained, service-state-dependent control problem</b>: decompose the field into a modular <b>Transform → Quantize → Codec</b> pipeline, Bayesian-search it into a 3D (accuracy, compression, latency) Pareto set <b>50× cheaper</b> (~1000 h → ~20 h), then pick a profile online in <b>O(1)</b> using a proved bandwidth-threshold rule plus a bandit that corrects offline-to-online drift. On vLLM: up to <b>9.13×</b> JCT speedup, <b>32.8×</b> TTFT reduction, <b>8.28×</b> average compression.</p>
+    <p class="t-ko">LLM 서빙을 여러 기계로 쪼개는 순간 — prefill은 이 노드, decode는 저 노드, 혹은 KV 캐시는 원격 풀에 — KV 캐시는 더 이상 GPU 내부 상태가 아니라 <b>네트워크를 건너는 페이로드</b>가 되고, 작업 완료 시간(JCT)의 최대 <b>60%</b>를 잡아먹는다. 기존 KV 압축기(CacheGen, KIVI, KVQuant)는 모두 <i>정적으로 설정</i>되지만, KVServe의 측정에 따르면 지연시간 최적 선택은 <b>워크로드와 대역폭에 따라 뒤집힌다</b> — 그리고 어떤 임계점을 넘으면 압축은 오히려 원본 BF16을 그냥 보내는 것보다 <span class="hl">더 느리게</span> 만든다. 그래서 KVServe는 압축을 고정된 알고리즘이 아니라 <b>제약이 있는, 서비스 상태에 의존하는 제어 문제</b>로 다룬다: 기존 기법들을 <b>변환 → 양자화 → 코덱</b> 모듈 파이프라인으로 분해하고, 베이지안 탐색으로 3D(정확도·압축률·지연) 파레토 집합을 <b>50배 싸게</b>(~1000시간 → ~20시간) 추출한 뒤, 증명된 대역폭 임계 규칙과 오프라인–온라인 괴리를 보정하는 밴딧으로 온라인에서 <b>O(1)</b>에 프로파일을 고른다. vLLM 위에서 최대 <b>9.13배</b> JCT 가속, <b>32.8배</b> TTFT 감소, 평균 <b>8.28배</b> 압축.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Every KV compression paper asks "how small can I make it?" KVServe asks the question production actually cares about: "should I compress at all, right now?"</p>
+    <p class="lead t-ko">모든 KV 압축 논문은 "얼마나 작게 만들 수 있나?"를 묻는다. KVServe는 실제 프로덕션이 신경 쓰는 질문을 던진다: "지금 이 순간, 압축을 하긴 해야 하나?"</p>
+    <p class="t-en">Disaggregated serving is now standard practice — PD separation scales prefill and decode independently, and remote KV pools enable long contexts and cross-request reuse. But it moves the KV cache onto the network, and the cache is enormous: Llama-3.1-70B produces <b>39.06 GB</b> of KV at 128K tokens. In the paper's own measurements KV transfer accounts for <b>16–60%</b> of JCT at 10–50 Gbps. Compression is the obvious lever — and here is the trap. Compressing costs GPU time to encode and decode. That cost is fixed; the savings depend on how slow the link is. On a fast link the savings vanish but the overhead remains, so a static compressor <b>increases</b> latency versus doing nothing at all. The paper names this <b>negative optimization</b>, and shows it is not hypothetical: on short-context GSM8K and HumanEval, CacheGen and KIVI land <i>above</i> the uncompressed baseline. The optimal strategy also flips by workload — KIVI is strong on Qasper and weak on GSM8K. A single fixed configuration cannot be right across a production mix that shifts by the hour.</p>
+    <p class="t-ko">분산 서빙은 이제 표준이다 — PD 분리는 prefill과 decode를 독립적으로 확장하고, 원격 KV 풀은 긴 컨텍스트와 요청 간 재사용을 가능케 한다. 그러나 이는 KV 캐시를 네트워크 위로 올려놓으며, 그 캐시는 거대하다: Llama-3.1-70B는 128K 토큰에서 <b>39.06 GB</b>의 KV를 만든다. 논문의 실측에서 KV 전송은 10–50 Gbps 구간에서 JCT의 <b>16–60%</b>를 차지한다. 압축은 당연한 지렛대다 — 그리고 여기에 함정이 있다. 압축에는 인코딩·디코딩 GPU 시간이 든다. 이 비용은 고정이지만, 절감량은 링크가 얼마나 느린지에 달려 있다. 빠른 링크에서는 절감은 사라지고 오버헤드만 남아, 정적 압축기는 아무것도 안 하는 것보다 지연을 <b>늘린다</b>. 논문은 이를 <b>부정적 최적화(negative optimization)</b>라 부르며, 이것이 가설이 아님을 보인다: 짧은 컨텍스트인 GSM8K·HumanEval에서 CacheGen과 KIVI는 무압축 기준선보다 <i>위에</i> 놓인다. 최적 전략은 워크로드에 따라서도 뒤집힌다 — KIVI는 Qasper에선 강하고 GSM8K에선 약하다. 시간 단위로 변하는 프로덕션 혼합 부하에서, 단 하나의 고정 설정이 항상 옳을 수는 없다.</p>
+    <figure class="fig">
+      <img src="fig/2605.13734/kv_latency_vs_bandwidth.png" alt="Left: KV transfer latency plotted against effective bandwidth for several compression strategies, showing the latency-optimal choice switching between strategies as bandwidth increases and static compressors crossing above the uncompressed baseline at high bandwidth. Right: a stacked time breakdown of KV movement into compression, transfer and decompression components.">
+      <figcaption class="t-en"><b>Figure 4.</b> KV latency across effective bandwidths (left) and the time breakdown (right). This one plot is the paper's whole argument: <b>the winning strategy changes as the link changes</b>. When bandwidth is scarce, aggressive compression pays. As bandwidth grows, the fixed (de)compression cost stops being repaid and the static curves cross <i>above</i> the uncompressed baseline — compressing now costs you. KVServe's bandwidth-threshold rule predicts this crossover in closed form and steps aside before it happens.</figcaption>
+      <figcaption class="t-ko"><b>그림 4.</b> 유효 대역폭에 따른 KV 지연시간(왼쪽)과 시간 분해(오른쪽). 이 그림 한 장이 논문의 논지 전부다: <b>링크가 바뀌면 승자도 바뀐다</b>. 대역폭이 부족할 땐 공격적 압축이 이득이다. 대역폭이 커지면 고정된 (역)압축 비용이 회수되지 않아, 정적 곡선들은 무압축 기준선 <i>위로</i> 올라간다 — 이제 압축은 손해다. KVServe의 대역폭 임계 규칙은 이 교차점을 닫힌 형태로 예측하고, 그 전에 스스로 물러난다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2605.13734</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">9.13×</div><div class="l"><span class="t-en">JCT speedup, PD separation (Llama-3.1-8B, HotpotQA)</span><span class="t-ko">JCT 가속, PD 분리 (Llama-3.1-8B, HotpotQA)</span></div></div>
+      <div class="stat"><div class="n">32.8×</div><div class="l"><span class="t-en">TTFT reduction, KV disaggregation (2WikiMQA, SLO=1.5s)</span><span class="t-ko">TTFT 감소, KV 분산 (2WikiMQA, SLO=1.5초)</span></div></div>
+      <div class="stat"><div class="n">50×</div><div class="l"><span class="t-en">less offline profiling (~1000 h → ~20 h, &lt;80 iters)</span><span class="t-ko">오프라인 프로파일링 비용 절감 (~1000시간 → ~20시간, 80회 미만)</span></div></div>
+      <div class="stat"><div class="n">8.28×</div><div class="l"><span class="t-en">avg compression ratio (KVServe-Aware) vs KIVI's 4.40×</span><span class="t-ko">평균 압축률 (KVServe-Aware), KIVI는 4.40배</span></div></div>
+      <div class="stat"><div class="n">82–90% → 6–9%</div><div class="l"><span class="t-en">communication's share of JCT (network-bound → compute-bound)</span><span class="t-ko">JCT 중 통신 비중 (네트워크 병목 → 연산 병목)</span></div></div>
+      <div class="stat"><div class="n">&lt;1 ms</div><div class="l"><span class="t-en">online profile-selection overhead</span><span class="t-ko">온라인 프로파일 선택 오버헤드</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Compression vs. accuracy, head to head</span><span class="t-ko">압축률 대 정확도, 정면 비교</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Qwen2.5-7B-Instruct, offline Pareto search on A100 under a 97% relative-accuracy constraint. Each cell is <b>Accuracy / Compression Ratio</b>. HotpotQA is <i>unseen</i> during profiling — it tests generalization. Average reports relative accuracy against the BF16 Default.</caption>
+        <caption class="t-ko"><b>표 1.</b> Qwen2.5-7B-Instruct, A100에서 97% 상대 정확도 제약 하의 오프라인 파레토 탐색. 각 칸은 <b>정확도 / 압축률</b>. HotpotQA는 프로파일링 때 <i>보지 않은</i> 워크로드로, 일반화를 시험한다. Average는 BF16 Default 대비 상대 정확도.</caption>
+        <thead><tr><th>Method</th><th>GSM8K</th><th>HumanEval</th><th>HotpotQA (unseen)</th><th>Average (Rel. Acc / CR)</th></tr></thead>
+        <tbody>
+          <tr><td>Default (BF16)</td><td>82.64 / 1.00</td><td>83.54 / 1.00</td><td>57.53 / 1.00</td><td>100.00 / 1.00</td></tr>
+          <tr><td>CacheGen</td><td>72.55 / 6.01</td><td>57.32 / 4.06</td><td>24.09 / 6.94</td><td>65.76 / 6.17</td></tr>
+          <tr><td>KIVI</td><td>81.50 / 4.26</td><td>81.71 / 2.49</td><td>55.37 / 5.15</td><td>97.43 / 4.40</td></tr>
+          <tr><td>DuoAttention</td><td>82.56 / 2.21</td><td>82.93 / 1.06</td><td>56.00 / 4.50</td><td>95.48 / 3.10</td></tr>
+          <tr><td>KVServe-Unified</td><td>81.50 / 7.07</td><td>84.15 / 6.20</td><td>54.23 / 8.07</td><td>98.20 / 7.42</td></tr>
+          <tr><td>KVServe-Aware</td><td>84.53 / 7.29</td><td>84.15 / 6.04</td><td>55.11 / 8.90</td><td class="up">100.35 / 8.28</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">The story is in the spread. <b>CacheGen</b> buys 6.17× compression by collapsing accuracy to 65.76% — on HumanEval it falls from 83.54 to 57.32, which is not a trade-off so much as a failure. <b>KIVI</b> is the honest baseline: safe at 97.43%, but capped at 4.40× by its metadata overhead. <b>DuoAttention</b>'s token pruning barely compresses at all where it matters (1.06× on HumanEval). KVServe roughly <b>doubles KIVI's compression</b> while holding accuracy higher — and it does so by <i>recomposing</i> those same published components rather than inventing a new compressor. Note the honest caveat: the unseen-workload column is where KVServe is weakest (54.23 and 55.11 vs. KIVI's 55.37 on HotpotQA), so its edge there is compression, not accuracy.</p>
+    <p class="t-ko">이야기는 편차에 있다. <b>CacheGen</b>은 정확도를 65.76%로 무너뜨리며 6.17배 압축을 얻는다 — HumanEval에서 83.54 → 57.32는 절충이라기보다 실패다. <b>KIVI</b>는 정직한 기준선이다: 97.43%로 안전하지만 메타데이터 오버헤드 탓에 4.40배에서 막힌다. <b>DuoAttention</b>의 토큰 프루닝은 정작 필요한 곳에서 거의 압축하지 못한다(HumanEval 1.06배). KVServe는 정확도를 더 높게 유지하면서 <b>KIVI 압축률의 약 두 배</b>를 낸다 — 그것도 새 압축기를 발명한 게 아니라 바로 그 공개된 부품들을 <i>재조합</i>해서다. 정직한 단서 하나: 미관측 워크로드 열이 KVServe가 가장 약한 지점이며(HotpotQA에서 54.23·55.11 대 KIVI 55.37), 거기서의 우위는 정확도가 아니라 압축률이다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 780 372" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">
+        <defs>
+          <marker id="k-ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#79746A"/></marker>
+          <marker id="k-ahr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#D97757"/></marker>
+        </defs>
+
+        <!-- ===== OFFLINE ===== -->
+        <text x="20" y="22" font-size="11" font-weight="700" fill="#79746A">OFFLINE · once per model</text>
+        <line x1="20" y1="30" x2="760" y2="30" stroke="#DCD6C8" stroke-width="1"/>
+
+        <!-- modular pipeline -->
+        <rect x="20" y="44" width="386" height="80" rx="10" fill="#FBFAF6" stroke="#DCD6C8" stroke-width="1.5"/>
+        <text x="34" y="64" font-size="11.5" font-weight="700" fill="#1A1915">Modular strategy space</text>
+        <rect x="34" y="74" width="104" height="36" rx="7" fill="#FFFFFF" stroke="#C9C2B2"/>
+        <text x="86" y="90" font-size="11.5" font-weight="700" text-anchor="middle" fill="#403C34">Transform T</text>
+        <text x="86" y="104" font-size="9.5" text-anchor="middle" fill="#79746A">Hadamard · Affine · Delta</text>
+        <path d="M140 92 L156 92" stroke="#79746A" stroke-width="1.6" marker-end="url(#k-ah)"/>
+        <rect x="158" y="74" width="104" height="36" rx="7" fill="#FFFFFF" stroke="#C9C2B2"/>
+        <text x="210" y="90" font-size="11.5" font-weight="700" text-anchor="middle" fill="#403C34">Quantize Q</text>
+        <text x="210" y="104" font-size="9.5" text-anchor="middle" fill="#B5552F">MixHQ (new)</text>
+        <path d="M264 92 L280 92" stroke="#79746A" stroke-width="1.6" marker-end="url(#k-ah)"/>
+        <rect x="282" y="74" width="108" height="36" rx="7" fill="#FFFFFF" stroke="#C9C2B2"/>
+        <text x="336" y="90" font-size="11.5" font-weight="700" text-anchor="middle" fill="#403C34">Codec C</text>
+        <text x="336" y="104" font-size="9.5" text-anchor="middle" fill="#79746A">BitPack · entropy</text>
+        <text x="213" y="140" font-size="10.5" text-anchor="middle" fill="#79746A">C(Q(T(X))) · &gt;4,000 candidates</text>
+
+        <!-- bayesian -->
+        <path d="M406 84 L444 84" stroke="#79746A" stroke-width="1.8" marker-end="url(#k-ah)"/>
+        <rect x="446" y="44" width="150" height="80" rx="10" fill="#FBFAF6" stroke="#DCD6C8" stroke-width="1.5"/>
+        <text x="521" y="66" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1A1915">Bayesian profiling</text>
+        <text x="521" y="83" font-size="10" text-anchor="middle" fill="#403C34">GP surrogate + pruning</text>
+        <text x="521" y="99" font-size="10" text-anchor="middle" fill="#403C34">max CR s.t. Acc ≥ thr</text>
+        <text x="521" y="115" font-size="10" text-anchor="middle" fill="#B5552F">1000 h → ~20 h (50×)</text>
+
+        <!-- pareto -->
+        <path d="M596 84 L634 84" stroke="#79746A" stroke-width="1.8" marker-end="url(#k-ah)"/>
+        <rect x="636" y="44" width="124" height="80" rx="10" fill="rgba(217,119,87,.13)" stroke="#D97757" stroke-width="1.8"/>
+        <text x="698" y="66" font-size="11.5" font-weight="700" text-anchor="middle" fill="#B5552F">3D Pareto set</text>
+        <text x="698" y="84" font-size="10" text-anchor="middle" fill="#403C34">Acc × CR × Latency</text>
+        <text x="698" y="102" font-size="10" text-anchor="middle" fill="#79746A">a lookup table,</text>
+        <text x="698" y="116" font-size="10" text-anchor="middle" fill="#79746A">not a model</text>
+
+        <!-- handoff arrow -->
+        <path d="M698 124 L698 172" stroke="#D97757" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#k-ahr)"/>
+
+        <!-- ===== ONLINE ===== -->
+        <text x="20" y="176" font-size="11" font-weight="700" fill="#79746A">ONLINE · per request</text>
+        <line x1="20" y1="184" x2="760" y2="184" stroke="#DCD6C8" stroke-width="1"/>
+
+        <!-- context -->
+        <rect x="20" y="198" width="150" height="86" rx="10" fill="#FBFAF6" stroke="#DCD6C8" stroke-width="1.5"/>
+        <text x="95" y="219" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1A1915">Sense context c</text>
+        <text x="95" y="238" font-size="10.5" text-anchor="middle" fill="#403C34">workload w</text>
+        <text x="95" y="254" font-size="10.5" text-anchor="middle" fill="#403C34">bandwidth B</text>
+        <text x="95" y="270" font-size="10.5" text-anchor="middle" fill="#403C34">T_SLO , q_min</text>
+
+        <path d="M170 241 L206 241" stroke="#79746A" stroke-width="1.8" marker-end="url(#k-ah)"/>
+
+        <!-- theorem 1 -->
+        <rect x="208" y="198" width="172" height="86" rx="10" fill="#FFFFFF" stroke="#C9C2B2" stroke-width="1.5"/>
+        <text x="294" y="219" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1A1915">Thm 6.1 · filter</text>
+        <text x="294" y="240" font-size="11" text-anchor="middle" fill="#B5552F">B* = (1 − 1/cr) · s</text>
+        <text x="294" y="257" font-size="10" text-anchor="middle" fill="#403C34">keep p only if B &lt; B*</text>
+        <text x="294" y="273" font-size="9.5" text-anchor="middle" fill="#79746A">independent of KV volume</text>
+
+        <path d="M380 241 L416 241" stroke="#79746A" stroke-width="1.8" marker-end="url(#k-ah)"/>
+
+        <!-- theorem 2 -->
+        <rect x="418" y="198" width="164" height="86" rx="10" fill="#FFFFFF" stroke="#C9C2B2" stroke-width="1.5"/>
+        <text x="500" y="219" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1A1915">Thm 6.2 · lookup</text>
+        <text x="500" y="240" font-size="10.5" text-anchor="middle" fill="#403C34">lower envelope in x = 1/B</text>
+        <text x="500" y="257" font-size="10.5" text-anchor="middle" fill="#403C34">optimal p is piecewise const.</text>
+        <text x="500" y="273" font-size="9.5" text-anchor="middle" fill="#79746A">O(1) decision · &lt;1 ms</text>
+
+        <path d="M582 241 L618 241" stroke="#79746A" stroke-width="1.8" marker-end="url(#k-ah)"/>
+
+        <!-- bandit -->
+        <rect x="620" y="198" width="140" height="86" rx="10" fill="rgba(217,119,87,.13)" stroke="#D97757" stroke-width="1.8"/>
+        <text x="690" y="219" font-size="11.5" font-weight="700" text-anchor="middle" fill="#B5552F">Bandit · correct</text>
+        <text x="690" y="238" font-size="10" text-anchor="middle" fill="#403C34">EWMA residual δ̄</text>
+        <text x="690" y="254" font-size="10" text-anchor="middle" fill="#403C34">ε-greedy over 2–3</text>
+        <text x="690" y="270" font-size="9.5" text-anchor="middle" fill="#79746A">SLO cooldown guard</text>
+
+        <!-- feedback -->
+        <path d="M690 284 L690 306 L294 306 L294 286" stroke="#D97757" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#k-ahr)"/>
+        <text x="492" y="322" font-size="10" text-anchor="middle" fill="#79746A">observed JCT − predicted JCT → residual feeds back (no re-profiling)</text>
+
+        <!-- escape hatch -->
+        <rect x="208" y="334" width="374" height="28" rx="8" fill="#F3F6F1" stroke="#3f6b40" stroke-width="1.3"/>
+        <text x="395" y="352" font-size="10.5" font-weight="700" text-anchor="middle" fill="#3f6b40">If no profile survives the filter → send raw BF16. Refusing to compress is a valid move.</text>
+      </svg>
+      <div class="cap t-en">Offline (top), KVServe decomposes published compressors into a Transform→Quantize→Codec pipeline and Bayesian-searches the 4,000+ compositions down to a 3D Pareto set — a static lookup table, not a learned model. Online (bottom), each request senses its context, uses Theorem 6.1's bandwidth threshold to throw away profiles that would cost more than they save, uses Theorem 6.2's lower envelope to look up the optimal profile in O(1), and lets a tiny bandit correct the gap between predicted and observed latency. The green bar is the part competitors lack: when nothing beats the wire, KVServe declines to compress.</div>
+      <div class="cap t-ko">오프라인(위)에서 KVServe는 공개된 압축기들을 변환→양자화→코덱 파이프라인으로 분해하고, 4,000개가 넘는 조합을 베이지안 탐색으로 3D 파레토 집합으로 줄인다 — 학습된 모델이 아니라 정적 조회 테이블이다. 온라인(아래)에서는 요청마다 컨텍스트를 감지하고, 정리 6.1의 대역폭 임계로 절감보다 비용이 큰 프로파일을 버리고, 정리 6.2의 하부 포락선으로 최적 프로파일을 O(1)에 조회하며, 작은 밴딧이 예측과 실측 지연의 괴리를 보정한다. 초록 막대가 경쟁자들에게 없는 부분이다: 그 무엇도 그냥 전송을 못 이기면, KVServe는 압축을 거부한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core idea</span><span class="t-ko">핵심 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">The reframe</span>
+        <h3>Selection, not invention</h3>
+        <p class="t-en">The field's reflex is to publish a better compressor. KVServe's claim is that the compressor was never the bottleneck — the <i>choice</i> was. Since the latency-optimal strategy depends on workload, bandwidth and SLO, all of which move at runtime, any fixed configuration is wrong most of the time. Compression becomes a constrained selection problem over service state.</p>
+        <p class="t-ko">이 분야의 반사신경은 더 나은 압축기를 내놓는 것이다. KVServe의 주장은 압축기가 애초에 병목이 아니었다는 것 — <i>선택</i>이 병목이었다. 지연 최적 전략은 워크로드·대역폭·SLO에 달렸고 이들은 모두 런타임에 움직이므로, 고정된 설정은 대부분의 시간 동안 틀린다. 압축은 서비스 상태 위의 제약 선택 문제가 된다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">The space</span>
+        <h3>Transform → Quantize → Codec</h3>
+        <p class="t-en">Existing methods ship as tightly coupled code with incompatible interfaces. KVServe dissects them into three pluggable stages, <code>C(Q(T(X)))</code>, so a QuaRot-style transform can be paired with a CacheGen-style quantizer — combinations no single paper ever tried. It adds one new component, <b>MixHQ</b>, which assigns bit-widths per attention head: ultra-low bits for streaming heads, high precision for retrieval heads.</p>
+        <p class="t-ko">기존 기법들은 호환되지 않는 인터페이스의 단단히 결합된 코드로 배포된다. KVServe는 이를 세 개의 교체 가능한 단계 <code>C(Q(T(X)))</code>로 해부해, QuaRot 계열 변환과 CacheGen 계열 양자화기를 짝지을 수 있게 한다 — 어떤 단일 논문도 시도하지 않은 조합이다. 여기에 새 부품 <b>MixHQ</b>를 더하는데, 어텐션 헤드별로 비트폭을 배분한다: 스트리밍 헤드엔 초저비트, 검색 헤드엔 고정밀.</p>
+      </div>
+      <div class="m">
+        <span class="tag">The search</span>
+        <h3>Bayesian, because brute force is a week</h3>
+        <p class="t-en">Modularity explodes the space past 4,000 candidates, each needing an end-to-end accuracy run — roughly 1,000 GPU-hours. A Gaussian-process surrogate models configuration→accuracy, an acquisition function trades exploration against expected compression, and <b>bi-directional pruning</b> exploits the monotone CR–accuracy trade-off to discard whole regions. It converges in under 80 iterations, about 20 hours.</p>
+        <p class="t-ko">모듈화는 공간을 4,000개 후보 이상으로 폭발시키고, 각각은 종단 정확도 실행 — 약 1,000 GPU-시간 — 을 요구한다. 가우시안 프로세스 대리모델이 설정→정확도를 모델링하고, 획득 함수가 탐색과 기대 압축률을 절충하며, <b>양방향 가지치기</b>가 단조로운 CR–정확도 절충을 이용해 영역 전체를 버린다. 80회 미만, 약 20시간에 수렴한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">The control</span>
+        <h3>A threshold you can prove, a bandit for the rest</h3>
+        <p class="t-en">Theorem 6.1 gives compression's break-even in closed form: profile <i>p</i> helps only if bandwidth <code>B &lt; B* = (1 − 1/cr<sub>p</sub>)·s<sub>p</sub></code> — strikingly, independent of KV volume. Theorem 6.2 shows the optimal profile is piecewise constant in 1/B, so the policy is a precomputed lower envelope and lookup is O(1). Theory can't model GPU queue contention, so an EWMA bandit learns only the <i>residual</i> between predicted and observed latency.</p>
+        <p class="t-ko">정리 6.1은 압축의 손익분기를 닫힌 형태로 준다: 프로파일 <i>p</i>는 대역폭 <code>B &lt; B* = (1 − 1/cr<sub>p</sub>)·s<sub>p</sub></code>일 때만 이득이며 — 놀랍게도 KV 부피와 무관하다. 정리 6.2는 최적 프로파일이 1/B에 대해 구간별 상수임을 보이므로, 정책은 미리 계산된 하부 포락선이고 조회는 O(1)이다. 이론은 GPU 큐 경합을 모델링할 수 없으니, EWMA 밴딧이 예측과 실측 지연의 <i>잔차</i>만을 학습한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Decompose. </span><span class="t-ko">분해. </span></b><span class="t-en">Break CacheGen, KIVI, QuaRot and friends into pluggable Transform / Quantizer / Codec stages, add MixHQ, and enumerate the cross-method compositions as one searchable space.</span><span class="t-ko">CacheGen·KIVI·QuaRot 등을 교체 가능한 변환/양자화기/코덱 단계로 쪼개고, MixHQ를 더한 뒤, 기법 간 교차 조합을 하나의 탐색 가능한 공간으로 열거한다.</span></li>
+      <li><b><span class="t-en">Profile. </span><span class="t-ko">프로파일링. </span></b><span class="t-en">Run constrained Bayesian optimization — maximize compression subject to accuracy ≥ threshold — on proxy subsets, with bi-directional pruning and early stopping. ~1,000 h collapses to ~20 h.</span><span class="t-ko">대리 부분집합 위에서 제약 베이지안 최적화를 수행한다 — 정확도 ≥ 임계 조건 하에 압축률 최대화 — 양방향 가지치기와 조기 종료를 곁들여. ~1,000시간이 ~20시간으로 줄어든다.</span></li>
+      <li><b><span class="t-en">Distill. </span><span class="t-ko">증류. </span></b><span class="t-en">Project the survivors into Accuracy × Compression × Latency space and keep only non-dominated points. The resulting 3D Pareto frontier ships as a static runtime lookup table.</span><span class="t-ko">살아남은 후보를 정확도 × 압축률 × 지연 공간에 투영해 비지배 점만 남긴다. 그 3D 파레토 프론티어가 정적 런타임 조회 테이블로 배포된다.</span></li>
+      <li><b><span class="t-en">Select. </span><span class="t-ko">선택. </span></b><span class="t-en">At each KV movement, read context (workload, measured bandwidth, SLO, quality budget). Bucket by quality, drop profiles failing B &lt; B*, then look up the lower-envelope interval for 1/B — O(1), under 1 ms.</span><span class="t-ko">KV 이동 시점마다 컨텍스트(워크로드·측정 대역폭·SLO·품질 예산)를 읽는다. 품질로 버킷을 나누고, B &lt; B*를 못 넘는 프로파일을 버린 뒤, 1/B에 대한 하부 포락선 구간을 조회한다 — O(1), 1 ms 미만.</span></li>
+      <li><b><span class="t-en">Correct. </span><span class="t-ko">보정. </span></b><span class="t-en">Compare observed JCT to prediction, update an EWMA residual over the 2–3 neighbouring candidates, and ε-greedily pick the corrected minimum — with an SLO-violation cooldown as a guardrail against exploration.</span><span class="t-ko">실측 JCT를 예측과 비교해 인접한 2–3개 후보에 대한 EWMA 잔차를 갱신하고, ε-탐욕적으로 보정된 최솟값을 고른다 — 탐색의 위험을 막는 SLO 위반 쿨다운을 안전장치로 둔 채.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The most valuable thing a compressor can do is sometimes <b>decline to compress</b>. Baselines suffer negative optimization on short-context GSM8K/HumanEval; KVServe filters those profiles out and converges to the uncompressed baseline instead of degrading below it.</p><p class="t-ko">압축기가 할 수 있는 가장 값진 일은 때때로 <b>압축을 거부하는 것</b>이다. 기준선들은 짧은 컨텍스트 GSM8K·HumanEval에서 부정적 최적화를 겪지만, KVServe는 그런 프로파일을 걸러내고 기준선 아래로 떨어지는 대신 무압축 성능으로 수렴한다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The break-even <code>B* = (1 − 1/cr)·s</code> is <b>independent of KV volume</b> — it depends only on compression ratio and (de)compression throughput. That's a clean, portable result: any system shipping compressed state over a link can compute its own threshold.</p><p class="t-ko">손익분기 <code>B* = (1 − 1/cr)·s</code>는 <b>KV 부피와 무관</b>하며, 오직 압축률과 (역)압축 처리량에만 의존한다. 이는 깔끔하고 이식 가능한 결과다 — 링크 너머로 압축 상태를 보내는 어떤 시스템이든 자기 임계값을 계산할 수 있다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Recomposition beat invention. KVServe roughly doubles KIVI's compression using components already published — the gains were sitting in combinations nobody tried because everyone shipped their method as a monolith.</p><p class="t-ko">재조합이 발명을 이겼다. KVServe는 이미 공개된 부품들만으로 KIVI 압축률의 약 두 배를 낸다 — 이득은 아무도 시도하지 않은 조합 속에 놓여 있었다. 모두가 자기 기법을 단일 덩어리로 배포했기 때문이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the "50× cheaper profiling" headline hides a recurring bill — <b>~20 hours on 4× A100 per model</b>, and the Pareto table is model- and workload-specific, so every new model or shifted workload mix pays it again; the paper never analyzes how many requests it takes to amortize that. The showcase numbers are best-case corners too: 9.13× and 32.8× come from the longest-context workloads at the most bandwidth-starved settings, while the same figures show gains as low as 1.67×. And <b>KVServe-Aware's 100.35% relative accuracy</b> — a lossy compressor <i>beating</i> BF16 on average — is credited to MixHQ, but with no seeds, error bars, or variance reported, evaluation noise is the far more parsimonious explanation. That variant also presumes the workload type is known per request; the router that would have to classify it is never built or evaluated.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> "프로파일링 50배 절감"이라는 헤드라인은 반복되는 청구서를 가린다 — <b>모델당 4×A100에서 ~20시간</b>이며, 파레토 테이블은 모델·워크로드에 특화되어 새 모델이나 바뀐 부하 조합마다 다시 지불해야 한다. 그 비용이 몇 건의 요청으로 상각되는지 논문은 분석하지 않는다. 대표 수치들도 최선의 구석이다: 9.13배·32.8배는 가장 긴 컨텍스트에 가장 대역폭이 굶주린 설정에서 나오며, 같은 그림에 1.67배짜리 이득도 있다. 그리고 <b>KVServe-Aware의 100.35% 상대 정확도</b> — 손실 압축기가 BF16을 평균적으로 <i>이긴다</i>는 것 — 는 MixHQ 덕분이라 설명되지만, 시드·오차 막대·분산이 전혀 보고되지 않은 상황에서 평가 잡음이 훨씬 간명한 설명이다. 그 변형은 또한 요청마다 워크로드 유형을 안다고 전제하는데, 그것을 분류할 라우터는 만들어지지도 평가되지도 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2605.13734">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2605.13734">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2605.13734">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2605.13734">🔎 alphaXiv</a>
+      <a href="https://github.com/hpdps-group/KVServe">💻 code</a>
+    </div>
+    <span class="t-en">Why picked — <b>Fallback pick · topic: Model Compression / KV Cache · the only conference-accepted candidate in the fallback sweep, and it reframes KV compression as a control problem rather than another compressor</b> · venue: SIGCOMM 2026 (ICT, CAS).<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-17.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>폴백 선정 · 주제: 모델 압축 / KV 캐시 · 폴백 탐색에서 유일하게 학회 accept된 후보였고, KV 압축을 또 하나의 압축기가 아니라 제어 문제로 재구성한다</b> · venue: SIGCOMM 2026 (ICT, CAS).<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-17.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
