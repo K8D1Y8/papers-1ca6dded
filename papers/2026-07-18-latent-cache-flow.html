@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Latent Cache Flow: Model-to-Model Communication Without Text</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent Systems · Latent Communication · KV Cache</span><span class="t-ko">멀티에이전트 · 잠재 통신 · KV 캐시</span></span>
+      <span>2026 · 05 · 19</span>
+    </div>
+    <h1>Latent Cache Flow<br>
+      <span class="glow t-en">— let two models talk through a compressed latent cache, not text</span>
+      <span class="glow t-ko">— 두 모델이 텍스트가 아니라 압축된 잠재 캐시로 대화하게 하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Maximillian Rossi</b>, <b>Prajwal Raghunath</b> <span class="t-en">(equal) · Eugene Wu</span><span class="t-ko">(공동 1저자) · Eugene Wu</span></span>
+      <span>🏛 Columbia University</span>
+      <span>🗓 2026-05-19</span>
+      <span>🏆 ICML 2026</span>
+      <span>📄 <a href="https://arxiv.org/abs/2605.22863">arXiv:2605.22863</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">LLM agents talk to each other in English, and it is both slow and lossy: the receiver must wait for the sender to autoregressively decode, and the sender's rich hidden state is crushed into roughly <b>15 bits per token</b>. <b>Cache-to-Cache (C2C)</b> fixed the text bottleneck by handing over the KV cache directly — but at two brutal costs: a <b>956 MB</b> adapter, and a <i>position-wise</i> design that forces both models to read the <b>same prompt</b>. Latent Cache Flow (LCF) keeps the cache-level idea and removes both costs. (1) It fuses keys and values through <b>one shared low-dimensional latent bottleneck</b> instead of two full-width pipelines, shrinking the adapter to <b>~4%</b> of C2C — a pruned <b>13 MB</b> adapter still <i>beats</i> the 956 MB one on four QA benchmarks. (2) <b>LCF-X</b> pools the sender's own context into a fixed-size summary, so the two models no longer need the same input — cross-context transfer lands <b>+23% Exact Match</b> and <b>8.5× faster</b> time-to-first-token versus sending text. All of this on tiny <b>≤0.6B</b> Qwen models.</p>
+    <p class="t-ko">LLM 에이전트들은 서로 영어로 대화한다. 그런데 이건 느리고 손실이 크다: 수신 모델은 송신 모델이 토큰을 하나씩 디코딩하기를 기다려야 하고, 송신 모델의 풍부한 은닉 상태는 <b>토큰당 약 15비트</b>로 짓눌린다. <b>Cache-to-Cache(C2C)</b>는 KV 캐시를 직접 넘겨 이 텍스트 병목을 없앴지만 — 두 가지 혹독한 비용을 치른다: <b>956 MB</b>짜리 어댑터, 그리고 두 모델이 <b>같은 프롬프트</b>를 읽어야만 하는 <i>위치 정렬(position-wise)</i> 설계. Latent Cache Flow(LCF)는 캐시 수준 통신이라는 아이디어는 유지하되 이 두 비용을 제거한다. (1) 키와 값을 두 개의 전폭(full-width) 파이프라인 대신 <b>하나의 공유 저차원 잠재 병목</b>으로 융합해 어댑터를 C2C의 <b>~4%</b>로 줄인다 — 가지치기한 <b>13 MB</b> 어댑터가 956 MB짜리를 네 개 QA 벤치마크에서 <i>오히려 이긴다</i>. (2) <b>LCF-X</b>는 송신 모델의 자기 컨텍스트를 고정 크기 요약으로 풀링해, 두 모델이 더 이상 같은 입력을 볼 필요가 없게 한다 — 서로 다른 컨텍스트 전송에서 텍스트 대비 <b>Exact Match +23%</b>, 첫 토큰까지 시간 <b>8.5배 단축</b>. 이 모두가 <b>0.6B 이하</b>의 작은 Qwen 모델에서 나온 결과다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Multi-agent LLM systems still mostly pass notes in English. Every hop pays twice — the sender decodes to tokens, the receiver re-encodes — and the sender's internal state is squeezed through a ~15-bit-per-token straw.</p>
+    <p class="lead t-ko">멀티에이전트 LLM 시스템은 여전히 대부분 영어로 쪽지를 주고받는다. 매 홉마다 비용은 두 번 든다 — 송신 측은 토큰으로 디코딩하고 수신 측은 다시 인코딩한다 — 그리고 송신 측 내부 상태는 토큰당 약 15비트짜리 빨대를 통과해야 한다.</p>
+    <p class="t-en">The obvious fix is to skip text and hand over the KV cache itself. <b>Cache-to-Cache (C2C)</b> does exactly this: a learned fuser reads both models' caches and injects a residual update into the receiver's, bypassing decoding entirely. It works — but two costs make it unfit for real agent systems. First, the fuser is <b>enormous</b>: for a ~1B model pair it holds 477.8M parameters (956 MB in bf16), because it runs a full-width pipeline for keys and a second one for values. Second, it is <b>position-wise by design</b>: C2C fuses caches at matching token positions, so the sharer and receiver must process the <i>same</i> prompt — exactly the assumption that breaks when agents take on different roles, tools, or contexts. LCF is a middle ground between free-form text (flexible but slow and lossy) and C2C (fast but rigidly aligned): compressed, cache-level communication that stays cheap <i>and</i> relaxes the shared-context constraint.</p>
+    <p class="t-ko">당연한 해법은 텍스트를 건너뛰고 KV 캐시 자체를 넘기는 것이다. <b>Cache-to-Cache(C2C)</b>가 바로 이걸 한다: 학습된 융합기(fuser)가 두 모델의 캐시를 읽어 수신 모델 캐시에 잔차(residual) 업데이트를 주입하고, 디코딩을 통째로 건너뛴다. 작동은 한다 — 그러나 두 가지 비용이 실제 에이전트 시스템에는 부적합하게 만든다. 첫째, 융합기가 <b>거대하다</b>: ~1B 모델 쌍에 대해 477.8M 파라미터(bf16로 956 MB)를 갖는데, 키에 대해 전폭 파이프라인을 한 번, 값에 대해 또 한 번 돌리기 때문이다. 둘째, <b>설계상 위치 정렬</b>이다: C2C는 일치하는 토큰 위치에서 캐시를 융합하므로 송신·수신 모델이 <i>같은</i> 프롬프트를 처리해야 한다 — 에이전트들이 서로 다른 역할·도구·컨텍스트를 맡는 순간 깨지는 바로 그 가정이다. LCF는 자유 텍스트(유연하지만 느리고 손실 큼)와 C2C(빠르지만 경직된 정렬) 사이의 중간 지대다: 저렴함을 유지하면서 <i>동시에</i> 공유 컨텍스트 제약을 완화하는, 압축된 캐시 수준 통신.</p>
+    <figure class="fig">
+      <img src="fig/2605.22863/pareto_overview.png" alt="Scatter plot of weighted accuracy versus adapter size in MB. C2C sits at 956 MB with 29.13% accuracy. LCF variants cluster near the y-axis at 8 to 107 MB with higher accuracy: LCF-256 reaches 32.88, LCF-128 reaches 31.94, and pruned 13 MB and 8 MB variants stay at or above C2C. A dashed green line marks the Optimal Routing Frontier at 31.99, which LCF-128 and LCF-256 exceed.">
+      <figcaption class="t-en"><b>Figure 4.</b> The whole shared-context story in one plot: weighted accuracy vs. bf16 adapter footprint. C2C is the lonely red square at <b>956 MB</b>. Every LCF point lives against the left axis — the pruned green variants reach C2C-level accuracy at <b>8–13 MB</b>, and LCF-128/256 climb into the shaded region <i>above the Optimal Routing Frontier</i> (31.99), the per-question oracle that picks whichever base model is right. Bigger is not better: LCF-512 (faint) falls back below LCF-256, so the latent bottleneck is also acting as a regularizer.</figcaption>
+      <figcaption class="t-ko"><b>그림 4.</b> 공유 컨텍스트 이야기 전부를 담은 한 장: 가중 정확도 대 bf16 어댑터 용량. C2C는 <b>956 MB</b>에 홀로 떨어진 빨간 사각형이다. 모든 LCF 점은 왼쪽 축에 붙어 있다 — 가지치기한 초록 변형들은 <b>8–13 MB</b>에서 C2C 수준 정확도에 도달하고, LCF-128/256은 <i>Optimal Routing Frontier</i>(31.99, 두 기본 모델 중 맞힌 쪽을 고르는 문항별 오라클) <i>위</i> 음영 영역까지 올라간다. 크다고 좋은 게 아니다: LCF-512(옅은 점)는 LCF-256 아래로 되돌아가므로, 잠재 병목은 정규화 역할도 한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2605.22863</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">956 MB → 13 MB</div><div class="l"><span class="t-en">C2C adapter vs. LCF's pruned adapter (73× smaller) — still more accurate</span><span class="t-ko">C2C 어댑터 대 LCF 가지치기 어댑터 (73배 작음) — 그래도 더 정확</span></div></div>
+      <div class="stat"><div class="n">~4%</div><div class="l"><span class="t-en">LCF adapter size as a fraction of C2C (39 MB vs 956 MB)</span><span class="t-ko">C2C 대비 LCF 어댑터 크기 비율 (39 MB 대 956 MB)</span></div></div>
+      <div class="stat"><div class="n">+23%</div><div class="l"><span class="t-en">Exact Match over the best text-to-text baseline (cross-context HotpotQA)</span><span class="t-ko">최고 text-to-text 기준선 대비 Exact Match (서로 다른 컨텍스트, HotpotQA)</span></div></div>
+      <div class="stat"><div class="n">8.5×</div><div class="l"><span class="t-en">faster time-to-first-token than text communication (410 → 48 ms)</span><span class="t-ko">텍스트 통신 대비 첫 토큰까지 시간 (410 → 48 ms)</span></div></div>
+      <div class="stat"><div class="n">32.88 &gt; 31.99</div><div class="l"><span class="t-en">LCF-256 weighted accuracy beats the per-question oracle routing frontier</span><span class="t-ko">LCF-256 가중 정확도가 문항별 오라클 라우팅을 능가</span></div></div>
+      <div class="stat"><div class="n">≤ 0.6B</div><div class="l"><span class="t-en">model scale of every experiment (Qwen2.5-0.5B → Qwen3-0.6B) — the honest ceiling</span><span class="t-ko">모든 실험의 모델 규모 (Qwen2.5-0.5B → Qwen3-0.6B) — 정직한 상한</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The shared-context frontier, in one table</span><span class="t-ko">공유 컨텍스트 프론티어, 표 하나로</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Shared-context transfer, sharer Qwen2.5-0.5B-Instruct → receiver Qwen3-0.6B, trained under C2C's own public recipe. Weighted accuracy averages MMLU-Redux / ARC-C / OpenBookQA / MMLU-Pro (test sizes 5632 / 1150 / 500 / 12032). Adapter size is the bf16 projector footprint. ORF is a per-question oracle upper bound, not a deployable method.</caption>
+        <caption class="t-ko"><b>표 1.</b> 공유 컨텍스트 전송, 송신 Qwen2.5-0.5B-Instruct → 수신 Qwen3-0.6B, C2C의 공개 레시피 그대로 학습. 가중 정확도는 MMLU-Redux / ARC-C / OpenBookQA / MMLU-Pro(테스트 크기 5632 / 1150 / 500 / 12032)의 평균. 어댑터 크기는 bf16 프로젝터 용량. ORF은 문항별 오라클 상한이며 배포 가능한 기법이 아니다.</caption>
+        <thead><tr><th>Method</th><th>Weighted Acc (%)</th><th>Adapter Size</th><th>Params</th></tr></thead>
+        <tbody>
+          <tr><td>Receiver only</td><td>23.64</td><td>0</td><td>0</td></tr>
+          <tr><td>C2C (prior SOTA)</td><td>29.13</td><td>956 MB</td><td>477.8M</td></tr>
+          <tr><td>LCF-128</td><td>31.94</td><td>39 MB</td><td>19.4M</td></tr>
+          <tr><td>LCF-256 (best)</td><td class="up">32.88</td><td>107 MB</td><td>53.4M</td></tr>
+          <tr><td>LCF-128 pruned (9 layers)</td><td>31.26</td><td class="up">13 MB</td><td>6.24M</td></tr>
+          <tr><td>ORF (oracle upper bound)</td><td>31.99</td><td>—</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">Read top to bottom: the bare receiver scores 23.64. C2C lifts it to 29.13 but pays 956 MB. <b>LCF-128 beats C2C by +2.81 points at 4% of the size</b>, and LCF-256 pushes to 32.88 — above the oracle routing frontier that retrospectively picks the better of the two base models. The most striking row is the pruned one: strip LCF-128 down to just 9 of its 28 layer-projectors and it still clears C2C at <b>13 MB</b>, a 76× parameter reduction. The gains that matter (MMLU-Redux +2.6, MMLU-Pro +3.0) are significant at p&lt;0.001; the smaller benchmarks (ARC-C, OBQA) mostly are not.</p>
+    <p class="t-ko">위에서 아래로 읽어보라: 맨 수신 모델은 23.64점. C2C가 29.13으로 끌어올리지만 956 MB를 지불한다. <b>LCF-128은 크기의 4%로 C2C를 +2.81점 이긴다</b>, 그리고 LCF-256은 32.88까지 밀어붙인다 — 두 기본 모델 중 나은 쪽을 사후에 고르는 오라클 라우팅 프론티어보다 높다. 가장 인상적인 행은 가지치기한 것이다: LCF-128을 28개 레이어 프로젝터 중 9개만 남겨도 <b>13 MB</b>에서 여전히 C2C를 넘는다 — 76배 파라미터 감소. 중요한 이득(MMLU-Redux +2.6, MMLU-Pro +3.0)은 p&lt;0.001로 유의하지만, 작은 벤치마크(ARC-C, OBQA)는 대체로 그렇지 않다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 782 384" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">
+        <defs>
+          <marker id="l-ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#79746A"/></marker>
+          <marker id="l-ahr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#D97757"/></marker>
+        </defs>
+
+        <!-- ===== TOP BAND: LCF-X ===== -->
+        <text x="20" y="22" font-size="11" font-weight="700" fill="#79746A">CROSS-CONTEXT · LCF-X pooling — only when the two prompts differ</text>
+        <line x1="20" y1="30" x2="762" y2="30" stroke="#DCD6C8" stroke-width="1"/>
+
+        <rect x="20" y="44" width="150" height="66" rx="10" fill="rgba(61,106,143,.10)" stroke="#3d6a8f" stroke-width="1.5"/>
+        <text x="95" y="66" font-size="11.5" font-weight="700" text-anchor="middle" fill="#274a68">Sharer reads its</text>
+        <text x="95" y="82" font-size="11.5" font-weight="700" text-anchor="middle" fill="#274a68">own context</text>
+        <text x="95" y="100" font-size="9.5" text-anchor="middle" fill="#79746A">spans S₁ … S_P</text>
+        <path d="M170 77 L200 77" stroke="#79746A" stroke-width="1.7" marker-end="url(#l-ah)"/>
+
+        <rect x="202" y="44" width="168" height="66" rx="10" fill="#FBFAF6" stroke="#DCD6C8" stroke-width="1.5"/>
+        <text x="286" y="66" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1A1915">Within-span pool</text>
+        <text x="286" y="84" font-size="10" text-anchor="middle" fill="#403C34">P per-head summaries</text>
+        <text x="286" y="100" font-size="10" text-anchor="middle" fill="#403C34">K̃, Ṽ ∈ (B,H,P,D)</text>
+        <path d="M370 77 L400 77" stroke="#79746A" stroke-width="1.7" marker-end="url(#l-ah)"/>
+
+        <rect x="402" y="44" width="168" height="66" rx="10" fill="#FBFAF6" stroke="#DCD6C8" stroke-width="1.5"/>
+        <text x="486" y="66" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1A1915">Cross-span pool</text>
+        <text x="486" y="84" font-size="10" text-anchor="middle" fill="#403C34">one summary K*, V*</text>
+        <text x="486" y="100" font-size="10" text-anchor="middle" fill="#403C34">position-free</text>
+        <path d="M570 77 L600 77" stroke="#D97757" stroke-width="1.8" marker-end="url(#l-ahr)"/>
+
+        <rect x="602" y="44" width="160" height="66" rx="10" fill="rgba(217,119,87,.13)" stroke="#D97757" stroke-width="1.8"/>
+        <text x="682" y="66" font-size="11.5" font-weight="700" text-anchor="middle" fill="#B5552F">Broadcast to receiver</text>
+        <text x="682" y="84" font-size="9.5" text-anchor="middle" fill="#403C34">replaces the token-</text>
+        <text x="682" y="99" font-size="9.5" text-anchor="middle" fill="#403C34">aligned sharer cache</text>
+
+        <text x="391" y="128" font-size="9.5" text-anchor="middle" fill="#79746A">no token alignment · span count P can be chosen at inference · one checkpoint, many partitions</text>
+
+        <!-- handoff into core -->
+        <path d="M682 110 L682 146 L308 146 L308 172" stroke="#D97757" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#l-ahr)"/>
+
+        <!-- ===== BOTTOM BAND: CORE LCF ===== -->
+        <text x="20" y="170" font-size="11" font-weight="700" fill="#79746A">CORE LCF PROJECTOR · one per receiver layer</text>
+        <line x1="20" y1="178" x2="762" y2="178" stroke="#DCD6C8" stroke-width="1"/>
+
+        <!-- inputs -->
+        <rect x="20" y="196" width="132" height="34" rx="8" fill="rgba(61,106,143,.10)" stroke="#3d6a8f" stroke-width="1.4"/>
+        <text x="86" y="217" font-size="11" font-weight="700" text-anchor="middle" fill="#274a68">Sharer K , V</text>
+        <rect x="20" y="234" width="132" height="34" rx="8" fill="#F3F6F1" stroke="#3f6b40" stroke-width="1.4"/>
+        <text x="86" y="255" font-size="11" font-weight="700" text-anchor="middle" fill="#3f6b40">Receiver K , V</text>
+        <path d="M152 232 L182 232" stroke="#79746A" stroke-width="1.7" marker-end="url(#l-ah)"/>
+
+        <!-- concat -->
+        <rect x="184" y="200" width="118" height="64" rx="10" fill="#FBFAF6" stroke="#DCD6C8" stroke-width="1.5"/>
+        <text x="243" y="222" font-size="11" font-weight="700" text-anchor="middle" fill="#1A1915">Concat &amp;</text>
+        <text x="243" y="237" font-size="11" font-weight="700" text-anchor="middle" fill="#1A1915">flatten heads</text>
+        <text x="243" y="254" font-size="9.5" text-anchor="middle" fill="#79746A">4HD = 2304</text>
+        <path d="M302 232 L332 232" stroke="#D97757" stroke-width="1.9" marker-end="url(#l-ahr)"/>
+
+        <!-- bottleneck -->
+        <rect x="334" y="200" width="120" height="64" rx="10" fill="rgba(217,119,87,.13)" stroke="#D97757" stroke-width="1.9"/>
+        <text x="394" y="221" font-size="11" font-weight="700" text-anchor="middle" fill="#B5552F">Down-project</text>
+        <text x="394" y="237" font-size="11" font-weight="700" text-anchor="middle" fill="#B5552F">latent d</text>
+        <text x="394" y="254" font-size="9.5" text-anchor="middle" fill="#403C34">d ∈ {64…512}</text>
+        <path d="M454 232 L484 232" stroke="#79746A" stroke-width="1.7" marker-end="url(#l-ah)"/>
+
+        <!-- mlp/split -->
+        <rect x="486" y="200" width="118" height="64" rx="10" fill="#FBFAF6" stroke="#DCD6C8" stroke-width="1.5"/>
+        <text x="545" y="222" font-size="11" font-weight="700" text-anchor="middle" fill="#1A1915">MLP · split</text>
+        <text x="545" y="239" font-size="10" text-anchor="middle" fill="#403C34">z_K , z_V</text>
+        <text x="545" y="255" font-size="9.5" text-anchor="middle" fill="#79746A">up-project → Δ_K, Δ_V</text>
+        <path d="M604 232 L634 232" stroke="#79746A" stroke-width="1.7" marker-end="url(#l-ah)"/>
+
+        <!-- gate/add -->
+        <rect x="636" y="200" width="126" height="64" rx="10" fill="#F3F6F1" stroke="#3f6b40" stroke-width="1.6"/>
+        <text x="699" y="221" font-size="11" font-weight="700" text-anchor="middle" fill="#3f6b40">Gate ⊙ α + add</text>
+        <text x="699" y="238" font-size="9.5" text-anchor="middle" fill="#403C34">Gumbel g ∈ {0,1}</text>
+        <text x="699" y="254" font-size="10" font-weight="700" text-anchor="middle" fill="#3f6b40">→ enriched R′</text>
+
+        <!-- annotations -->
+        <rect x="184" y="286" width="270" height="30" rx="8" fill="#FBFAF6" stroke="#DCD6C8" stroke-width="1.2"/>
+        <text x="319" y="305" font-size="10" text-anchor="middle" fill="#403C34">one shared K+V pipeline (not two) · d=256 &gt; d=512</text>
+        <rect x="466" y="286" width="296" height="30" rx="8" fill="#F3F6F1" stroke="#3f6b40" stroke-width="1.2"/>
+        <text x="614" y="305" font-size="10" text-anchor="middle" fill="#3f6b40">Gumbel gates keep ~9 of 28 layers → a 13 MB adapter</text>
+
+        <text x="391" y="340" font-size="10.5" text-anchor="middle" fill="#79746A">C2C: two full-width fusers in receiver space · 956 MB   —   LCF: one fuser through a low-dim latent channel · 13–107 MB</text>
+      </svg>
+      <div class="cap t-en">Bottom: the core LCF projector runs once per receiver layer. It concatenates the sharer's and receiver's keys <i>and</i> values into a single tensor, squeezes it through a low-dimensional latent (the terracotta box — this is the whole trick), then up-projects to per-head residuals that a learned Gumbel gate adds into the receiver's cache. Because keys and values share one pipeline and the channel is narrow, the adapter is ~4% of C2C's, and the gates concentrate the useful signal in ~9 layers. Top: when the two agents read <i>different</i> prompts, LCF-X first pools the sharer's own context into a fixed-size, position-free summary and broadcasts that in place of a token-aligned cache — the piece that makes cache-level communication usable between genuinely different agents.</div>
+      <div class="cap t-ko">아래: 핵심 LCF 프로젝터는 수신 레이어마다 한 번씩 돈다. 송신·수신의 키 <i>와</i> 값을 하나의 텐서로 이어붙이고, 저차원 잠재(테라코타 상자 — 이것이 트릭 전부)로 짜낸 뒤, 헤드별 잔차로 다시 펼쳐 학습된 Gumbel 게이트가 수신 캐시에 더한다. 키·값이 하나의 파이프라인을 공유하고 채널이 좁기 때문에 어댑터는 C2C의 ~4%이며, 게이트는 유용한 신호를 ~9개 레이어에 집중시킨다. 위: 두 에이전트가 <i>다른</i> 프롬프트를 읽을 때, LCF-X는 먼저 송신 측 자기 컨텍스트를 고정 크기의 위치-무관 요약으로 풀링해, 토큰 정렬 캐시 대신 그것을 방송한다 — 진짜로 다른 에이전트들 사이에서 캐시 수준 통신을 쓸 수 있게 만드는 조각이다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The core idea</span><span class="t-ko">핵심 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">The reframe</span>
+        <h3>Compression, not translation</h3>
+        <p class="t-en">C2C treats cache transfer as token-by-token translation, fusing at full width in the receiver's high-dimensional cache space. LCF reframes it as <b>compressed communication</b>: project the joint key–value representation into a compact latent space, mix it there, and up-project back to receiver-cache residuals. The bottleneck is motivated by two known facts — KV states compress well within a model, and cross-model representations align approximately linearly.</p>
+        <p class="t-ko">C2C는 캐시 전송을 토큰별 번역으로 보고, 수신 모델의 고차원 캐시 공간에서 전폭으로 융합한다. LCF는 이를 <b>압축된 통신</b>으로 재구성한다: 결합된 키–값 표현을 작은 잠재 공간으로 투영해 거기서 섞고, 다시 수신 캐시 잔차로 펼친다. 이 병목은 두 가지 알려진 사실에 근거한다 — KV 상태는 모델 내부에서 잘 압축되고, 모델 간 표현은 근사적으로 선형 정렬된다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">The saving</span>
+        <h3>One shared K+V pipeline</h3>
+        <p class="t-en">C2C duplicates its entire fuser — one copy for keys, one for values. But keys and values are projections of the <i>same</i> hidden state (newer architectures like Gemma even share a unified KV tensor). LCF fuses them jointly through a single pipeline, then splits late. Combined with the narrow latent (d=128 → 693K params/layer), the adapter drops from 477.8M to 19.4M parameters — a 24.5× cut.</p>
+        <p class="t-ko">C2C는 융합기 전체를 복제한다 — 키용 하나, 값용 하나. 그러나 키와 값은 <i>같은</i> 은닉 상태의 투영이다(Gemma 같은 최신 구조는 통합 KV 텐서를 공유하기도 한다). LCF는 이를 하나의 파이프라인으로 함께 융합하고 나중에 분리한다. 좁은 잠재(d=128 → 레이어당 693K 파라미터)와 결합해 어댑터는 477.8M에서 19.4M 파라미터로 줄어든다 — 24.5배 감소.</p>
+      </div>
+      <div class="m">
+        <span class="tag">The extension</span>
+        <h3>LCF-X drops the shared-context rule</h3>
+        <p class="t-en">The real barrier for agents is C2C's <i>position-wise</i> requirement. LCF-X removes it with hierarchical attention pooling: split the sharer's context into P spans, pool each into one key–value summary, then pool across spans into a single per-head summary that is broadcast to the receiver. Because the pool has no P-dependent parameters, one trained checkpoint handles paragraphs, sentences, or sliding windows at inference — F1 stays within 0.32 points across a 4.7× range of span counts.</p>
+        <p class="t-ko">에이전트에게 진짜 장벽은 C2C의 <i>위치 정렬</i> 요구다. LCF-X는 계층적 어텐션 풀링으로 이를 없앤다: 송신 컨텍스트를 P개 스팬으로 나눠 각각을 하나의 키–값 요약으로 풀링하고, 스팬 전체를 다시 헤드별 단일 요약으로 풀링해 수신 모델에 방송한다. 풀에 P-의존 파라미터가 없어, 학습된 체크포인트 하나가 추론 시 문단·문장·슬라이딩 윈도우를 모두 처리한다 — 스팬 수가 4.7배 달라져도 F1은 0.32점 이내로 유지된다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">The pruning</span>
+        <h3>Communication lives in ~9 layers</h3>
+        <p class="t-en">Each receiver layer gets its own independent projector, and each carries a Gumbel-sigmoid gate that anneals to a hard on/off at inference. After training, a gate audit shows six layers are already dead and three more are net-harmful by ablation. Keep the top-9 and you lose almost nothing — a purely structural prune, no fine-tuning, that lands the 13 MB / 76×-smaller adapter.</p>
+        <p class="t-ko">각 수신 레이어는 독립 프로젝터를 갖고, 각각 추론 시 하드 on/off로 수렴하는 Gumbel-sigmoid 게이트를 지닌다. 학습 후 게이트 감사를 해보면 여섯 레이어는 이미 죽어 있고, 세 레이어는 절제(ablation) 기준 순손해다. 상위 9개만 남기면 거의 아무것도 잃지 않는다 — 미세조정 없는 순수 구조적 가지치기로, 13 MB / 76배 작은 어댑터에 도달한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Prefill both. </span><span class="t-ko">양쪽 프리필. </span></b><span class="t-en">The frozen sharer and receiver each read their prompt and emit per-layer, per-head key and value tensors. Both base models stay frozen throughout — only the projector trains.</span><span class="t-ko">고정된 송신·수신 모델이 각자 프롬프트를 읽고 레이어별·헤드별 키·값 텐서를 내놓는다. 두 기본 모델은 내내 고정이며, 프로젝터만 학습된다.</span></li>
+      <li><b><span class="t-en">Join &amp; compress. </span><span class="t-ko">결합·압축. </span></b><span class="t-en">At each receiver layer, concatenate the sharer's and receiver's K and V into one tensor (4HD = 2304 wide), flatten the heads, and down-project to a narrow latent d, followed by a small MLP.</span><span class="t-ko">수신 레이어마다 송신·수신의 K·V를 하나의 텐서(4HD = 2304 폭)로 이어붙이고, 헤드를 평탄화한 뒤, 좁은 잠재 d로 내려 투영하고 작은 MLP를 통과시킨다.</span></li>
+      <li><b><span class="t-en">Split &amp; up-project. </span><span class="t-ko">분리·상향 투영. </span></b><span class="t-en">Split the latent into z_K and z_V and up-project each back to receiver-cache shape, producing residual edits Δ_K and Δ_V.</span><span class="t-ko">잠재를 z_K와 z_V로 분리하고 각각을 수신 캐시 형태로 다시 상향 투영해 잔차 편집 Δ_K, Δ_V를 만든다.</span></li>
+      <li><b><span class="t-en">Gate &amp; add. </span><span class="t-ko">게이트·가산. </span></b><span class="t-en">Scale each residual by a per-head weight α, mask it with a learned Gumbel-sigmoid layer gate g (hard 0/1 at inference), and add it to the receiver's cache: R′ = R + g·(α⊙Δ). Then the receiver decodes as usual.</span><span class="t-ko">각 잔차를 헤드별 가중치 α로 스케일하고, 학습된 Gumbel-sigmoid 레이어 게이트 g(추론 시 하드 0/1)로 마스킹한 뒤 수신 캐시에 더한다: R′ = R + g·(α⊙Δ). 이후 수신 모델은 평소대로 디코딩한다.</span></li>
+      <li><b><span class="t-en">Pool first, if contexts differ. </span><span class="t-ko">컨텍스트가 다르면 먼저 풀링. </span></b><span class="t-en">For LCF-X, insert a front-end before step 2: hierarchically attention-pool the sharer's own context into one fixed-size, position-free K*/V* summary and broadcast it, so the two models never need matching token positions.</span><span class="t-ko">LCF-X에서는 2단계 앞에 프런트엔드를 끼운다: 송신 측 자기 컨텍스트를 계층적 어텐션으로 하나의 고정 크기·위치-무관 K*/V* 요약으로 풀링해 방송한다. 그러면 두 모델은 토큰 위치를 맞출 필요가 전혀 없다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Cache-level communication does <b>not</b> need full-width transfer. A latent channel ~4% the size of C2C matches or beats it — and the fact that d=256 outperforms d=512 says the useful cross-model signal is genuinely low-dimensional, so the bottleneck doubles as a regularizer.</p><p class="t-ko">캐시 수준 통신에 전폭 전송은 <b>필요없다</b>. C2C의 ~4% 크기 잠재 채널이 그것을 맞추거나 이긴다 — 그리고 d=256이 d=512를 능가한다는 사실은 유용한 모델 간 신호가 정말로 저차원임을 뜻하므로, 병목은 정규화 역할도 겸한다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The real unlock is <b>LCF-X dropping the shared-context assumption</b>. Cross-context transfer with a fixed-size summary beats text on both axes at once (+23% EM, 8.5× faster first token) — the first cache-level channel that works when agents genuinely read different things.</p><p class="t-ko">진짜 돌파구는 <b>LCF-X가 공유 컨텍스트 가정을 버린 것</b>이다. 고정 크기 요약을 쓰는 서로 다른 컨텍스트 전송이 텍스트를 두 축에서 동시에 이긴다(EM +23%, 첫 토큰 8.5배 빠름) — 에이전트가 진짜 다른 것을 읽을 때 작동하는 최초의 캐시 수준 채널이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Inter-model communication is <b>sparse across depth</b>: 9 of 28 receiver layers carry almost all the benefit. A gate-then-ablate prune gives a 13 MB adapter with no retraining — a reminder that where information enters a model matters as much as how much.</p><p class="t-ko">모델 간 통신은 <b>깊이 방향으로 희소</b>하다: 28개 수신 레이어 중 9개가 이득의 거의 전부를 나른다. 게이트 후 절제 가지치기로 재학습 없이 13 MB 어댑터가 나온다 — 정보가 모델의 <i>어디로</i> 들어가는지가 <i>얼마나</i> 들어가는지만큼 중요하다는 상기.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> everything here runs at <b>0.5–0.6B</b> parameters on a single sharer→receiver Qwen pair; the paper itself files larger scales and cross-family pairs under "future work," while the very C2C baseline it beats was demonstrated across model families. The cross-context win is confounded: LCF-X is trained <i>directly on HotpotQA-bridge</i> with a symmetric Qwen3-0.6B/Qwen3-0.6B pair, and the authors concede they "cannot fully separate transfer from tuned adaptation of the receiver" — so part of that +23% EM may be task fine-tuning rather than genuine model-to-model transfer. LCF-256 <i>exceeding</i> the per-question oracle (ORF) is sold as a feature, but beating an oracle should raise an eyebrow: with only single-run McNemar tests and no seeds or error bars, evaluation noise on the small benchmarks (OBQA n=500) is hard to rule out. The adapter is "patent pending," which sits awkwardly with reproducibility. And the headline "13 MB vs 956 MB" is a <b>deployment-footprint</b> claim, not a training-speed one — per-step training is only ~1.2× faster because the frozen prefills, not the adapter, dominate.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 여기 모든 것은 단일 송신→수신 Qwen 쌍에서 <b>0.5–0.6B</b> 파라미터로 돌아간다. 논문 스스로 더 큰 규모와 이종 모델 쌍을 "향후 과제"로 미루는데, 정작 그들이 이긴 C2C 기준선은 여러 모델 계열에서 입증되었다. 서로 다른 컨텍스트에서의 승리는 교란되어 있다: LCF-X는 대칭 Qwen3-0.6B/Qwen3-0.6B 쌍으로 <i>HotpotQA-bridge에서 직접</i> 학습되며, 저자들도 "전송과 수신 모델의 튜닝된 적응을 완전히 분리할 수 없다"고 인정한다 — 그래서 그 +23% EM의 일부는 진짜 모델 간 전송이 아니라 과제 미세조정일 수 있다. LCF-256이 문항별 오라클(ORF)을 <i>능가</i>하는 것은 장점으로 포장되지만, 오라클을 이긴다는 건 눈썹을 치켜올릴 일이다: 단일 실행 McNemar 검정만 있고 시드·오차 막대가 없어, 작은 벤치마크(OBQA n=500)의 평가 잡음을 배제하기 어렵다. 어댑터는 "특허 출원 중"이라 재현성과 어색하게 맞물린다. 그리고 헤드라인 "13 MB 대 956 MB"는 <b>배포 용량</b> 주장이지 학습 속도 주장이 아니다 — 스텝당 학습은 ~1.2배 빠를 뿐인데, 어댑터가 아니라 고정된 프리필이 시간을 지배하기 때문이다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2605.22863">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2605.22863">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2605.22863">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2605.22863">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Fallback pick · topic: Multi-Agent Latent Communication · an ICML 2026 accept that diversifies a KV-cache-heavy run into model-to-model latent communication, reframing Cache-to-Cache as compressed low-dimensional transfer</b> · venue: ICML 2026 (Columbia).<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-18.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>폴백 선정 · 주제: 멀티에이전트 잠재 통신 · KV 캐시에 치우친 최근 흐름을 모델 간 잠재 통신으로 다양화하는 ICML 2026 accept 논문으로, Cache-to-Cache를 압축된 저차원 전송으로 재구성한다</b> · venue: ICML 2026 (Columbia).<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-18.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
