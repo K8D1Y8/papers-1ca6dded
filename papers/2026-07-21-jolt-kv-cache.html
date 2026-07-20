@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<!-- 5-min paper summary · bilingual (EN default · KO toggle) · noindex -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · A JoLT for the KV Cache</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache · Tensor Decomposition</span><span class="t-ko">모델 압축 · KV 캐시 · 텐서 분해</span></span>
+      <span>2026 · 07 · 14</span>
+    </div>
+    <h1>A JoLT for the KV Cache<br>
+      <span class="glow t-en">— compress the cache as a 3rd-order tensor, near-lossless at 2–3×</span>
+      <span class="glow t-ko">— KV 캐시를 3차 텐서로 압축, 2–3×에서 거의 무손실</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Rahul Krishnan</b> <span class="t-en">&amp; Volker Schulz</span><span class="t-ko">, Volker Schulz</span></span>
+      <span>🏛 Universität Trier</span>
+      <span>🗓 2026-07-14</span>
+      <span>📄 <a href="https://arxiv.org/abs/2607.12550">arXiv:2607.12550</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Every prior KV-cache compressor commits early to <i>one</i> view of the cache: low-rank methods (Palu, xKV) factor a 2-D slice, quantizers (KIVI, int4) lower every entry's bit-width. <b>JoLT</b> instead sees each layer's cache as a <b>third-order tensor</b> (heads × tokens × features) and measures where the redundancy actually lives. The answer is lopsided: the <b>head and layer axes are incompressible</b>, almost all redundancy sits in the <b>token and feature axes</b>, and <b>values are 2–3× harder to compress than keys</b>. So JoLT applies a <b>partial Tucker</b> decomposition that truncates only the token/feature modes, restores the discarded energy with a <b>rotated low-bit residual</b>, and lets a <b>single Lagrangian dual</b> split one byte budget between ranks, residual bits, and keys-vs-values. Result: a <b>near-lossless 2–3× "free zone"</b> — perplexity, GSM8K, and RULER all stay within noise on both a GQA (Mistral-7B) and an MHA (LLaMA-2-13B) model — with reconstruction error <b>~10× below</b> 4-bit quant and cross-layer SVD. A randomized-SVD variant, <b>FlashJoLT</b>, is <b>5–13× faster</b> at matched quality.</p>
+    <p class="t-ko">기존 KV 캐시 압축기는 캐시를 보는 <i>한 가지</i> 관점에 일찍 못 박힌다: 저랭크(Palu, xKV)는 2차원 슬라이스를 분해하고, 양자화(KIVI, int4)는 모든 원소의 비트폭을 낮춘다. <b>JoLT</b>는 대신 각 레이어의 캐시를 <b>3차 텐서</b>(헤드 × 토큰 × 피처)로 보고 중복이 실제로 어디에 있는지 측정한다. 답은 편향돼 있다: <b>헤드·레이어 축은 압축 불가</b>, 중복은 거의 전부 <b>토큰·피처 축</b>에 있으며, <b>value가 key보다 2–3× 압축하기 어렵다</b>. 그래서 JoLT는 토큰/피처 모드만 잘라내는 <b>부분 Tucker</b> 분해를 적용하고, 버려진 에너지를 <b>회전된 저비트 잔차</b>로 복원하며, <b>하나의 라그랑주 쌍대</b>가 하나의 바이트 예산을 랭크·잔차 비트·key/value 사이로 나눈다. 결과는 <b>거의 무손실인 2–3× "프리존"</b> — perplexity·GSM8K·RULER가 GQA(Mistral-7B)와 MHA(LLaMA-2-13B) 모두에서 노이즈 수준을 유지 — 이고, 재구성 오차는 4비트 양자화·크로스레이어 SVD보다 <b>약 10× 낮다</b>. 랜덤화 SVD 변형 <b>FlashJoLT</b>는 동일 품질에서 <b>5–13× 빠르다</b>.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">At long context the KV cache — not the model weights — sets the ceiling on throughput. Shrinking it without hurting quality is a direct lever on how cheaply a model serves long inputs.</p>
+    <p class="lead t-ko">긴 컨텍스트에서는 모델 가중치가 아니라 KV 캐시가 처리량의 상한을 결정한다. 품질을 해치지 않고 이를 줄이는 것은 모델이 긴 입력을 얼마나 싸게 서빙하는지에 직접 작용하는 레버다.</p>
+    <p class="t-en">The paper's contribution is less a new trick than a new <i>frame</i>. A 2-D factorization has to pick one axis of redundancy and ignore the rest; a fixed-bit quantizer can't even <i>reach</i> the modest 2–3× band where quality is still free (4-bit already overshoots to ~4×). By pricing Tucker ranks and residual bits on the same error scale and solving one budgeted allocation, JoLT lands exactly in that intermediate band — and shows it is essentially free. The catch, stated plainly by the authors, is that the win today is in <i>persistent storage</i>, not decode speed.</p>
+    <p class="t-ko">이 논문의 기여는 새로운 트릭이라기보다 새로운 <i>관점</i>이다. 2차원 분해는 중복의 한 축만 고르고 나머지를 버려야 하고, 고정 비트 양자화는 품질이 아직 공짜인 2–3× 대역에 <i>도달조차</i> 못 한다(4비트는 이미 ~4×로 넘어간다). Tucker 랭크와 잔차 비트를 같은 오차 척도로 값 매기고 하나의 예산 배분으로 풀어, JoLT는 바로 그 중간 대역에 정확히 착지하고 그것이 사실상 공짜임을 보인다. 저자들이 분명히 밝힌 한계는, 오늘의 이득이 <i>디코드 속도</i>가 아니라 <i>영속 저장</i>에 있다는 점이다.</p>
+    <figure class="fig">
+      <img src="fig/2607.12550/fig1.png" alt="Perplexity change vs. compression ratio for Mistral-7B (GQA) and LLaMA-2-13B (MHA); shaded 2-3x free zone is near-lossless, MHA cliff peaks near +105% at 7x.">
+      <figcaption class="t-en"><b>Figure 1.</b> Perplexity change vs. compression ratio (T=1024). The shaded 2–3× <b>free zone</b> is near-lossless on both architectures. Beyond it they split: the GQA model (Mistral) degrades smoothly (~4% per step), while the MHA model (LLaMA) falls off a <b>sharp cliff</b> at 4–5× and peaks near +105% at 7×.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> 압축비 대 perplexity 변화(T=1024). 음영 처리된 2–3× <b>프리존</b>은 두 아키텍처 모두에서 거의 무손실이다. 그 너머로는 갈라진다: GQA 모델(Mistral)은 완만히 저하(스텝당 ~4%)하는 반면, MHA 모델(LLaMA)은 4–5×에서 <b>가파른 절벽</b>으로 떨어져 7×에서 약 +105%로 정점을 찍는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2607.12550</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">2–3×</div><div class="l"><span class="t-en">near-lossless "free zone" compression</span><span class="t-ko">거의 무손실 "프리존" 압축</span></div></div>
+      <div class="stat"><div class="n">0.009 / 0.006</div><div class="l"><span class="t-en">K / V rel. Frobenius error at 2×</span><span class="t-ko">2×에서 K / V 상대 프로베니우스 오차</span></div></div>
+      <div class="stat"><div class="n">~10×</div><div class="l"><span class="t-en">lower error than int4 quant &amp; xKV</span><span class="t-ko">int4 양자화·xKV 대비 낮은 오차</span></div></div>
+      <div class="stat"><div class="n">5–13×</div><div class="l"><span class="t-en">FlashJoLT compression-time speedup</span><span class="t-ko">FlashJoLT 압축 시간 가속</span></div></div>
+      <div class="stat"><div class="n">4 bits</div><div class="l"><span class="t-en">residual quality knee (8-bit adds nothing)</span><span class="t-ko">잔차 품질 임계(8비트는 무의미)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Reconstruction fidelity — the headline result</span><span class="t-ko">재구성 정확도 — 핵심 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2.</b> Relative Frobenius reconstruction error at 2× (T=1024). Lower is better. JoLT's error is ~an order of magnitude below both a strong 4-bit quantizer and cross-layer SVD, and is identical (0.009 / 0.006) on Mistral-7B and LLaMA-2-13B.</caption>
+        <caption class="t-ko"><b>표 2.</b> 2×에서 상대 프로베니우스 재구성 오차(T=1024). 낮을수록 좋다. JoLT의 오차는 강력한 4비트 양자화기와 크로스레이어 SVD보다 약 한 자릿수 낮고, Mistral-7B와 LLaMA-2-13B에서 동일(0.009 / 0.006)하다.</caption>
+        <thead><tr><th><span class="t-en">Method</span><span class="t-ko">방법</span></th><th>K error ↓</th><th>V error ↓</th><th><span class="t-en">vs JoLT</span><span class="t-ko">JoLT 대비</span></th></tr></thead>
+        <tbody>
+          <tr><td><b>JoLT (ours)</b></td><td class="up">0.009</td><td class="up">0.006</td><td><span class="t-en">—</span><span class="t-ko">—</span></td></tr>
+          <tr><td>int4 per-channel</td><td>0.080</td><td>0.131</td><td><span class="t-en">9–22× worse</span><span class="t-ko">9–22× 나쁨</span></td></tr>
+          <tr><td>xKV (cross-layer SVD)</td><td>0.077</td><td>0.237</td><td><span class="t-en">9–40× worse</span><span class="t-ko">9–40× 나쁨</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en"><small>Values shown for Mistral-7B (GQA); LLaMA-2-13B is identical for JoLT and within a few % for baselines. int4 is a fixed-rate quantizer whose floor sits at ~3.97×, so it cannot actually express a 2× point — it is shown at its native rate.</small></p>
+    <p class="t-ko"><small>표시된 값은 Mistral-7B(GQA) 기준이며, LLaMA-2-13B는 JoLT에서 동일하고 baseline은 수 % 이내 차이다. int4는 하한이 ~3.97×인 고정 비율 양자화기라 2× 지점을 실제로 표현할 수 없어 자기 native 비율로 표기했다.</small></p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three moving parts</span><span class="t-ko">세 가지 핵심 요소</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">backbone</span>
+        <h3>Partial Tucker</h3>
+        <p class="t-en">Decompose the layer tensor but truncate <b>only</b> the token and feature modes (via ST-HOSVD), leaving head and layer axes as identity factors. Letting a full 4-mode allocator loose just reverts head/layer to full rank anyway — and the partial form runs 2.4–3.0× faster than full HOOI.</p>
+        <p class="t-ko">레이어 텐서를 분해하되 <b>토큰·피처 모드만</b> 자르고(ST-HOSVD) 헤드·레이어 축은 항등 인자로 둔다. 4모드 배분기를 풀어놓으면 어차피 헤드·레이어를 풀 랭크로 되돌린다 — 부분 형태는 풀 HOOI보다 2.4–3.0× 빠르다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">fidelity</span>
+        <h3>Rotated low-bit residual</h3>
+        <p class="t-en">Pure low-rank throws away real energy — fatal on values' flat spectrum. JoLT takes the truncation residual, applies a random orthogonal (JL) rotation to spread out outliers, and quantizes it at b∈{0,2,4,8} bits. This is the lever that turns a lossy backbone near-lossless.</p>
+        <p class="t-ko">순수 저랭크는 실제 에너지를 버린다 — value의 평평한 스펙트럼에선 치명적이다. JoLT는 절단 잔차에 랜덤 직교(JL) 회전을 걸어 이상치를 퍼뜨린 뒤 b∈{0,2,4,8} 비트로 양자화한다. 이것이 손실 백본을 거의 무손실로 바꾸는 레버다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">allocation</span>
+        <h3>One Lagrangian dual</h3>
+        <p class="t-en">Ranks and residual bits compete for the same bytes, so JoLT prices both on one error scale and minimizes total error under a byte budget B. A single multiplier λ, tuned by bisection, moves budget between ranks/bits <i>and</i> between keys/values — funding the hard value residual, starving the easy key residual.</p>
+        <p class="t-ko">랭크와 잔차 비트는 같은 바이트를 두고 경쟁하므로, JoLT는 둘을 하나의 오차 척도로 값 매기고 바이트 예산 B 하에서 총 오차를 최소화한다. 이분법으로 조정되는 단일 승수 λ가 랭크/비트 <i>그리고</i> key/value 사이로 예산을 옮긴다 — 어려운 value 잔차엔 몰아주고, 쉬운 key 잔차엔 줄인다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Measure the spectrum.</span><span class="t-ko">스펙트럼을 측정한다.</span></b><span class="t-en"> Unfold the cache along each axis: head ratio ≈1.5 (incompressible), keys hit 10% error at rank 228/1024 but values need 563/1024 — values are 2–3× harder.</span><span class="t-ko"> 캐시를 각 축으로 언폴딩: 헤드 비율 ≈1.5(압축 불가), key는 랭크 228/1024에서 10% 오차지만 value는 563/1024 필요 — value가 2–3× 더 어렵다.</span></li>
+      <li><b><span class="t-en">Group &amp; partial-Tucker.</span><span class="t-ko">그룹화 후 부분 Tucker.</span></b><span class="t-en"> Partition layers into contiguous groups; per group and per K/V, truncate only token/feature modes to ranks (r_T, r_d).</span><span class="t-ko"> 레이어를 인접 그룹으로 나누고, 그룹·K/V별로 토큰/피처 모드만 랭크 (r_T, r_d)로 자른다.</span></li>
+      <li><b><span class="t-en">Rotate &amp; quantize the residual.</span><span class="t-ko">잔차를 회전·양자화.</span></b><span class="t-en"> Take R = X − X̃, apply a JL rotation, quantize at ≤4 bits to recover discarded energy; decode inverts the rotation.</span><span class="t-ko"> R = X − X̃를 취해 JL 회전을 걸고 ≤4비트로 양자화해 버려진 에너지를 복원; 디코딩은 회전을 역산한다.</span></li>
+      <li><b><span class="t-en">Allocate jointly.</span><span class="t-ko">공동 배분.</span></b><span class="t-en"> Solve the Lagrangian relaxation cell-by-cell over a finite (r_T, r_d, b) grid; bisect λ until total bytes = budget B.</span><span class="t-ko"> 유한한 (r_T, r_d, b) 격자에서 셀 단위로 라그랑주 완화를 풀고, 총 바이트 = 예산 B가 될 때까지 λ를 이분한다.</span></li>
+      <li><b><span class="t-en">Go fast (FlashJoLT).</span><span class="t-ko">빠르게(FlashJoLT).</span></b><span class="t-en"> Swap the exact token-mode SVD for a randomized one with tail-mass accounting → 5–13× faster, same free-zone quality.</span><span class="t-ko"> 정확한 토큰 모드 SVD를 tail-mass 보정이 있는 랜덤화 SVD로 교체 → 5–13× 빠르고 프리존 품질은 동일.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">A 2–3× KV cache is essentially free: perplexity, GSM8K, and RULER retrieval all stay within noise of the uncompressed baseline on both a GQA and an MHA model.</p><p class="t-ko">2–3× KV 캐시는 사실상 공짜다: perplexity·GSM8K·RULER 검색이 GQA와 MHA 모두에서 무압축 기준 대비 노이즈 수준을 유지한다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Treat the cache as a tensor, not a matrix. Different axes carry wildly different redundancy — spend the budget only where it exists (token &amp; feature), pin what doesn't (head &amp; layer).</p><p class="t-ko">캐시를 행렬이 아닌 텐서로 다뤄라. 축마다 중복이 천차만별이다 — 중복이 있는 곳(토큰·피처)에만 예산을 쓰고 없는 곳(헤드·레이어)은 고정하라.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Keys ≠ values. Values have a flat spectrum and are 2–3× harder to compress, so they deserve separate rank and bit budgets — the joint dual exploits exactly this asymmetry.</p><p class="t-ko">key ≠ value. value는 스펙트럼이 평평해 2–3× 압축이 어려우므로 별도의 랭크·비트 예산을 받아야 한다 — 공동 쌍대가 바로 이 비대칭을 활용한다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> Today JoLT is a <i>storage</i> win, not a speed win — decode must reconstruct the cache from its factors every step, and the fused attention kernel that would give decode parity is "actively developing," not shown. The 2–3× band is also modest (plain 2-bit/4-bit quant already reaches higher ratios), and several load-bearing claims — that Tucker beats CP/TT/t-SVD, that a full 4-mode allocator reverts to the partial one — are deferred to an unpublished "companion paper," so they can't be verified from this paper alone. Evidence is two ≤13B, older-generation models on a single A100; no MLA models, no larger scale, no multi-needle long-context.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 현재 JoLT는 <i>저장</i> 이득이지 속도 이득이 아니다 — 디코딩은 매 스텝 인자로부터 캐시를 재구성해야 하고, 디코드 동등성을 줄 융합 어텐션 커널은 "개발 중"일 뿐 제시되지 않았다. 2–3× 대역도 소박하며(단순 2/4비트 양자화는 이미 더 높은 비율에 도달), 핵심을 떠받치는 여러 주장 — Tucker가 CP/TT/t-SVD를 이긴다, 4모드 배분기가 부분 형태로 회귀한다 — 은 미출간 "companion paper"로 미뤄져 이 논문만으로는 검증할 수 없다. 근거는 단일 A100에서의 구세대 ≤13B 모델 2개뿐 — MLA 모델·더 큰 스케일·멀티니들 장문맥은 없다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2607.12550">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2607.12550">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2607.12550">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2607.12550">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>wishlist exhausted → fallback: freshest strong alphaXiv match on Model Compression / KV Cache (2026-07-14), a novel tensor-view angle (partial Tucker + rotated residual) on cache compression</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-07-21.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 소진 → 폴백: Model Compression / KV Cache 분야에서 가장 신선하고 강한 alphaXiv 매치(2026-07-14), 캐시 압축에 대한 새로운 텐서 관점(부분 Tucker + 회전 잔차)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-07-21.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
