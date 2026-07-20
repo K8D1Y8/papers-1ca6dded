@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · STILL: Selecting Tokens for Intra-Layer Hybrid Attention to Linearize LLMs</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Efficient Attention · LLM Linearization</span><span class="t-ko">Efficient Attention · LLM Linearization</span></span>
+      <span>2026 · 07 · 20</span>
+    </div>
+    <h1>STILL: Token-Selective Intra-Layer Hybrid Attention<br><span class="glow t-en">— Linearize the LLM, but let softmax keep the tokens that actually matter</span><span class="glow t-ko">— LLM을 선형화하되, 정말 중요한 토큰만은 softmax에 남겨라</span></h1>
+    <div class="meta">
+      <span>👥 <b>Weikang Meng</b>, Liangyu Huo <span class="t-en">et al.</span><span class="t-ko">외 5인</span></span>
+      <span>🏛 HIT Shenzhen · Pengcheng Lab · UQ · Huawei</span>
+      <span>🗓 2026.02.02</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.02180">arXiv:2602.02180</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Linearizing a pretrained LLM (LoLCATs, Liger) means giving softmax attention a <b>fixed local window</b> and summarizing the rest with linear attention — a <em>position</em>-based split that silently drops globally important tokens. STILL makes the split <em>content</em>-based: a <span class="hl">Self-Saliency Score</span>, computable inside a sliding window, flags tokens whose attention depends strongly on themselves (negation, modality, quantifiers — the word cloud is literally "without / no / never / if"), and routes them to sparse softmax while linear attention absorbs the rest. A <span class="hl">Norm-Preserved feature map</span> stops the learnable linear kernel from wrecking pretrained vector magnitudes. With just <b>0.04B training tokens</b>, the linearized Llama 3.1 8B hits <b>MMLU 61.3 vs 50.8</b> for the best prior method, <em>beats its own teacher</em> on the no-MMLU average (74.7 vs 73.2), and scores <b>86.2 vs 8.8</b> on 4K needle-in-a-haystack — at 45% less memory and 28% faster decoding beyond 8K.</p>
+    <p class="t-ko">사전학습 LLM의 선형화(LoLCATs, Liger)는 softmax 어텐션에 <b>고정 로컬 창</b>을 주고 나머지를 선형 어텐션으로 요약한다 — 전역적으로 중요한 토큰을 조용히 버리는 <em>위치</em> 기반 분할이다. STILL은 이 분할을 <em>내용</em> 기반으로 바꾼다: 슬라이딩 창 안에서 계산 가능한 <span class="hl">Self-Saliency Score</span>가 자기 자신에 대한 어텐션 의존이 강한 토큰(부정·양상·양화사 — 워드클라우드가 말 그대로 "without / no / never / if")을 골라 희소 softmax로 보내고, 나머지는 선형 어텐션이 흡수한다. <span class="hl">Norm 보존 특징 사상</span>은 학습형 선형 커널이 사전학습된 벡터 크기를 망치는 걸 막는다. 단 <b>0.04B 학습 토큰</b>으로, 선형화된 Llama 3.1 8B가 <b>MMLU 61.3 vs 기존 최고 50.8</b>, MMLU 제외 평균에선 <em>자기 teacher를 초과</em>(74.7 vs 73.2), 4K needle-in-a-haystack에서 <b>86.2 vs 8.8</b> — 메모리 45% 절감, 8K 이상 디코딩 28% 가속과 함께.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">"Recent tokens get softmax" is a heuristic, not a law — importance doesn't live at fixed positions.</p>
+    <p class="lead t-ko">"최근 토큰에 softmax"는 법칙이 아니라 휴리스틱이다 — 중요도는 고정 위치에 살지 않는다.</p>
+    <p class="t-en">Training linear-attention LLMs from scratch costs trillions of tokens and still lags softmax. The practical alternative is <strong>linearization</strong>: take a pretrained Transformer, keep a little softmax, replace the rest with linear attention, and fine-tune briefly. Intra-layer hybrids (LoLCATs, Liger) do this with a sliding window — softmax for the last W tokens, linear attention for everything older. But the tokens that steer meaning — a "not" three sentences ago, the variable name from the top of the file — are exactly the ones a positional window evicts into the lossy linear summary. STILL's question: can we cheaply detect <em>which</em> tokens deserve softmax, regardless of where they sit?</p>
+    <p class="t-ko">선형 어텐션 LLM을 처음부터 학습하면 수조 토큰이 들고도 softmax에 뒤진다. 실용적 대안은 <strong>선형화</strong>: 사전학습 Transformer를 가져와 softmax를 조금만 남기고 나머지를 선형 어텐션으로 바꾼 뒤 짧게 미세조정한다. 층내(intra-layer) 하이브리드(LoLCATs, Liger)는 이를 슬라이딩 창으로 한다 — 마지막 W 토큰은 softmax, 더 오래된 건 전부 선형 어텐션. 그러나 의미를 조종하는 토큰들 — 세 문장 전의 "not", 파일 맨 위의 변수명 — 이 바로 위치 창이 손실 있는 선형 요약으로 퇴출시키는 것들이다. STILL의 질문: 위치와 무관하게 <em>어떤</em> 토큰이 softmax를 받을 자격이 있는지 싸게 감지할 수 있는가?</p>
+    <figure class="fig">
+      <img src="fig/2602.02180/x1.png" alt="Attention map comparison: LoLCATs, Liger, STILL with selected softmax columns">
+      <figcaption class="t-en"><b>Figure 1.</b> Where each design spends softmax. LoLCATs/Liger: a fixed local band (red) + linear attention (green). STILL adds <b>selected softmax columns</b> (yellow) for content-salient tokens like "although" and "night" — high-fidelity attention that follows importance, not position.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 각 설계가 softmax를 쓰는 곳. LoLCATs/Liger: 고정 로컬 밴드(빨강) + 선형 어텐션(초록). STILL은 "although"·"night" 같은 내용상 중요한 토큰에 <b>선택된 softmax 열</b>(노랑)을 더한다 — 위치가 아니라 중요도를 따라가는 고충실 어텐션.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.02180</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">61.3</div><div class="l"><span class="t-en">MMLU after linearization<br>(best prior: 50.8 · teacher: 68.0)</span><span class="t-ko">선형화 후 MMLU<br>(기존 최고 50.8 · teacher 68.0)</span></div></div>
+      <div class="stat"><div class="n">74.7</div><div class="l"><span class="t-en">Avg wo. MMLU —<br>above the teacher's 73.2</span><span class="t-ko">MMLU 제외 평균 —<br>teacher(73.2) 상회</span></div></div>
+      <div class="stat"><div class="n">0.04B</div><div class="l"><span class="t-en">Training tokens<br>(Llamba needs 12B for less)</span><span class="t-ko">학습 토큰<br>(Llamba는 12B로도 그 이하)</span></div></div>
+      <div class="stat"><div class="n">86.2 vs 8.8</div><div class="l"><span class="t-en">S-NIAH-1 @4K, ≤512 budget<br>STILL vs LoLCATs</span><span class="t-ko">S-NIAH-1 @4K, ≤512 예산<br>STILL vs LoLCATs</span></div></div>
+      <div class="stat"><div class="n">47.9 vs 7.2</div><div class="l"><span class="t-en">Extended RULER @4K avg<br>(even Mamba2-from-scratch: 44.7)</span><span class="t-ko">확장 RULER @4K 평균<br>(스크래치 Mamba2도 44.7)</span></div></div>
+      <div class="stat"><div class="n">−45% / +28%</div><div class="l"><span class="t-en">Memory / decoding speed<br>beyond 8K tokens</span><span class="t-ko">8K 초과에서<br>메모리 / 디코딩 속도</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Score in the window</span><span class="t-ko">창 안에서 점수화</span></div>
+          <div class="sub"><span class="t-en">attention with vs without self-term</span><span class="t-ko">self 항 포함 vs 제외 어텐션</span></div>
+          <div class="latent"><span class="t-en">Self-Saliency Score</span><span class="t-ko">Self-Saliency Score</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Route by content</span><span class="t-ko">내용으로 라우팅</span></div>
+          <div class="sub"><span class="t-en">top-λ per chunk → softmax cache</span><span class="t-ko">청크당 상위 λ → softmax 캐시</span></div>
+          <div class="latent"><span class="t-en">rest → linear KV state</span><span class="t-ko">나머지 → 선형 KV 상태</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Mix in one layer</span><span class="t-ko">한 층에서 혼합</span></div>
+          <div class="sub"><span class="t-en">sparse softmax + gated linear</span><span class="t-ko">희소 softmax + 게이트 선형</span></div>
+          <div class="latent"><span class="t-en">O(N) total</span><span class="t-ko">전체 O(N)</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Delayed selection</b> — a chunk is only ranked when it exits the sliding window, so routing is amortized: no per-token decisions, chunk-parallel in training and prefill.</div>
+      <div class="cap t-ko"><b>지연 선택</b> — 청크가 슬라이딩 창을 벗어날 때만 순위를 매기므로 라우팅이 상각된다: 토큰별 결정 없이, 학습·프리필에서 청크 병렬.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: choose by saliency, preserve the norms</span><span class="t-ko">아이디어: 중요도로 고르고, norm을 보존하라</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 선택</span>
+        <h3>Self-Saliency Score</h3>
+        <p class="t-en">For each token, compare its local softmax distribution <span class="term">with</span> and <span class="term">without</span> its own diagonal self-attention term; the divergence between the two is the score. Tokens whose removal reshapes attention are intrinsically salient. Crucially this needs only a <strong>sliding window</strong> — and empirically the local score is consistent with global relevance, so cheap local computation buys global routing. The chosen tokens? Overwhelmingly <em>functional operators</em>: negation, modality, quantifiers (Fig. 4 below).</p>
+        <p class="t-ko">각 토큰에 대해, 자신의 대각 self-attention 항을 <span class="term">포함한</span> 로컬 softmax 분포와 <span class="term">제외한</span> 분포를 비교한다; 둘의 발산이 점수다. 제거 시 어텐션이 재편되는 토큰이 본질적으로 중요하다. 핵심은 <strong>슬라이딩 창</strong>만으로 계산된다는 것 — 그리고 경험적으로 로컬 점수가 전역 관련성과 일치해, 싼 로컬 계산이 전역 라우팅을 산다. 선택되는 토큰은? 압도적으로 <em>기능적 연산자</em>: 부정·양상·양화사 (아래 Fig. 4).</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 보존</span>
+        <h3>Norm-Preserved feature map</h3>
+        <p class="t-en">Softmax attention is <em>norm-aware</em>: magnitudes modulate weights. But the learnable MLP in linear-attention feature maps rescales norms arbitrarily, so the linear branch operates on distorted pretrained features. NP-Map decouples direction from magnitude: <span class="term">u = f(x)/‖f(x)‖ · ‖x‖</span> — the MLP refines only direction, the pretrained norm is reinjected — then <span class="term">φ<sub>NP</sub> = [softmax(u) ⊕ softmax(−u)]</span>, plus a gate for expressivity. Ablation: NP-Map +4.9, gate +5.8, saliency selection +6.7 points on BABILong.</p>
+        <p class="t-ko">softmax 어텐션은 <em>norm 인지적</em>이다: 크기가 가중치를 조절한다. 그런데 선형 어텐션 특징 사상의 학습형 MLP는 norm을 임의로 재스케일해, 선형 가지가 왜곡된 사전학습 특징 위에서 돌게 된다. NP-Map은 방향과 크기를 분리한다: <span class="term">u = f(x)/‖f(x)‖ · ‖x‖</span> — MLP는 방향만 다듬고 사전학습 norm을 재주입 — 그 뒤 <span class="term">φ<sub>NP</sub> = [softmax(u) ⊕ softmax(−u)]</span>, 표현력을 위한 게이트 추가. Ablation: BABILong에서 NP-Map +4.9, 게이트 +5.8, 중요도 선택 +6.7점.</p>
+      </div>
+    </div>
+    <figure class="fig">
+      <img src="fig/2602.02180/x2.png" alt="STILL architecture: self-saliency scoring, NP-Map, in-layer hybrid attention, two-stage training">
+      <figcaption class="t-en"><b>Figure 2.</b> The full pipeline: ① score tokens by self-saliency inside the window, ② NP-Map re-injects pretrained norms into the linear branch, ③ selected tokens get sparse softmax while the rest flow through gated linear attention — mixed in one layer. Training (b): attention-transfer distillation (MSE to the teacher's maps), then LoRA fine-tuning.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 전체 파이프라인: ① 창 안에서 self-saliency로 토큰 점수화, ② NP-Map이 선형 가지에 사전학습 norm 재주입, ③ 선택 토큰은 희소 softmax, 나머지는 게이트 선형 어텐션 — 한 층에서 혼합. 학습(b): 어텐션 전이 증류(teacher 맵에 MSE) 후 LoRA 미세조정.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.02180</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Score inside the window</span><span class="t-ko">창 안에서 점수화</span></b><span class="t-en">While a token is in the sliding window it gets exact softmax anyway; its self-saliency is measured there for free-ish, from the with/without-diagonal divergence.</span><span class="t-ko">토큰이 슬라이딩 창 안에 있는 동안은 어차피 정확한 softmax를 받는다; 그 사이 대각 포함/제외 발산으로 self-saliency를 사실상 공짜로 잰다.</span></li>
+      <li><b><span class="t-en">Delayed, chunk-wise routing</span><span class="t-ko">지연된 청크 단위 라우팅</span></b><span class="t-en">When a chunk exits the window, rank its tokens; top-λ join the salient softmax cache, the rest are folded into the linear attention state — O(T log C) selection overhead, O(N) overall.</span><span class="t-ko">청크가 창을 벗어날 때 토큰 순위를 매겨 상위 λ는 salient softmax 캐시로, 나머지는 선형 어텐션 상태로 접어 넣는다 — 선택 오버헤드 O(T log C), 전체 O(N).</span></li>
+      <li><b><span class="t-en">Attend twice, cheaply</span><span class="t-ko">두 번, 싸게 어텐션</span></b><span class="t-en">Each query does sparse softmax over (window + selected cache) and gated linear attention over the summarized rest; outputs are mixed in-layer.</span><span class="t-ko">각 쿼리는 (창 + 선택 캐시)에 희소 softmax, 요약된 나머지에 게이트 선형 어텐션을 수행; 출력은 층 안에서 혼합된다.</span></li>
+      <li><b><span class="t-en">Distill, then LoRA</span><span class="t-ko">증류 후 LoRA</span></b><span class="t-en">Stage 1 freezes the teacher and matches attention maps (MSE); stage 2 fine-tunes with LoRA — 20M tokens of Cleaned Alpaca at length 1024, total 0.04B.</span><span class="t-ko">1단계는 teacher를 얼리고 어텐션 맵을 맞춘다(MSE); 2단계는 LoRA 미세조정 — 길이 1024의 Cleaned Alpaca 20M 토큰, 총 0.04B.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — the MMLU cliff disappears</span><span class="t-ko">결과 — MMLU 절벽이 사라진다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 excerpt (linearized from Llama 3.1 8B, 0.04B tokens).</b> Prior linearizations bleed ~17–21 MMLU points; STILL keeps reasoning nearly intact and beats the teacher on the no-MMLU average.</caption>
+        <caption class="t-ko"><b>표 1 발췌 (Llama 3.1 8B에서 선형화, 0.04B 토큰).</b> 기존 선형화는 MMLU를 ~17~21점 흘리지만, STILL은 추론을 거의 온전히 지키고 MMLU 제외 평균에선 teacher를 이긴다.</caption>
+        <thead><tr><th>Method</th><th>PIQA</th><th>ARC-c</th><th>Hella.</th><th>MMLU</th><th>Avg (w)</th><th>Avg (wo)</th></tr></thead>
+        <tbody>
+          <tr><td>Llama 3.1 8B (teacher)</td><td>81.1</td><td>55.1</td><td class="up">79.3</td><td class="up">68.0</td><td class="up">74.2</td><td>73.2</td></tr>
+          <tr><td>LoLCATs</td><td>80.9</td><td>54.7</td><td>76.6</td><td>50.8</td><td>69.9</td><td>73.7</td></tr>
+          <tr><td>Liger-GLA</td><td>80.5</td><td>55.6</td><td>75.4</td><td>46.9</td><td>68.3</td><td>72.6</td></tr>
+          <tr><td><b>STILL</b></td><td class="up">81.3</td><td class="up">56.7</td><td>79.0</td><td>61.3</td><td>72.5</td><td class="up">74.7</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en" style="margin-top:12px">Long context is where position-based routing collapses: on extended RULER at 4K, STILL averages <b>47.9</b> against LoLCATs' 7.2 and Liger's 2.1 — above even from-scratch Mamba2 (44.7). BABILong QA5 at 4K: 24 vs 6. The trend holds across Llama 3.2 1B/3B and Mistral 7B teachers.</p>
+    <p class="t-ko">위치 기반 라우팅이 무너지는 곳이 장맥락이다: 4K 확장 RULER에서 STILL 평균 <b>47.9</b> vs LoLCATs 7.2·Liger 2.1 — 스크래치 학습 Mamba2(44.7)보다도 높다. BABILong QA5 @4K: 24 vs 6. 이 경향은 Llama 3.2 1B/3B·Mistral 7B teacher에서도 유지된다.</p>
+    <figure class="fig">
+      <img src="fig/2602.02180/x4.png" alt="Word clouds of tokens most frequently routed to softmax attention">
+      <figcaption class="t-en"><b>Figure 4.</b> What the saliency score actually picks: "without", "no", "never", "almost", "if", "any" — negation, modality, and quantification. The tokens with the widest logical scope get the exact attention; content words ride the linear summary.</figcaption>
+      <figcaption class="t-ko"><b>Figure 4.</b> 중요도 점수가 실제로 고르는 것: "without", "no", "never", "almost", "if", "any" — 부정·양상·양화. 논리적 범위가 가장 넓은 토큰이 정확한 어텐션을 받고, 내용어는 선형 요약에 실린다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.02180</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🎯</span><p class="t-en"><strong>Routing is the bottleneck, not the kernel.</strong> Same budget, same training — just choosing <em>which</em> tokens keep softmax turns 7.2 into 47.9 on RULER. The linearization field was optimizing the wrong knob.</p><p class="t-ko"><strong>병목은 커널이 아니라 라우팅.</strong> 같은 예산·같은 학습에서 <em>어떤</em> 토큰이 softmax를 유지할지만 바꿔도 RULER 7.2가 47.9가 된다. 선형화 분야는 엉뚱한 손잡이를 돌리고 있었다.</p></div>
+      <div class="t"><span class="ic">🔡</span><p class="t-en"><strong>Function words are the skeleton.</strong> The saliency score independently rediscovers linguistics: negation/modality/quantifiers carry the widest scope and need exact attention. A lovely interpretability result hiding in an efficiency paper.</p><p class="t-ko"><strong>기능어가 뼈대다.</strong> 중요도 점수가 언어학을 독립적으로 재발견한다: 부정·양상·양화사가 가장 넓은 범위를 지니며 정확한 어텐션을 요구한다. 효율 논문에 숨은 사랑스러운 해석가능성 결과.</p></div>
+      <div class="t"><span class="ic">📏</span><p class="t-en"><strong>Norms are part of the pretrained contract.</strong> Letting an MLP rescale feature magnitudes silently breaks softmax's norm-awareness — reinjecting ‖x‖ is nearly free and worth ~5 points. Echoes the R-gate lesson from TriAttention: respect the model's own statistics.</p><p class="t-ko"><strong>norm도 사전학습 계약의 일부.</strong> MLP가 특징 크기를 재스케일하게 두면 softmax의 norm 인지성이 조용히 깨진다 — ‖x‖ 재주입은 거의 공짜인데 ~5점 값어치다. TriAttention의 R-게이트 교훈과 공명: 모델 자신의 통계를 존중하라.</p></div>
+      <div class="t"><span class="ic">💸</span><p class="t-en"><strong>0.04B tokens is the real headline.</strong> Matching (and partly beating) a 15T-token teacher with a 375,000× smaller adaptation budget makes linearization an afternoon job, not a pretraining run.</p><p class="t-ko"><strong>진짜 헤드라인은 0.04B 토큰.</strong> 15T 토큰 teacher를 375,000× 작은 적응 예산으로 따라잡고(일부는 추월) — 선형화가 사전학습이 아니라 반나절 작업이 된다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> "long-context" here means <b>4K</b> — RULER and BABILong stop there (64K appears only in efficiency plots, never accuracy), the model is fine-tuned at length 1024, and absolute scores at 4K remain low (S-NIAH-2 37.4, BABILong QA1 10/100) with no full-attention teacher row in those tables for calibration. STILL's cache is also reported as a range (e.g. 256~512) rather than a fixed budget, so comparisons are approximate; decoding latency is slightly <em>higher</em> than LoLCATs, with the win coming from memory. Preprint, no venue yet.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판:</b> 여기서 "장맥락"은 <b>4K</b>다 — RULER·BABILong은 거기서 끝나고(64K는 정확도 없이 효율 그래프에만 등장), 미세조정은 길이 1024에서 했으며, 4K 절대 점수는 여전히 낮고(S-NIAH-2 37.4, BABILong QA1 10/100) 그 표들엔 보정용 full-attention teacher 행이 없다. STILL의 캐시도 고정 예산이 아닌 범위(예: 256~512)로 보고돼 비교가 근사적이고, 디코딩 지연은 LoLCATs보다 약간 <em>높으며</em> 이득은 메모리에서 온다. 프리프린트, 아직 학회 미정.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.02180">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.02180">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.02180">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.02180">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Requested · topic: Efficient Sequence Models</b> (token-selective LLM linearization).<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-07-20.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>요청 · 주제: Efficient Sequence Models</b> (토큰 선택형 LLM 선형화).<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-07-20.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
