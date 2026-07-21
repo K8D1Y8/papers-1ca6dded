@@ -163,8 +163,8 @@
 
   <section>
     <div class="note">
-      <span class="t-en">⚠️ <b>One critical note:</b> "long-context" here means <b>4K</b> — RULER and BABILong stop there (64K appears only in efficiency plots, never accuracy), the model is fine-tuned at length 1024, and absolute scores at 4K remain low (S-NIAH-2 37.4, BABILong QA1 10/100) with no full-attention teacher row in those tables for calibration. STILL's cache is also reported as a range (e.g. 256~512) rather than a fixed budget, so comparisons are approximate; decoding latency is slightly <em>higher</em> than LoLCATs, with the win coming from memory. Preprint, no venue yet.</span>
-      <span class="t-ko">⚠️ <b>한 줄 비판:</b> 여기서 "장맥락"은 <b>4K</b>다 — RULER·BABILong은 거기서 끝나고(64K는 정확도 없이 효율 그래프에만 등장), 미세조정은 길이 1024에서 했으며, 4K 절대 점수는 여전히 낮고(S-NIAH-2 37.4, BABILong QA1 10/100) 그 표들엔 보정용 full-attention teacher 행이 없다. STILL의 캐시도 고정 예산이 아닌 범위(예: 256~512)로 보고돼 비교가 근사적이고, 디코딩 지연은 LoLCATs보다 약간 <em>높으며</em> 이득은 메모리에서 온다. 프리프린트, 아직 학회 미정.</span>
+      <span class="t-en">⚠️ <b>One critical note:</b> "long-context" here means <b>4K</b> — RULER and BABILong stop there (64K appears only in efficiency plots, never accuracy), and the model is fine-tuned at length 1024. Absolute scores at 4K remain low: the S-NIAH table's own full-attention teacher row scores 100 where STILL gets 86.2 (99.6 vs 19.4 on S-NIAH-3), and extended-RULER/BABILong include no teacher row at all (BABILong QA1: 10/100). Cache budgets are ranges (e.g. 256~512) but explicitly capped at the baselines' budget, so that comparison is fair-to-conservative; decoding latency is slightly <em>higher</em> than LoLCATs, with the win coming from memory. Preprint, no venue yet.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판:</b> 여기서 "장맥락"은 <b>4K</b>다 — RULER·BABILong은 거기서 끝나고(64K는 정확도 없이 효율 그래프에만 등장), 미세조정은 길이 1024에서 했다. 4K 절대 점수는 여전히 낮다: S-NIAH 표의 full-attention teacher 행은 STILL이 86.2인 곳에서 100이고(S-NIAH-3에선 99.6 vs 19.4), 확장 RULER·BABILong엔 teacher 행 자체가 없다(BABILong QA1: 10/100). 캐시 예산은 범위(예: 256~512)지만 기준선 예산 이하로 명시적으로 캡돼 있어 그 비교는 공정~보수적이다; 디코딩 지연은 LoLCATs보다 약간 <em>높으며</em> 이득은 메모리에서 온다. 프리프린트, 아직 학회 미정.</span>
     </div>
   </section>
 
