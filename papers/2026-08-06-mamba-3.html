@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<!-- 5-min paper summary · bilingual (EN default · KO toggle) · noindex -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Mamba-3</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Efficient Sequence Models · State Space Models</span><span class="t-ko">효율 시퀀스 모델 · 상태공간 모델</span></span>
+      <span>2026 · 03 · 16</span>
+    </div>
+    <h1>Mamba-3<br>
+      <span class="glow t-en">— rebuild the recurrence from SSM first principles, for the decode step</span>
+      <span class="glow t-ko">— 디코딩을 위해 SSM 제1원리로 재구성한 순환식</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Aakash Lahoti</b> <span class="t-en">et al. · Tri Dao, Albert Gu</span><span class="t-ko">외 · Tri Dao, Albert Gu</span></span>
+      <span>🏛 CMU · Princeton · Together AI · Cartesia AI</span>
+      <span>🗓 2026-03-16</span>
+      <span>📄 <a href="https://arxiv.org/abs/2603.15569">arXiv:2603.15569</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Linear models won the <i>asymptotics</i> but not the <i>decode step</i>: Mamba-2's decoding is memory-bound at roughly <b>2.5 ops/byte</b>, so the GPU sits idle, and its real-valued state can't do rotation-style state tracking (it fails <b>parity</b>). Mamba-3 fixes all three from a pure SSM viewpoint. (1) <b>Exponential-trapezoidal discretization</b> replaces the unjustified Euler heuristic, giving a three-term recurrence with <b>O(Δ³)</b> error instead of O(Δ²) — and its built-in width-2 convolution lets them <b>delete the short causal conv layer</b> entirely. (2) <b>Complex-valued states</b>, implemented as a free <b>data-dependent RoPE</b> on B and C, restore state tracking: <b>100%</b> on parity, which Mamba-2 cannot solve at all. (3) <b>MIMO</b> turns the state update's outer product into a matrix-matrix product, raising arithmetic intensity so the idle GPU actually computes. Net: <b>+1.8 pp</b> downstream accuracy over Gated DeltaNet at 1.5B, and the fastest decode kernel of the bunch — <b>0.156 ms</b> vs Mamba-2's 0.203 ms.</p>
+    <p class="t-ko">선형 모델은 <i>점근 복잡도</i>는 이겼지만 <i>디코딩 스텝</i>은 못 이겼다: Mamba-2의 디코딩은 약 <b>2.5 ops/byte</b>로 메모리 바운드라 GPU가 놀고, 실수 상태로는 회전형 상태추적을 못 한다(<b>parity</b> 실패). Mamba-3는 순수 SSM 관점에서 이 셋을 모두 고친다. (1) <b>지수-사다리꼴 이산화</b>가 근거 없던 오일러 휴리스틱을 대체해 오차가 O(Δ²)에서 <b>O(Δ³)</b>인 3항 순환식을 만들고, 내장된 너비-2 컨볼루션 덕분에 <b>짧은 causal conv 층을 통째로 삭제</b>한다. (2) <b>복소수 상태</b>를 B·C에 거는 공짜 <b>데이터 의존 RoPE</b>로 구현해 상태추적을 복원한다 — Mamba-2가 아예 못 푸는 parity에서 <b>100%</b>. (3) <b>MIMO</b>가 상태 갱신의 외적을 행렬-행렬 곱으로 바꿔 산술 강도를 올려, 놀던 GPU가 실제로 계산하게 만든다. 결과: 1.5B에서 Gated DeltaNet 대비 다운스트림 정확도 <b>+1.8 pp</b>, 그리고 가장 빠른 디코드 커널 — <b>0.156 ms</b> 대 Mamba-2의 0.203 ms.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">As LLM value shifts to inference-time compute — long chains of thought, agentic loops — the decode step is the thing you actually pay for. Mamba-3 is designed backwards from that step rather than from training throughput.</p>
+    <p class="lead t-ko">LLM의 가치가 추론 시점 연산(긴 사고 사슬, 에이전트 루프)으로 옮겨가면서, 실제로 비용을 치르는 것은 디코딩 스텝이다. Mamba-3는 학습 처리량이 아니라 그 스텝에서 거꾸로 설계됐다.</p>
+    <p class="t-en">The framing is the contribution. Mamba-2 was explicitly optimized for training speed and simplicity, and paid for it in expressivity; the field then papered over the gaps with bolt-ons (an explicit short convolution, extra norms). Mamba-3 instead asks what the underlying continuous system actually implies — and gets the convolution, the state tracking, and the hardware utilization as <i>consequences</i> of better discretization, complex eigenvalues, and a wider input map. Notably, this is an SSM-first story, deliberately not a linear-attention or test-time-regression one.</p>
+    <p class="t-ko">관점 자체가 기여다. Mamba-2는 대놓고 학습 속도와 단순성에 최적화됐고 그 대가를 표현력으로 치렀다. 이후 분야는 그 틈을 덧붙임(명시적 짧은 컨볼루션, 추가 norm)으로 메워왔다. Mamba-3는 대신 바탕의 연속 시스템이 실제로 무엇을 함의하는지 묻고, 컨볼루션·상태추적·하드웨어 활용을 더 나은 이산화·복소 고윳값·넓어진 입력 사상의 <i>결과</i>로 얻는다. 특히 이건 선형 어텐션이나 test-time regression이 아닌, 의도적으로 SSM 우선의 서사다.</p>
+    <figure class="fig">
+      <img src="fig/2603.15569/fig3-pareto.png" alt="Relative total state size vs pretraining perplexity: Mamba-3 MIMO lowest at every state size, Mamba-3 below Mamba-2.">
+      <figcaption class="t-en"><b>Figure 3.</b> State size (a proxy for decode speed) vs pretraining perplexity. Mamba-3 sits below Mamba-2 at every state size, and Mamba-3 MIMO below that again — at its <b>smallest</b> state size MIMO already matches what Mamba-2 needs its <b>largest</b> state to reach. Down and to the left is better.</figcaption>
+      <figcaption class="t-ko"><b>그림 3.</b> 상태 크기(디코딩 속도의 대리 지표) 대 사전학습 perplexity. Mamba-3는 모든 상태 크기에서 Mamba-2 아래에 있고, Mamba-3 MIMO는 다시 그 아래다 — MIMO는 <b>가장 작은</b> 상태 크기에서 이미 Mamba-2가 <b>가장 큰</b> 상태로 도달하는 지점과 맞먹는다. 왼쪽 아래로 갈수록 좋다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2603.15569</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+1.8 pp</div><div class="l"><span class="t-en">downstream acc. over GDN at 1.5B (MIMO)</span><span class="t-ko">1.5B에서 GDN 대비 다운스트림 정확도 (MIMO)</span></div></div>
+      <div class="stat"><div class="n">0.156 ms</div><div class="l"><span class="t-en">decode latency vs Mamba-2's 0.203</span><span class="t-ko">디코드 지연 (Mamba-2는 0.203)</span></div></div>
+      <div class="stat"><div class="n">100%</div><div class="l"><span class="t-en">parity accuracy — Mamba-2 cannot solve it</span><span class="t-ko">parity 정확도 — Mamba-2는 못 푼다</span></div></div>
+      <div class="stat"><div class="n">O(Δ³)</div><div class="l"><span class="t-en">truncation error, vs O(Δ²) for Euler</span><span class="t-ko">절단 오차, 오일러는 O(Δ²)</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">explicit short conv layers needed</span><span class="t-ko">필요한 명시적 짧은 conv 층</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Decode kernel latency — the point of the whole design</span><span class="t-ko">디코드 커널 지연 — 설계 전체의 목적</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 6.</b> Per-token decode kernel latency (ms), lower is better. In BF16 — the deployment case — Mamba-3 SISO is the fastest of all, and MIMO buys its extra quality for only <b>+0.023 ms</b>. Note the honest wrinkle: in FP32 at d_state=64, Mamba-3 is <i>slower</i> than Mamba-2.</caption>
+        <caption class="t-ko"><b>표 6.</b> 토큰당 디코드 커널 지연(ms), 낮을수록 좋다. 배포 환경인 BF16에서 Mamba-3 SISO가 전체 최속이고, MIMO는 추가 품질을 단 <b>+0.023 ms</b>에 산다. 정직하게 짚을 대목: FP32·d_state=64에서는 Mamba-3가 Mamba-2보다 <i>느리다</i>.</caption>
+        <thead><tr><th><span class="t-en">Model</span><span class="t-ko">모델</span></th><th>FP32 d=64</th><th>FP32 d=128</th><th>BF16 d=64</th><th>BF16 d=128</th></tr></thead>
+        <tbody>
+          <tr><td>Mamba-2</td><td>0.295</td><td>0.409</td><td>0.127</td><td>0.203</td></tr>
+          <tr><td>Gated DeltaNet</td><td>0.344</td><td>0.423</td><td>0.176</td><td>0.257</td></tr>
+          <tr><td><b>Mamba-3 (SISO)</b></td><td>0.310</td><td class="up">0.399</td><td class="up">0.110</td><td class="up">0.156</td></tr>
+          <tr><td><b>Mamba-3 (MIMO, R=4)</b></td><td>0.333</td><td>0.431</td><td>0.137</td><td>0.179</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Three changes, one viewpoint</span><span class="t-ko">세 가지 변경, 하나의 관점</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">discretization</span>
+        <h3>Exponential-trapezoidal</h3>
+        <p class="t-en">Mamba-1/2 used what this paper names "exponential-Euler" — a heuristic holding the endpoint, error O(Δ²). Averaging both endpoints instead gives a three-term recurrence with O(Δ³) error. That third term is secretly a width-2 convolution <i>inside</i> the recurrence, which is why the explicit conv layer becomes redundant.</p>
+        <p class="t-ko">Mamba-1/2는 이 논문이 "지수-오일러"라 이름 붙인 것, 즉 끝점을 유지하는 오차 O(Δ²)의 휴리스틱을 썼다. 양 끝점을 평균 내면 오차 O(Δ³)의 3항 순환식이 된다. 그 세 번째 항이 사실 순환식 <i>내부</i>의 너비-2 컨볼루션이며, 그래서 명시적 conv 층이 불필요해진다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">expressivity</span>
+        <h3>Complex states = data-dependent RoPE</h3>
+        <p class="t-en">Real non-negative eigenvalues can decay but not rotate, which is why prior SSMs fail parity. A complex SSM of state N/2 equals a real one of state N whose transition is block-diagonal 2×2 rotations — equivalently, RoPE applied to B and C with data-dependent angles. Expressivity restored at near-zero cost.</p>
+        <p class="t-ko">실수 비음수 고윳값은 감쇠는 해도 회전은 못 하고, 그래서 기존 SSM은 parity에 실패한다. 상태 N/2의 복소 SSM은 전이가 블록 대각 2×2 회전인 상태 N의 실수 SSM과 같다 — 즉 데이터 의존 각도로 B·C에 RoPE를 거는 것과 동치다. 거의 공짜로 표현력 복원.</p>
+      </div>
+      <div class="m">
+        <span class="tag">hardware</span>
+        <h3>MIMO</h3>
+        <p class="t-en">SISO's state update is an outer product of two vectors — few FLOPs per byte moved, so decode is memory-bound. Widening the input map to rank R makes it a matrix-matrix product: R× the FLOPs, but memory traffic still dominated by the state. The GPU stops idling; latency barely moves.</p>
+        <p class="t-ko">SISO의 상태 갱신은 두 벡터의 외적이라 옮긴 바이트당 FLOP이 적고, 그래서 디코딩이 메모리 바운드다. 입력 사상을 랭크 R로 넓히면 행렬-행렬 곱이 된다: FLOP은 R배지만 메모리 트래픽은 여전히 상태가 지배한다. GPU가 놀지 않게 되고, 지연은 거의 그대로다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Formalize the discretization.</span><span class="t-ko">이산화를 형식화한다.</span></b><span class="t-en"> Build a general framework for discretizing linear time-varying SSMs; show Mamba-1/2's heuristic is its exponential-Euler special case.</span><span class="t-ko"> 선형 시변 SSM 이산화의 일반 프레임워크를 세우고, Mamba-1/2의 휴리스틱이 그 지수-오일러 특수 사례임을 보인다.</span></li>
+      <li><b><span class="t-en">Upgrade to trapezoidal.</span><span class="t-ko">사다리꼴로 올린다.</span></b><span class="t-en"> Apply a second-order rule to the state-input integral: h_t = α_t h_(t−1) + β_t B_(t−1) x_(t−1) + γ_t B_t x_t, with a learned data-dependent mix λ_t.</span><span class="t-ko"> 상태-입력 적분에 2차 규칙을 적용: h_t = α_t h_(t−1) + β_t B_(t−1) x_(t−1) + γ_t B_t x_t, 혼합 비율 λ_t는 데이터 의존으로 학습.</span></li>
+      <li><b><span class="t-en">Complexify via RoPE.</span><span class="t-ko">RoPE로 복소화한다.</span></b><span class="t-en"> Rewrite complex state transitions as cumulative 2×2 rotations folded into B and C — reusing the existing RoPE trick, so no new kernel is needed.</span><span class="t-ko"> 복소 상태 전이를 B·C에 접어 넣은 누적 2×2 회전으로 다시 쓴다 — 기존 RoPE 트릭 재사용이라 새 커널이 필요 없다.</span></li>
+      <li><b><span class="t-en">Widen to MIMO.</span><span class="t-ko">MIMO로 넓힌다.</span></b><span class="t-en"> Expand B to N×R and x to P×R. Train it as R² SISO SSMs but with a chunked algorithm costing only R×, and share B/C to keep parameters flat.</span><span class="t-ko"> B를 N×R로, x를 P×R로 확장. R²개의 SISO SSM처럼 학습하되 청크 알고리즘으로 비용은 R배만, B·C는 공유해 파라미터를 억제한다.</span></li>
+      <li><b><span class="t-en">Clean up the block.</span><span class="t-ko">블록을 정리한다.</span></b><span class="t-en"> Add BC/QK-norm and learnable B,C biases — which stabilizes large runs, lets the post-gate RMSNorm go, and removes the short causal convolution.</span><span class="t-ko"> BC/QK-norm과 학습 가능한 B·C 편향을 추가 — 대규모 학습이 안정되고, post-gate RMSNorm을 없애고, 짧은 causal 컨볼루션도 제거된다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Better numerics is a free lunch. Moving from a first- to a second-order integration rule bought accuracy <i>and</i> deleted an architectural component — the short conv everyone treated as essential.</p><p class="t-ko">더 나은 수치해석은 공짜 점심이다. 1차에서 2차 적분 규칙으로 옮긴 것만으로 정확도를 얻고 <i>동시에</i> 다들 필수로 여기던 짧은 conv라는 구조 부품을 삭제했다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Rotation, not just decay. Real non-negative eigenvalues were the hidden reason linear models failed state tracking; complex states fix it and cost almost nothing because RoPE already exists.</p><p class="t-ko">감쇠만이 아니라 회전. 실수 비음수 고윳값이 선형 모델의 상태추적 실패의 숨은 이유였고, 복소 상태가 이를 고치며 RoPE가 이미 있으니 비용은 거의 없다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Optimize the step you pay for. Arithmetic intensity — not FLOP count or big-O — is the decode bottleneck, and MIMO buys real quality in FLOPs the GPU was wasting anyway.</p><p class="t-ko">비용을 치르는 스텝을 최적화하라. 디코딩의 병목은 FLOP 수나 big-O가 아니라 산술 강도이며, MIMO는 어차피 GPU가 낭비하던 FLOP으로 실제 품질을 산다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The efficiency headline is precision-specific — in FP32 at d_state=64 Mamba-3 is <i>slower</i> than Mamba-2 (0.310 vs 0.295 ms), so "fastest" holds for the BF16 case the paper leads with, not universally. Capability gaps also remain: retrieval from semi-structured text (SWDE, FDA) still trails baselines, the strongest retrieval results need a <b>hybrid</b> with real self-attention at 5:1 rather than pure Mamba-3, and the state-tracking wins are on <b>synthetic</b> parity/modular-arithmetic probes — modular arithmetic with brackets is only 87.75%, not solved. Everything is trained at <b>≤1.5B</b>, so whether the +1.8 pp survives at deployment scale is untested.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 효율 헤드라인은 정밀도 의존적이다 — FP32·d_state=64에서는 Mamba-3가 Mamba-2보다 <i>느리다</i>(0.310 대 0.295 ms). 즉 "최속"은 논문이 앞세운 BF16에서 성립하지 별 조건 없이 참이 아니다. 능력의 빈틈도 남는다: 반정형 텍스트 검색(SWDE·FDA)은 여전히 baseline에 뒤지고, 가장 강한 검색 결과는 순수 Mamba-3가 아니라 진짜 self-attention을 5:1로 섞은 <b>하이브리드</b>가 필요하며, 상태추적 성과는 <b>합성</b> parity·모듈러 산술 프로브 위의 것이다 — 괄호 있는 모듈러 산술은 87.75%로 풀린 게 아니다. 전부 <b>≤1.5B</b>에서 학습돼, +1.8 pp가 배포 규모에서 살아남는지는 검증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2603.15569">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2603.15569">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2603.15569">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2603.15569">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>#1 in the refreshed 2026-08 wishlist queue (Efficient Sequence Models axis); the direct successor to Mamba-2 from the original authors, and the highest-signal paper in the queue by community response</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-06.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>새로 채운 2026-08 위시리스트 큐 1번(효율 시퀀스 모델 축); 원저자들이 낸 Mamba-2의 직계 후속이자 큐에서 커뮤니티 반응이 가장 큰 논문</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-06.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
