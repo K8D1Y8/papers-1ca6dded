@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<!-- 5-min paper summary · bilingual (EN default · KO toggle) · noindex -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · AnchorKV</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache</span><span class="t-ko">모델 압축 · KV 캐시</span></span>
+      <span>2026 · 08 · 03</span>
+    </div>
+    <h1>AnchorKV<br>
+      <span class="glow t-en">— compress the KV cache 20× without throwing away a single token</span>
+      <span class="glow t-ko">— 토큰을 단 하나도 버리지 않고 KV 캐시를 20× 압축한다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Malik Khalaf</b>, <b>Yara Shamshoum</b> <span class="t-en">(equal) · Assaf Schuster (senior)</span><span class="t-ko">(공동 1저자) · Assaf Schuster (책임저자)</span></span>
+      <span>🏛 Technion — Israel Institute of Technology</span>
+      <span>🗓 2026-08-03</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.02901">arXiv:2608.02901</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">KV cache compression has been stuck between two bad options: <b>eviction</b> reaches high ratios but permanently deletes tokens — and the deletion is decided at prefill, <i>before</i> the queries that will need them exist — while <b>quantization</b> keeps everything but stalls near <b>5×</b>. AnchorKV takes the third path. Each KV head stores a few <b>anchors</b> exactly; every other token is stored as an <i>anchor index + one scalar</i> — a scaled copy of its most-aligned anchor. Leftover bytes buy <b>2-bit residuals</b>, spent not on the biggest errors or the most-attended tokens but on the tokens ranked by a first-order estimate of <b>attention-output error</b>. Nothing leaves the softmax, so the compressed cache is a <i>perturbation</i> of the exact one rather than a truncation. At <b>20×</b> it beats every eviction baseline at <b>10×</b> — same accuracy, half the memory — and at 70B it retains <b>99.3%</b> of the full-cache RULER score (94.4 vs 95.0) where the best baseline manages 86.8%. On needle-in-a-haystack at 5×, it averages <b>0.94</b> against AdaKV's <b>0.18</b>.</p>
+    <p class="t-ko">KV 캐시 압축은 나쁜 두 선택지 사이에 갇혀 있었다: <b>eviction</b>은 높은 압축률에 도달하지만 토큰을 영구 삭제하고 — 그 삭제를 prefill 시점, 즉 그 토큰이 필요해질 쿼리가 존재하기 <i>전</i>에 결정한다 — <b>양자화</b>는 전부 유지하지만 <b>5×</b> 근처에서 멈춘다. AnchorKV는 세 번째 길을 간다. 각 KV head는 소수의 <b>anchor</b>를 정확히 저장하고, 나머지 토큰은 전부 <i>anchor 인덱스 + 스칼라 하나</i>, 즉 가장 정렬이 잘 되는 anchor의 스케일된 복사본으로 저장된다. 남은 바이트는 <b>2비트 residual</b>을 사는데, 오차가 가장 큰 토큰도 어텐션을 가장 많이 받는 토큰도 아니라 <b>어텐션 출력 오차</b>의 1차 추정치로 순위를 매겨 배분한다. 어떤 위치도 softmax를 떠나지 않으므로 압축된 캐시는 잘라낸 것이 아니라 정확한 캐시의 <i>섭동</i>이다. <b>20×</b>에서 모든 eviction baseline의 <b>10×</b>를 이기고 — 같은 정확도를 절반 메모리로 — 70B에서는 full 캐시 RULER 점수의 <b>99.3%</b>(94.4 대 95.0)를 유지하는데 최고 baseline은 86.8%에 그친다. 5×의 needle-in-a-haystack에서는 평균 <b>0.94</b>, AdaKV는 <b>0.18</b>이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">At 128K context a single Llama-3.1-8B request holds a 16 GiB KV cache in bf16 — as much as the weights serving it. The cache, not the model, decides how many requests a device holds.</p>
+    <p class="lead t-ko">128K 컨텍스트에서 Llama-3.1-8B 요청 하나가 bf16으로 16 GiB의 KV 캐시를 든다 — 그 요청을 서빙하는 가중치와 맞먹는다. 한 장치가 몇 개의 요청을 담을지는 모델이 아니라 캐시가 결정한다.</p>
+    <p class="t-en">The interesting claim here is diagnostic, not just architectural. Eviction methods score tokens using an observation window at prefill and drop the rest — but that scoring happens before the decoding queries exist. The paper argues this is not an occasional failure but <i>the family's dominant failure mode</i>, and shows it: on RULER tasks requiring retrieval against distractors or aggregation over the whole context, the best eviction baseline collapses below 16% of full-cache accuracy. AnchorKV keeps the exact same scoring machinery — SnapKV's observation window — but changes what the score decides: <b>how many bytes a token gets, not whether it survives</b>. A mispriced token is stored coarsely and remains reachable, instead of being gone.</p>
+    <p class="t-ko">여기서 흥미로운 주장은 구조가 아니라 진단이다. eviction 계열은 prefill 시점의 observation window로 토큰을 점수화하고 나머지를 버리는데, 그 점수화는 디코딩 쿼리가 존재하기 전에 일어난다. 논문은 이것이 가끔의 실패가 아니라 <i>이 계열의 지배적 실패 양식</i>이라 주장하고, 실제로 보인다: 방해 문서 속 검색이나 전체 컨텍스트 집계를 요구하는 RULER 과제에서 최고 eviction baseline은 full 캐시 정확도의 16% 아래로 무너진다. AnchorKV는 같은 점수화 기계 — SnapKV의 observation window — 를 그대로 쓰되, 그 점수가 결정하는 대상을 바꾼다: <b>토큰의 생존 여부가 아니라 토큰이 받는 바이트 수</b>. 잘못 매겨진 토큰은 사라지는 대신 거칠게 저장되고 여전히 닿을 수 있다.</p>
+    <figure class="fig">
+      <img src="fig/2608.02901/fig1-overview.png" alt="Overview of AnchorKV: (a) anchors stored exactly, other tokens projected onto nearest anchor with one coefficient, some receiving a 2-bit residual; (b) bytes per token under eviction, quantization and AnchorKV at a common budget.">
+      <figcaption class="t-en"><b>Figure 1.</b> <b>(a)</b> The representation in ℝ². Anchors are stored as-is; every other token is projected onto the span of its nearest anchor and encoded by an anchor index plus one coefficient γ. Token x₁ aligns closely and stores nothing more; x₂ aligns poorly, so it receives a budgeted slot and a 2-bit residual. <b>(b)</b> Bytes per token at a common budget. Eviction spends everything on exactly-stored tokens and keeps more of them; AnchorKV affords fewer anchors because the rest of its budget represents <i>every</i> remaining token.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> <b>(a)</b> ℝ²에서의 표현. anchor는 그대로 저장되고, 나머지 토큰은 가장 가까운 anchor의 span에 사영되어 anchor 인덱스와 계수 γ 하나로 부호화된다. 토큰 x₁은 정렬이 좋아 더 저장할 것이 없고, x₂는 정렬이 나빠 예산 슬롯과 2비트 residual을 받는다. <b>(b)</b> 동일 예산에서 토큰당 바이트. eviction은 예산 전부를 정확히 저장하는 토큰에 써서 그런 토큰을 더 많이 남기고, AnchorKV는 남은 예산으로 <i>모든</i> 잔여 토큰을 표현하기 때문에 anchor를 더 적게 갖는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.02901</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">20×</div><div class="l"><span class="t-en">compression, zero tokens discarded</span><span class="t-ko">압축률, 버린 토큰 0개</span></div></div>
+      <div class="stat"><div class="n">99.3%</div><div class="l"><span class="t-en">of FullKV RULER score kept at 70B</span><span class="t-ko">70B에서 유지한 FullKV RULER 점수</span></div></div>
+      <div class="stat"><div class="n">0.94</div><div class="l"><span class="t-en">needle-in-haystack at 5× — AdaKV 0.18</span><span class="t-ko">5×에서 needle 평균 — AdaKV는 0.18</span></div></div>
+      <div class="stat"><div class="n">19×</div><div class="l"><span class="t-en">smaller decode peak memory</span><span class="t-ko">디코드 피크 메모리 감소</span></div></div>
+      <div class="stat"><div class="n">2-bit</div><div class="l"><span class="t-en">residuals (Hadamard + Lloyd–Max)</span><span class="t-ko">residual 정밀도 (Hadamard + Lloyd–Max)</span></div></div>
+      <div class="stat"><div class="n">1.26×</div><div class="l"><span class="t-en">throughput at 64K, frontier-to-frontier</span><span class="t-ko">64K 처리량, 각자 메모리 한계에서</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The headline result, in one table</span><span class="t-ko">헤드라인 결과를 표 하나로</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table (Appendix C).</b> RULER-32K on <b>Llama-3.1-70B</b>, per-task accuracy at matched byte budgets. The claim to check is the last row against the 10× block: <b>AnchorKV at 20× (94.4) beats every eviction baseline at 10×</b> — the best of which, AdaKV, gets 91.0. Note where the baselines break: <code>S3</code> (retrieval against distractors), <code>MK3</code> (multi-key), <code>CWE</code> (common-word extraction, an aggregation task) — exactly the tasks whose answer tokens the observation window did not score highly.</caption>
+        <caption class="t-ko"><b>표 (Appendix C).</b> <b>Llama-3.1-70B</b>의 RULER-32K, 동일 바이트 예산에서의 과제별 정확도. 확인할 주장은 마지막 행 대 10× 블록이다: <b>20×의 AnchorKV(94.4)가 10×의 모든 eviction baseline을 이긴다</b> — 그중 최고인 AdaKV가 91.0이다. baseline이 무너지는 지점에 주목: <code>S3</code>(방해 문서 속 검색), <code>MK3</code>(다중 키), <code>CWE</code>(공통 단어 추출, 집계 과제) — 정확히 observation window가 정답 토큰을 높게 점수 매기지 못한 과제들이다.</caption>
+        <thead><tr><th><span class="t-en">Ratio</span><span class="t-ko">압축률</span></th><th><span class="t-en">Method</span><span class="t-ko">방법</span></th><th>S3</th><th>MK3</th><th>CWE</th><th>Avg</th></tr></thead>
+        <tbody>
+          <tr><td>1×</td><td>FullKV</td><td>100.0</td><td>100.0</td><td>93.5</td><td>95.0</td></tr>
+          <tr><td>10×</td><td>SnapKV</td><td>88.0</td><td>59.0</td><td>49.7</td><td>86.6</td></tr>
+          <tr><td>10×</td><td>PyramidKV</td><td>61.0</td><td>36.0</td><td>35.1</td><td>81.2</td></tr>
+          <tr><td>10×</td><td>AdaKV</td><td>97.0</td><td>86.0</td><td>66.1</td><td>91.0</td></tr>
+          <tr><td>10×</td><td><b>AnchorKV</b></td><td>100.0</td><td>100.0</td><td>92.6</td><td class="up">94.6</td></tr>
+          <tr><td>20×</td><td>SnapKV</td><td>30.0</td><td>19.0</td><td>29.4</td><td>75.9</td></tr>
+          <tr><td>20×</td><td>PyramidKV</td><td>11.0</td><td>4.0</td><td>21.0</td><td>72.1</td></tr>
+          <tr><td>20×</td><td>AdaKV</td><td>51.0</td><td>53.0</td><td>39.9</td><td>82.5</td></tr>
+          <tr><td>20×</td><td><b>AnchorKV</b></td><td>100.0</td><td>98.0</td><td>91.8</td><td class="up">94.4</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Three decisions that define the method</span><span class="t-ko">방법을 규정하는 세 결정</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">representation</span>
+        <h3>Anchor + coefficient, not a shared centroid</h3>
+        <p class="t-en">Each non-anchor token picks the anchor with maximum absolute cosine and stores its orthogonal projection onto that direction: γᵢ = ⟨xᵢ, x_a⟩ / ‖x_a‖². The distinction from codebook/merging methods is precise — when tokens collapse onto a shared representation, the softmax can no longer separate them. Here every token keeps <i>its own</i> coefficient along its anchor, so no two reconstructions are identical.</p>
+        <p class="t-ko">각 비-anchor 토큰은 절대 코사인이 최대인 anchor를 고르고 그 방향으로의 직교 사영을 저장한다: γᵢ = ⟨xᵢ, x_a⟩ / ‖x_a‖². 코드북·병합 계열과의 차이는 명확하다 — 토큰들이 공유 표현으로 뭉개지면 softmax가 그들을 더 이상 구분할 수 없다. 여기서는 모든 토큰이 자기 anchor 방향으로 <i>자기만의</i> 계수를 가지므로 두 복원값이 같아지지 않는다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">allocation</span>
+        <h3>Rank by attention-output error, not by size or attention</h3>
+        <p class="t-en">A large residual on a barely-attended token changes the output little; so does heavy attention on a token its anchor already fits. Applying the softmax Jacobian splits Δy into a K channel (modulated by ‖Vₜ − y‖) and a V channel, giving per-token utilities u<sup>K</sup>, u<sup>V</sup>. Ablations confirm the ranking earns its keep: cosine, residual norm, attention score and random all lose, and the gaps widen as the budget tightens.</p>
+        <p class="t-ko">거의 주목받지 않는 토큰의 큰 residual은 출력을 별로 바꾸지 않고, anchor가 이미 잘 맞추는 토큰에 쏠린 어텐션도 마찬가지다. softmax 야코비안을 적용하면 Δy가 K 채널(‖Vₜ − y‖로 조절됨)과 V 채널로 나뉘어 토큰별 효용 u<sup>K</sup>, u<sup>V</sup>가 나온다. ablation은 이 순위가 값을 한다는 걸 확인한다: 코사인·residual 노름·어텐션 점수·무작위가 모두 지고, 예산이 빡빡해질수록 격차가 벌어진다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">accounting</span>
+        <h3>One knob, exact bytes</h3>
+        <p class="t-en">The user sets θ, the fraction of the cache to retain. Anchors and metadata are committed first; whatever remains buys N residuals, split evenly between keys and values. The accounting charges <i>every</i> stored tensor — indices, coefficients, masks, scales — so the compressed footprint never exceeds the budget. Every other hyperparameter (W=32, k=S/128, ρ=0.7, κ=7) is fixed across all models and benchmarks.</p>
+        <p class="t-ko">사용자는 캐시 유지 비율 θ 하나만 정한다. anchor와 메타데이터가 먼저 확정되고, 남는 것이 N개의 residual을 사서 key와 value에 절반씩 나뉜다. 회계는 인덱스·계수·마스크·스케일까지 <i>모든</i> 저장 텐서를 계산에 넣으므로 압축 후 용량이 예산을 넘지 않는다. 나머지 하이퍼파라미터(W=32, k=S/128, ρ=0.7, κ=7)는 모든 모델·벤치마크에서 고정이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Pick anchors, once, at the end of prefill.</span><span class="t-ko">prefill 끝에서 anchor를 한 번 고른다.</span></b><span class="t-en"> The last W=32 positions are always exact and serve triple duty: recency window, observation queries, and free anchor directions. A fraction ρ=0.7 of the remaining slots goes to the highest SnapKV scores; the rest is <i>sampled uniformly</i> — because high-attention tokens make good targets but not necessarily good directional coverage.</span><span class="t-ko"> 마지막 W=32 위치는 항상 정확히 저장되며 세 역할을 겸한다: recency window, observation 쿼리, 그리고 공짜 anchor 방향. 남은 슬롯의 ρ=0.7은 SnapKV 점수 상위에, 나머지는 <i>균등 샘플링</i>으로 간다 — 어텐션이 높은 토큰이 좋은 표적이긴 해도 방향 커버리지가 좋다는 보장은 없기 때문이다.</span></li>
+      <li><b><span class="t-en">Project every other token — keys before RoPE.</span><span class="t-ko">나머지 토큰을 사영한다 — key는 RoPE 이전에.</span></b><span class="t-en"> Positional rotation weakens the directional similarity the assignment depends on: the median cosine to the nearest anchor is <b>0.27 lower</b> after RoPE. Since RoPE is a per-position linear map it distributes over the decomposition, so keys are stored unrotated and rotated during decoding.</span><span class="t-ko"> 위치 회전은 할당이 의존하는 방향 유사도를 약화시킨다: RoPE 이후 최근접 anchor와의 중앙값 코사인이 <b>0.27 낮다</b>. RoPE는 위치별 선형 사상이라 분해에 분배되므로, key는 회전 전 상태로 저장하고 디코딩 때 회전한다.</span></li>
+      <li><b><span class="t-en">Score every token's residual by its output cost.</span><span class="t-ko">모든 토큰의 residual을 출력 비용으로 점수화한다.</span></b><span class="t-en"> Using the m observation queries already available at the end of prefill, compute u<sup>K</sup> and u<sup>V</sup> — one pass over the cache, no extra forward.</span><span class="t-ko"> prefill 끝에 이미 확보된 m개의 observation 쿼리로 u<sup>K</sup>와 u<sup>V</sup>를 계산한다 — 캐시 1회 순회, 추가 forward 없음.</span></li>
+      <li><b><span class="t-en">Spend the residual budget, pooled across heads.</span><span class="t-ko">head 전체를 모아 residual 예산을 쓴다.</span></b><span class="t-en"> Utilities are comparable across KV heads within a side, so heads compete for one per-layer budget. Ablation: the per-head shares are far from uniform <i>and shift with the input</i>, so an equal split cannot follow them.</span><span class="t-ko"> 효용은 같은 쪽(K 또는 V) 안에서 KV head 간 비교가 가능하므로 head들이 층 단위 예산 하나를 놓고 경쟁한다. ablation: head별 배분은 균등과 거리가 멀고 <i>입력에 따라 변한다</i>. 균등 분배로는 따라갈 수 없다.</span></li>
+      <li><b><span class="t-en">Decode straight from the compressed form.</span><span class="t-ko">압축된 형태에서 곧바로 디코딩한다.</span></b><span class="t-en"> A FlashAttention-style tiled Triton kernel reconstructs each key tile only when consumed, rotates it, and contracts in registers. The dense cache is never materialized, so the runtime footprint <i>is</i> the compressed footprint.</span><span class="t-ko"> FlashAttention 방식의 타일 Triton 커널이 각 key 타일을 소비할 때만 복원하고, 회전시키고, 레지스터에서 축약한다. 밀집 캐시는 결코 물질화되지 않으므로 런타임 용량이 곧 압축 용량이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Reframe the decision, not the scorer. AnchorKV reuses SnapKV's exact scoring machinery and beats it by ~30 points at 20×, purely by changing what the score buys: bytes, not survival. A cheap lesson that likely generalizes beyond KV caches.</p><p class="t-ko">점수 매기는 방식이 아니라 결정을 다시 짜라. AnchorKV는 SnapKV의 점수화 기계를 그대로 재사용하면서 20×에서 약 30점 차로 이긴다. 바뀐 것은 그 점수가 사는 대상뿐이다 — 생존이 아니라 바이트. KV 캐시 너머로도 일반화될 법한 값싼 교훈이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Perturbation beats truncation. Because no position leaves the softmax, the error is bounded as a perturbation of the exact output — and the value-side bound is literally eviction's cost scaled by a factor ≤ 1. The structure of the guarantee, not just the accuracy, is what differs.</p><p class="t-ko">잘라내기보다 섭동이 낫다. 어떤 위치도 softmax를 떠나지 않기에 오차가 정확한 출력의 섭동으로 유계이며, value 쪽 한계식은 문자 그대로 eviction이 치르는 비용에 ≤1인 계수를 곱한 것이다. 정확도만이 아니라 보장의 구조가 다르다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Compression gets easier with scale. Retention rises 93.5% → 95.3% → 99.3% from 8B to 70B — exactly the regime where the cache is most expensive to hold. But note it is not simply "bigger models are more robust": eviction on Mistral-24B stays under 67%, no better than at 8B.</p><p class="t-ko">규모가 커질수록 압축이 쉬워진다. 유지율이 8B→70B에서 93.5% → 95.3% → 99.3%로 오르는데, 이는 캐시를 들고 있기 가장 비싼 구간이다. 다만 단순히 "큰 모델이 더 강건하다"는 얘기는 아니다: Mistral-24B에서 eviction은 67% 아래에 머물러 8B와 다를 바 없다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The accuracy story is strong, but the efficiency headline is doing quiet work. AnchorKV is <i>slower end-to-end at the same batch size</i>: Appendix E reports <b>+20.7%</b> latency at 32K and <b>+13.6%</b> at 64K for 64 generated tokens, reaching parity only around 2048 generated tokens — so for ordinary short answers it costs time. The advertised <b>1.26×</b> throughput is a frontier-to-frontier comparison (batch 6 vs 3), i.e. a benefit only when you actually spend the freed memory on concurrency. Two more caveats: compression runs <i>at the end of prefill</i>, so the dense cache must exist first and the ~19× saving is decode-only; and the flagship needle-in-a-haystack result (0.94 vs AdaKV 0.18) is measured at <b>5×</b>, not the 20× the paper leads with. Also worth noticing in the table above: on the real-document QA tasks AnchorKV at 20× scores 80.0 on QA1 against FullKV's 84.0 — matching AdaKV, not beating it. The wins concentrate in synthetic retrieval and aggregation. Finally, code is promised only "upon acceptance", and the paper is an unreviewed preprint.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 정확도 서사는 강하지만 효율 헤드라인은 조용히 무리를 한다. 같은 배치 크기에서 AnchorKV는 <i>end-to-end로 더 느리다</i>: Appendix E는 생성 토큰 64개 기준 32K에서 <b>+20.7%</b>, 64K에서 <b>+13.6%</b> 지연을 보고하고, 2048 토큰쯤에서야 동률이 된다 — 즉 평범한 짧은 응답에서는 시간을 잃는다. 내세운 <b>1.26×</b> 처리량은 각자의 메모리 한계에서 비교한 값(배치 6 대 3)으로, 확보한 메모리를 실제로 동시성에 쓸 때만 얻는 이득이다. 두 가지 더: 압축은 <i>prefill이 끝난 뒤</i> 수행되므로 밀집 캐시가 먼저 존재해야 하고 ~19× 절감은 디코딩 한정이다. 그리고 간판 격인 needle-in-a-haystack 결과(0.94 대 AdaKV 0.18)는 논문이 앞세우는 20×가 아니라 <b>5×</b>에서 측정됐다. 위 표에서도 짚을 대목: 실문서 QA인 QA1에서 20× AnchorKV는 80.0으로 FullKV의 84.0에 못 미치고 AdaKV와 동률이다 — 이기지 못한다. 성과는 합성 검색·집계에 몰려 있다. 끝으로 코드는 "게재 확정 시"에만 공개를 약속하며, 이 논문은 아직 심사를 거치지 않은 프리프린트다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.02901">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.02901">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.02901">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.02901">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>#2 in the 2026-08 wishlist queue (Model Compression · KV axis); it stakes out the middle ground between eviction and low-rank/quantization, the exact seam the queue was built to probe</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-07.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐 2번(모델 압축·KV 축); eviction과 저랭크/양자화 사이의 중간 지대를 노리는 논문으로, 이 큐가 탐색하려던 바로 그 접점이다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-07.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
