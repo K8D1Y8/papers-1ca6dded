@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Do Latent Channels Actually Communicate? A Causal Audit of Latent Multi-Agent LLM Communication</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle"><button class="langbtn" data-l="en">EN</button><button class="langbtn" data-l="ko">한</button></div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent · Latent Communication Audit</span><span class="t-ko">Multi-Agent · Latent Communication Audit</span></span>
+      <span>2026 · 08 · 09</span>
+    </div>
+    <h1>Do Latent Channels Actually Communicate?<br><span class="glow t-en">— A causal audit: swap the message, hold everything else fixed, see what was really transferred</span><span class="glow t-ko">— 인과 감사: 메시지만 바꾸고 나머지를 고정해, 정말 무엇이 전달됐는지 본다</span></h1>
+    <div class="meta">
+      <span>👥 <b>Huixiang Zhang</b>, Mahzabeen Emu</span>
+      <span>🏛 Georgia Tech · Memorial Univ.</span>
+      <span>🗓 2026.07.31</span>
+      <span>📄 <a href="https://arxiv.org/abs/2607.26773">arXiv:2607.26773</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Latent communication papers (LatentMAS, CIPHER, C2C…) report accuracy gains and conclude the channel "communicates." This paper asks the missing question: <em>does the receiver actually use sender-specific information?</em> The audit is simple and surgical — <span class="hl">replace the latent message with a controlled alternative</span> (none / another example's / the receiver's own self-generated one) while freezing everything else, and decompose the effect: <b>OPE = OME + CAG</b> (overall = mere-presence + content-attributable). Auditing LatentMAS on Qwen3-4B/8B: aggregate scores <b>conceal opposing mechanisms</b> — on GSM8K-4B a −1.0pp "no effect" hides <span class="hl">−6.17pp from message presence and +5.17pp from real content</span>; scale to 8B and the signs <b>flip</b> (+3.96 / −2.29). Sometimes the "communication" gain survives replacing the sender with the receiver talking to itself (SSG ≈ 0) — the other agent wasn't adding value at all.</p>
+    <p class="t-ko">잠재 통신 논문들(LatentMAS, CIPHER, C2C…)은 정확도 향상을 보고하며 채널이 "통신한다"고 결론짓는다. 이 논문은 빠진 질문을 던진다: <em>수신자가 정말 송신자 고유 정보를 쓰는가?</em> 감사는 단순하고 외과적이다 — <span class="hl">잠재 메시지만 통제된 대안으로 교체</span>(없음 / 다른 예제의 것 / 수신자 자신이 만든 것)하고 나머지를 전부 동결한 뒤 효과를 분해한다: <b>OPE = OME + CAG</b> (전체 = 존재 효과 + 내용 귀속 효과). Qwen3-4B/8B에서 LatentMAS를 감사한 결과: 집계 점수는 <b>상반된 메커니즘을 은폐</b>한다 — GSM8K-4B의 −1.0pp "무효과"는 <span class="hl">메시지 존재의 −6.17pp와 진짜 내용의 +5.17pp</span>를 숨기고 있었고, 8B로 키우면 부호가 <b>뒤집힌다</b>(+3.96 / −2.29). 때로는 송신자를 수신자 자신으로 바꿔도 "통신" 이득이 그대로다(SSG ≈ 0) — 다른 에이전트는 애초에 가치를 더하지 않았던 것.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">A benchmark gain is not evidence of communication — correlation at the channel is not causation through it.</p>
+    <p class="lead t-ko">벤치마크 향상은 통신의 증거가 아니다 — 채널에서의 상관은 채널을 통한 인과가 아니다.</p>
+    <p class="t-en">Every latent-communication result in this archive — LatentMAS's +14.6%, C2C's steering gains, relay compression "beating full" — rests on the same inference: performance went up, therefore information flowed. But the gain could come from <strong>extra computation</strong> the channel adds, from <strong>any message's structural presence</strong>, or from redundant reasoning the receiver would produce anyway. This paper builds the control experiments the field skipped: hold the receiver, weights, prompt, and decoding <em>fixed</em>, and intervene only on the message at the sender→receiver boundary (defined precisely for embeddings, hidden states, and KV caches). It is the multi-agent version of a causal probe — and the first standardized audit suite for this literature.</p>
+    <p class="t-ko">이 아카이브의 모든 잠재 통신 결과 — LatentMAS의 +14.6%, C2C의 조종 이득, "full을 이기는" relay 압축 — 는 같은 추론에 기댄다: 성능이 올랐으니 정보가 흘렀다. 그러나 그 이득은 채널이 더하는 <strong>추가 연산</strong>에서, <strong>아무 메시지든 구조적 존재</strong>에서, 혹은 수신자가 어차피 만들 중복 추론에서 올 수 있다. 이 논문은 분야가 건너뛴 통제 실험을 세운다: 수신자·가중치·프롬프트·디코딩을 <em>고정</em>하고, 송신자→수신자 경계(임베딩·은닉 상태·KV 캐시 각각에 정밀 정의)에서 메시지에만 개입한다. 멀티에이전트판 인과 프로브이자, 이 문헌 최초의 표준화된 감사 도구다.</p>
+    <figure class="fig">
+      <img src="fig/2607.26773/fig1_overview.png" alt="Causal audit overview: message replacement settings and metric suite">
+      <figcaption class="t-en"><b>Figure 1.</b> The audit. (a) The sender's latent message M is swapped with controlled alternatives — none (M₀), another example's (M_oth), or the receiver's own (M_self) — with everything downstream frozen. (b) Five measurements separate encoding (PS), prediction sensitivity (PL, CIC), and task value (CAG, SSG).</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 감사 구조. (a) 송신자의 잠재 메시지 M을 통제 대안 — 없음(M₀)·다른 예제의 것(M_oth)·수신자 자신의 것(M_self) — 으로 교체하되 하류는 전부 동결. (b) 다섯 측정이 인코딩(PS), 예측 민감도(PL·CIC), 과제 가치(CAG·SSG)를 분리한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2607.26773</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">−6.17 / +5.17</div><div class="l"><span class="t-en">GSM8K-4B: presence hurts,<br>content helps (net "−1.0")</span><span class="t-ko">GSM8K-4B: 존재는 해롭고<br>내용은 이롭다 (합계 "−1.0")</span></div></div>
+      <div class="stat"><div class="n">flip</div><div class="l"><span class="t-en">4B→8B the signs reverse:<br>OME +3.96, CAG −2.29</span><span class="t-ko">4B→8B에서 부호 반전:<br>OME +3.96, CAG −2.29</span></div></div>
+      <div class="stat"><div class="n">+15.0pp</div><div class="l"><span class="t-en">MATH-500-4B overall —<br>8.33 presence + 6.67 content</span><span class="t-ko">MATH-500-4B 전체 —<br>존재 8.33 + 내용 6.67</span></div></div>
+      <div class="stat"><div class="n">SSG −2.0</div><div class="l"><span class="t-en">GSM8K-4B: self-generated ≈<br>sender's — no other-agent value</span><span class="t-ko">GSM8K-4B: 자가 생성 ≈ 송신자<br>— 타 에이전트 가치 없음</span></div></div>
+      <div class="stat"><div class="n">+10.0pp</div><div class="l"><span class="t-en">MATH-500-8B SSG [2.5, 20.0] —<br>agent value without content value</span><span class="t-ko">MATH-500-8B SSG [2.5, 20.0] —<br>내용 가치 없는 에이전트 가치</span></div></div>
+      <div class="stat"><div class="n">5 / 4</div><div class="l"><span class="t-en">Metrics (PS·PL·CIC·CAG·SSG)<br>/ message settings</span><span class="t-ko">지표 (PS·PL·CIC·CAG·SSG)<br>/ 메시지 설정</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Sender φ_S(e)</span><span class="t-ko">송신자 φ_S(e)</span></div>
+          <div class="sub"><span class="t-en">produces latent message M</span><span class="t-ko">잠재 메시지 M 생성</span></div>
+          <div class="latent"><span class="t-en">embeddings / hidden / KV</span><span class="t-ko">임베딩 / 은닉 / KV</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Intervene here</span><span class="t-ko">여기에 개입</span></div>
+          <div class="sub"><span class="t-en">M → M₀ · M_oth · M_self</span><span class="t-ko">M → M₀ · M_oth · M_self</span></div>
+          <div class="latent"><span class="t-en">only the message changes</span><span class="t-ko">메시지만 바뀐다</span></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Receiver R (frozen)</span><span class="t-ko">수신자 R (동결)</span></div>
+          <div class="sub"><span class="t-en">same prompt, weights, decoding</span><span class="t-ko">같은 프롬프트·가중치·디코딩</span></div>
+          <div class="latent"><span class="t-en">Δoutput ⇒ causal effect</span><span class="t-ko">Δ출력 ⇒ 인과 효과</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Two clean decompositions</b> — OPE = OME + CAG splits "any message" from "this example's content"; CAG = DSC + SSG splits what the receiver could self-generate from what only another agent provides.</div>
+      <div class="cap t-ko"><b>두 개의 깔끔한 분해</b> — OPE = OME + CAG는 "아무 메시지"와 "이 예제의 내용"을 가르고, CAG = DSC + SSG는 수신자가 스스로 만들 수 있는 것과 오직 타 에이전트만 주는 것을 가른다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Idea: five measurements, two decompositions</span><span class="t-ko">아이디어: 다섯 측정, 두 분해</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">① 무엇이 실렸나 · 느껴지나</span>
+        <h3>PS · PL · CIC</h3>
+        <p class="t-en"><span class="term">Positive Signaling</span>: is a sender variable (e.g. its answer's correctness) decodable from the message (mutual-information lower bound)? <span class="term">Positive Listening</span>: does message <em>presence</em> move the receiver's first-token distribution (JSD vs M₀)? <span class="term">CIC</span>: does message <em>identity</em> matter (JSD vs M_oth)? On Qwen3-8B, CIC ≪ PL — the receiver reacts to <em>having</em> a message far more than to <em>which</em> message it is.</p>
+        <p class="t-ko"><span class="term">Positive Signaling</span>: 송신자 변수(예: 그 답의 정오)가 메시지에서 복호 가능한가(상호정보 하한)? <span class="term">Positive Listening</span>: 메시지의 <em>존재</em>가 수신자 첫 토큰 분포를 움직이는가(M₀ 대비 JSD)? <span class="term">CIC</span>: 메시지의 <em>정체</em>가 중요한가(M_oth 대비 JSD)? Qwen3-8B에선 CIC ≪ PL — 수신자는 <em>어떤</em> 메시지인지보다 메시지가 <em>있다는 것</em>에 훨씬 크게 반응한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">② 무엇이 점수를 올렸나</span>
+        <h3>CAG · SSG</h3>
+        <p class="t-en"><span class="term">Content-Attributable Gain</span> = accuracy(M_cur) − accuracy(M_oth): the value of <em>this example's</em> content beyond any message's structure. <span class="term">Self-Substitution Gap</span> = accuracy(M_cur) − accuracy(M_self): what a <em>separate agent</em> adds beyond the receiver spending the same compute on itself — exactly the compute-matched control earlier latent-comm papers never ran. Paired bootstrap CIs, ±1pp equivalence margin.</p>
+        <p class="t-ko"><span class="term">Content-Attributable Gain</span> = 정확도(M_cur) − 정확도(M_oth): 아무 메시지의 구조를 넘어 <em>이 예제</em> 내용의 가치. <span class="term">Self-Substitution Gap</span> = 정확도(M_cur) − 정확도(M_self): 수신자가 같은 연산을 스스로에게 쓸 때 대비 <em>별도 에이전트</em>가 더하는 것 — 기존 잠재 통신 논문들이 한 번도 안 돌린 바로 그 compute-matched 통제다. 짝지은 부트스트랩 CI, ±1pp 동등성 마진.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Fix the boundary</span><span class="t-ko">경계를 고정</span></b><span class="t-en">Define exactly where sender output enters the receiver — embedding sequence (CIPHER), transmitted hidden states (LatentMAS, Interlat), or sender-produced KV rows (C2C, DroidSpeak) — and swap only that.</span><span class="t-ko">송신자 출력이 수신자로 들어가는 지점 — 임베딩 열(CIPHER), 전달 은닉 상태(LatentMAS, Interlat), 송신자 생성 KV 행(C2C, DroidSpeak) — 을 정확히 정의하고 그것만 교체한다.</span></li>
+      <li><b><span class="t-en">Generate the four message worlds</span><span class="t-ko">네 가지 메시지 세계를 생성</span></b><span class="t-en">M_cur (real), M₀ (none), M_oth (same sender, different example, length-matched, K=4 per example), M_self (receiver-made, compute-matched).</span><span class="t-ko">M_cur(실제), M₀(없음), M_oth(같은 송신자·다른 예제·길이 일치, 예제당 K=4), M_self(수신자 제작·연산 일치).</span></li>
+      <li><b><span class="t-en">Measure and decompose</span><span class="t-ko">측정하고 분해</span></b><span class="t-en">Task accuracy per world gives OPE = OME + CAG and CAG = DSC + SSG by identity; first-token JSD gives PL and CIC; a probe on M_cur gives PS.</span><span class="t-ko">세계별 과제 정확도가 항등식으로 OPE = OME + CAG와 CAG = DSC + SSG를 주고, 첫 토큰 JSD가 PL·CIC를, M_cur 프로브가 PS를 준다.</span></li>
+      <li><b><span class="t-en">Validate the machinery</span><span class="t-ko">장치를 검증</span></b><span class="t-en">Hard checks (replacing M_oth with M_cur must zero CIC/CAG), message-distribution diagnostics, and noise/scramble controls keep the audit itself honest.</span><span class="t-ko">하드 체크(M_oth를 M_cur로 바꾸면 CIC/CAG가 0이어야 함), 메시지 분포 진단, 노이즈/뒤섞기 통제가 감사 자체를 정직하게 유지한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results — the aggregate score was hiding everything</span><span class="t-ko">결과 — 집계 점수가 모든 걸 숨기고 있었다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Audit of LatentMAS (m=40 latent steps).</b> Overall effect (OPE) split into message-presence (OME) and content (CAG) components, in pp. Bold = CI excludes zero. Same channel, opposite mechanisms across tasks and scales.</caption>
+        <caption class="t-ko"><b>LatentMAS 감사 (잠재 40스텝).</b> 전체 효과(OPE)를 존재(OME)·내용(CAG) 성분으로 분해(pp). 굵게 = CI가 0 제외. 같은 채널인데 과제·규모에 따라 정반대 메커니즘.</caption>
+        <thead><tr><th>Task · Model</th><th>OPE (overall)</th><th>OME (presence)</th><th>CAG (content)</th></tr></thead>
+        <tbody>
+          <tr><td>GSM8K · 4B</td><td>−1.00</td><td><b>−6.17</b></td><td class="up"><b>+5.17</b></td></tr>
+          <tr><td>GSM8K · 8B</td><td>+1.67</td><td class="up">+3.96</td><td>−2.29</td></tr>
+          <tr><td>MATH-500 · 4B</td><td class="up">+15.00</td><td class="up">+8.33</td><td class="up"><b>+6.67</b></td></tr>
+          <tr><td>MATH-500 · 8B</td><td class="up">+10.00</td><td class="up">+8.13</td><td>+1.88</td></tr>
+          <tr><td>ARC-C · 4B</td><td>−0.63</td><td>−2.97</td><td>+2.34</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figure class="fig">
+      <img src="fig/2607.26773/fig2_math500_decomp.png" alt="MATH-500 decomposition into other-example message effect and CAG">
+      <figcaption class="t-en"><b>Figure 2.</b> MATH-500: the overall gain decomposes into a large message-presence effect (OME) plus a content effect (CAG) — and the content share shrinks from 4B to 8B. Much of what looked like "communication" is the channel's structural side effects.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> MATH-500: 전체 이득이 큰 존재 효과(OME)와 내용 효과(CAG)로 분해된다 — 그리고 내용 몫은 4B→8B에서 줄어든다. "통신"처럼 보였던 것의 상당 부분이 채널의 구조적 부수효과다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2607.26773</div>
+    </figure>
+    <figure class="fig">
+      <img src="fig/2607.26773/fig3_forest.png" alt="Forest plot of CAG and SSG with confidence intervals">
+      <figcaption class="t-en"><b>Figure 3.</b> CAG vs SSG with paired 95% CIs. GSM8K-4B: content is real (CAG +5.17) but a self-generated message does just as well (SSG −2.0, CI crossing zero) — the "other agent" added nothing. MATH-500-8B is the mirror image: weak content effect, yet SSG +10.0 [2.5, 20.0] — the separate agent helps for reasons other than example-specific content.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> 짝지은 95% CI의 CAG vs SSG. GSM8K-4B: 내용은 실재(CAG +5.17)하지만 자가 생성 메시지도 똑같이 잘한다(SSG −2.0, CI가 0 포함) — "타 에이전트"는 아무것도 더하지 않았다. MATH-500-8B는 거울상: 내용 효과는 약한데 SSG +10.0 [2.5, 20.0] — 별도 에이전트가 예제 내용 아닌 다른 이유로 돕는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2607.26773</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><strong>OPE = OME + CAG should become mandatory reporting.</strong> Any latent-comm paper can run the M_oth swap for a few GPU-hours; without it, "our channel communicates" is unfalsified marketing.</p><p class="t-ko"><strong>OPE = OME + CAG는 의무 보고가 되어야 한다.</strong> 어떤 잠재 통신 논문이든 몇 GPU시간이면 M_oth 교체를 돌릴 수 있다; 그것 없이 "우리 채널은 통신한다"는 반증되지 않은 마케팅이다.</p></div>
+      <div class="t"><span class="ic">🪞</span><p class="t-en"><strong>SSG is the control the field owed us.</strong> If the receiver talking to itself matches the sender's message, the system is paying multi-agent costs for single-agent compute scaling — exactly the confound flagged in our LatentMAS full review.</p><p class="t-ko"><strong>SSG는 분야가 빚졌던 통제 실험.</strong> 수신자의 혼잣말이 송신자 메시지와 대등하면, 그 시스템은 단일 에이전트 연산 스케일링에 멀티에이전트 비용을 내는 것 — 우리 LatentMAS 풀리뷰가 짚었던 바로 그 교란이다.</p></div>
+      <div class="t"><span class="ic">⚖️</span><p class="t-en"><strong>Mechanisms flip with scale.</strong> The same channel is presence-hurt/content-help at 4B and the reverse at 8B — a single-model result about latent communication generalizes even less than we feared.</p><p class="t-ko"><strong>메커니즘은 규모에 따라 뒤집힌다.</strong> 같은 채널이 4B에선 존재-해악/내용-이득, 8B에선 그 반대 — 잠재 통신의 단일 모델 결과는 우려보다도 일반화가 안 된다.</p></div>
+      <div class="t"><span class="ic">📉</span><p class="t-en"><strong>Prediction sensitivity ≠ task value.</strong> Big first-token JSD can coexist with zero accuracy effect and vice versa — interpretability probes and benchmarks are complementary evidence, not substitutes.</p><p class="t-ko"><strong>예측 민감도 ≠ 과제 가치.</strong> 큰 첫 토큰 JSD가 정확도 무효과와 공존할 수 있고 그 역도 성립 — 해석 프로브와 벤치마크는 대체재가 아니라 상보적 증거다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the audit's scope is narrow where its rhetoric is broad — one channel implementation (LatentMAS hidden-state relay, m=40) on one model family (Qwen3-4B/8B) with small samples (100/60 examples; ARC-C and several CAG/SSG intervals straddle zero), so the headline sign-flips could themselves be noise at the margins. M_oth is length-matched but not difficulty-matched, and M_self inherits the receiver's style — both substitutions could carry their own confounds. The framework is the contribution; the specific verdicts on LatentMAS need replication at scale.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판:</b> 감사의 수사는 넓은데 범위는 좁다 — 채널 구현 하나(LatentMAS 은닉 상태 relay, m=40), 모델 계열 하나(Qwen3-4B/8B), 작은 표본(100/60 예제; ARC-C와 여러 CAG/SSG 구간이 0을 걸침)이라 헤드라인의 부호 반전 자체가 경계선에선 노이즈일 수 있다. M_oth는 길이만 맞추고 난이도는 안 맞췄고, M_self는 수신자 스타일을 물려받는다 — 두 대체물 모두 자체 교란을 품을 수 있다. 기여는 프레임워크이고, LatentMAS에 대한 구체적 판정은 대규모 재현이 필요하다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2607.26773">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2607.26773">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2607.26773">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2607.26773">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Daily routine · topic: Multi-Agent Latent Communication</b> (causal audit of the archive's core thread).<br>Auto-generated <b>5-min paper summary</b> · noindex · auto-generated 2026-08-09.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>데일리 루틴 · 주제: Multi-Agent Latent Communication</b> (아카이브 핵심 갈래의 인과 감사).<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 자동 생성 2026-08-09.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
