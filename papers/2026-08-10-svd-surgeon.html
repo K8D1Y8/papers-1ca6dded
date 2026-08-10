@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<!-- 5-min paper summary · bilingual (EN default · KO toggle) · noindex -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · SVD-Surgeon</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank Decomposition</span><span class="t-ko">모델 압축 · 저랭크 분해</span></span>
+      <span>2026 · 06 · 22</span>
+    </div>
+    <h1>SVD-Surgeon<br>
+      <span class="glow t-en">— stop arguing about which singular values to drop, and repair the ones you keep</span>
+      <span class="glow t-ko">— 어떤 특이값을 버릴지 다투지 말고, 남긴 것을 수리하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Mahmoud Safari</b> · Frank Hutter <span class="t-en">(senior)</span><span class="t-ko">(책임저자)</span></span>
+      <span>🏛 University of Freiburg · Prior Labs · ELLIS Institute Tübingen</span>
+      <span>🗓 2026-06-22</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.23568">arXiv:2606.23568</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Every SVD compressor for LLMs argues about the same two questions: <i>how</i> to factorize, and <i>which</i> singular values to discard. Nobody touches the third one — what the survivors should become <i>after</i> the others are gone. SVD-Surgeon ports <b>Optimal Brain Surgeon</b> into the singular-value basis and answers it in closed form. The trick is a change of coordinates: restrict the perturbation to δθ = U·diag(δσ)·Vᵀ and the fourth-order weight Hessian collapses into an ordinary <b>ℓ×ℓ</b> matrix H̄ — small enough to invert — whose entries are assembled from <i>first-order</i> gradients alone, because diag(UᵀGV) is literally ∂L/∂σ. One linear solve, <b>δσ*<sub>S</sub> = H̄⁻¹<sub>SS</sub> H̄<sub>SC</sub> σ<sub>C</sub></b>, and the retained singular values absorb the loss the truncation created. No retraining, no gradient steps, and — since the derivation never assumes U, V are orthonormal — it bolts onto existing compressors. On SVD-LLM the effect at aggressive ratios is dramatic: OPT-6.7B at 70% compression goes from perplexity <b>944.57 → 46.36</b>. On LLaMA-2-7B, the same machinery buys <b>8%</b>.</p>
+    <p class="t-ko">LLM용 SVD 압축기들은 늘 같은 두 질문만 다툰다: <i>어떻게</i> 분해할 것인가, <i>어떤</i> 특이값을 버릴 것인가. 세 번째 질문은 아무도 건드리지 않았다 — 나머지가 사라진 <i>뒤에</i> 살아남은 값들은 무엇이 되어야 하는가. SVD-Surgeon은 <b>Optimal Brain Surgeon</b>을 특이값 기저로 옮겨 이 질문에 닫힌 형태로 답한다. 핵심은 좌표 변환이다: 섭동을 δθ = U·diag(δσ)·Vᵀ로 제한하면 4차 텐서인 가중치 헤시안이 평범한 <b>ℓ×ℓ</b> 행렬 H̄로 붕괴하고 — 역행렬을 구할 만큼 작다 — 그 성분은 오직 <i>1차</i> 기울기만으로 조립된다. diag(UᵀGV)가 문자 그대로 ∂L/∂σ이기 때문이다. 선형 시스템 한 번, <b>δσ*<sub>S</sub> = H̄⁻¹<sub>SS</sub> H̄<sub>SC</sub> σ<sub>C</sub></b>를 풀면 남은 특이값들이 절단이 만든 손실을 흡수한다. 재학습도 기울기 스텝도 없고, 유도 과정에서 U, V의 직교성을 한 번도 가정하지 않으므로 기존 압축기 위에 그대로 얹힌다. SVD-LLM 위에서 공격적 압축률의 효과는 극적이다: OPT-6.7B의 70% 압축에서 perplexity가 <b>944.57 → 46.36</b>. 다만 LLaMA-2-7B에서 같은 기계가 사주는 것은 <b>8%</b>다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Low-rank compression is the one family that needs no special hardware: truncating θ = UΣVᵀ turns a matmul into two smaller matmuls, and that is the whole deployment story. Its weakness has always been that it degrades badly when pushed.</p>
+    <p class="lead t-ko">저랭크 압축은 특수 하드웨어가 필요 없는 유일한 계열이다: θ = UΣVᵀ를 절단하면 행렬곱 하나가 더 작은 행렬곱 둘이 되고, 배포 이야기는 그것으로 끝이다. 약점은 늘 하나였다 — 세게 밀어붙이면 급격히 무너진다.</p>
+    <p class="t-en">The framing here is worth more than the numbers. A decade of second-order pruning — OBD, OBS, Optimal BERT Surgeon, GPTQ, SparseGPT, LLM Surgeon — has been about compensating survivors in <b>weight space</b>, where the Hessian is mn×mn and every scaling trick (layer-wise blocks, K-FAC, input Gram matrices) exists to make that size tractable. Meanwhile the entire SVD-compression literature (FWSVD, DRONE, ASVD, SVD-LLM, OBD-LLM) optimizes the <i>decomposition</i> and then truncates and walks away. This paper notices that the two lines never met, and that in the singular-value basis the size problem simply evaporates: there are only ℓ = min(m, n) parameters per layer, so the exact OBS solution is affordable without any approximation of the curvature <i>structure</i> — only of its values.</p>
+    <p class="t-ko">숫자보다 이 논문의 배치가 더 값지다. 10년의 2차 프루닝 — OBD, OBS, Optimal BERT Surgeon, GPTQ, SparseGPT, LLM Surgeon — 은 모두 <b>가중치 공간</b>에서 생존자를 보정하는 일이었고, 거기서 헤시안은 mn×mn이라 모든 스케일링 기법(층별 블록, K-FAC, 입력 Gram 행렬)이 그 크기를 감당하려 존재했다. 한편 SVD 압축 문헌 전체(FWSVD, DRONE, ASVD, SVD-LLM, OBD-LLM)는 <i>분해</i>를 최적화한 뒤 절단하고 그냥 떠난다. 이 논문은 두 계보가 만난 적이 없다는 것, 그리고 특이값 기저에서는 크기 문제가 그냥 증발한다는 것을 짚는다: 층당 파라미터가 ℓ = min(m, n)개뿐이라, 곡률의 <i>구조</i>를 근사하지 않고도 — 값만 근사하면 — 정확한 OBS 해를 감당할 수 있다.</p>
+    <figure class="fig">
+      <img src="fig/2606.23568/x1.png" alt="Overview of SVD-Surgeon: the blue host pipeline decomposes and truncates the weight matrix, while the orange SVD-Surgeon path projects calibration gradients into the singular-value basis, assembles a compact Hessian, and computes a closed-form correction of the retained singular values.">
+      <figcaption class="t-en"><b>Figure 1.</b> The host compressor (blue, top) does what it always did: decompose θ = UΣVᵀ, keep the top-r singular values, ship U<sub>r</sub>Σ<sub>r</sub>V<sub>r</sub>ᵀ. SVD-Surgeon (orange, bottom) runs alongside it: calibration gradients Gⁿ are projected into the host's own singular basis via ḡⁿ = diag(UᵀGⁿV), averaged into H̄, and turned into a correction δσ<sub>S</sub> that is <i>added</i> to Σ<sub>r</sub>. The solid arrow is the update-only variant (U), which inherits the host's pruned set; the dashed arrow is select-and-update (S), which replaces that set using the saliency σᵢ²/[H̄⁻¹]ᵢᵢ.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> 호스트 압축기(파랑, 위)는 늘 하던 일을 한다: θ = UΣVᵀ로 분해하고 상위 r개 특이값을 남겨 U<sub>r</sub>Σ<sub>r</sub>V<sub>r</sub>ᵀ를 내보낸다. SVD-Surgeon(주황, 아래)은 그 옆에서 돈다: 캘리브레이션 기울기 Gⁿ를 ḡⁿ = diag(UᵀGⁿV)로 호스트 자신의 특이값 기저에 사영하고, 평균 내어 H̄를 만들고, 이를 Σ<sub>r</sub>에 <i>더해지는</i> 보정 δσ<sub>S</sub>로 바꾼다. 실선 화살표는 호스트의 절단 집합을 그대로 물려받는 update-only(U) 변형이고, 점선은 saliency σᵢ²/[H̄⁻¹]ᵢᵢ로 그 집합을 갈아치우는 select-and-update(S) 변형이다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.23568</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">944.57 → 46.36</div><div class="l"><span class="t-en">OPT-6.7B perplexity at 70% compression</span><span class="t-ko">OPT-6.7B의 70% 압축 perplexity</span></div></div>
+      <div class="stat"><div class="n">ℓ × ℓ</div><div class="l"><span class="t-en">Hessian size — weight space needs mn × mn</span><span class="t-ko">헤시안 크기 — 가중치 공간은 mn × mn</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">gradient steps · training-free, single-shot</span><span class="t-ko">기울기 스텝 · 학습 없는 단발 적용</span></div></div>
+      <div class="stat"><div class="n">8.1%</div><div class="l"><span class="t-en">LLaMA-2-7B gain at the same ratio (253.40 → 232.76)</span><span class="t-ko">같은 압축률의 LLaMA-2-7B 개선폭 (253.40 → 232.76)</span></div></div>
+      <div class="stat"><div class="n">4.3×</div><div class="l"><span class="t-en">that best 70% result is still worse than dense (10.86)</span><span class="t-ko">그 최고 70% 결과도 원본(10.86)보다 여전히 나쁘다</span></div></div>
+      <div class="stat"><div class="n">32,768</div><div class="l"><span class="t-en">Fisher calibration samples · 7.6 s each on an H200</span><span class="t-ko">Fisher 캘리브레이션 샘플 · H200에서 개당 7.6초</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The headline and its counterweight, in one table</span><span class="t-ko">헤드라인과 그 반대추를 표 하나로</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (excerpt).</b> WikiText-2 perplexity (↓) vs. compression ratio ρ, SVD-Surgeon layered on SVD-LLM (whitening only). Two model blocks tell two different stories. On <b>OPT-6.7B</b> the method converts a collapse into something merely bad — 944.57 → 46.36 at ρ=0.7, a 20× reduction. On <b>LLaMA-2-7B</b> the identical machinery moves 253.40 → 232.76, about 8%. Also worth reading down the columns rather than across: dense OPT-6.7B is 10.86 and dense LLaMA-2-7B is 5.47, so <i>every</i> number here at ρ≥0.6 is still far outside deployable range.</caption>
+        <caption class="t-ko"><b>표 1 (발췌).</b> 압축률 ρ에 따른 WikiText-2 perplexity(↓), SVD-LLM(whitening만) 위에 얹은 SVD-Surgeon. 두 모델 블록이 서로 다른 이야기를 한다. <b>OPT-6.7B</b>에서는 붕괴를 그저 나쁜 수준으로 되돌린다 — ρ=0.7에서 944.57 → 46.36, 20배 감소. <b>LLaMA-2-7B</b>에서는 동일한 기계가 253.40 → 232.76, 약 8%를 움직인다. 가로가 아니라 세로로도 읽어야 한다: 원본 OPT-6.7B는 10.86, LLaMA-2-7B는 5.47이므로 ρ≥0.6의 <i>모든</i> 숫자는 여전히 배포 가능 범위 밖이다.</caption>
+        <thead><tr><th><span class="t-en">Model</span><span class="t-ko">모델</span></th><th><span class="t-en">Method</span><span class="t-ko">방법</span></th><th>0.4</th><th>0.5</th><th>0.6</th><th>0.7</th><th>0.8</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="3">OPT-6.7B<br><small>dense 10.86</small></td><td>SVD-LLM</td><td>15.27</td><td>21.22</td><td>53.23</td><td>944.57</td><td>6777.57</td></tr>
+          <tr><td>SVD-Surgeon (U)</td><td>14.25</td><td>17.02</td><td>23.76</td><td>47.27</td><td>316.47</td></tr>
+          <tr><td><b>SVD-Surgeon (S)</b></td><td class="up">14.22</td><td class="up">16.90</td><td class="up">23.39</td><td class="up">46.36</td><td class="up">279.88</td></tr>
+          <tr><td rowspan="3">LLaMA-2-7B<br><small>dense 5.47</small></td><td>SVD-LLM</td><td>16.15</td><td>33.28</td><td>89.97</td><td>253.40</td><td>570.44</td></tr>
+          <tr><td>SVD-Surgeon (U)</td><td>15.71</td><td>31.49</td><td>84.04</td><td>241.71</td><td>549.14</td></tr>
+          <tr><td><b>SVD-Surgeon (S)</b></td><td class="up">15.59</td><td class="up">31.14</td><td class="up">82.50</td><td class="up">232.76</td><td class="up">531.62</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Three moves that make it work</span><span class="t-ko">작동하게 만드는 세 수</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">the reduction</span>
+        <h3>A fourth-order tensor collapses to an ℓ×ℓ matrix</h3>
+        <p class="t-en">Keep θ in matrix form and its Hessian is a fourth-order object H<sub>ij,kl</sub>. But if the only perturbation allowed is δθ = U·diag(δσ)·Vᵀ, the quadratic form contracts over all four indices and leaves δL ≈ ½ δσᵀH̄δσ with H̄<sub>pq</sub> = Σ U<sup>⊤</sup><sub>pi</sub>V<sub>jp</sub>H<sub>ij,kl</sub>U<sup>⊤</sup><sub>qk</sub>V<sub>lq</sub>. That is the entire reason this is tractable: freezing the singular <i>directions</i> is what shrinks curvature from mn×mn to min(m,n)².</p>
+        <p class="t-ko">θ를 행렬 형태로 두면 헤시안은 4차 객체 H<sub>ij,kl</sub>이다. 그러나 허용되는 섭동이 δθ = U·diag(δσ)·Vᵀ뿐이라면 2차 형식이 네 인덱스 모두에 대해 축약되어 δL ≈ ½ δσᵀH̄δσ만 남고, H̄<sub>pq</sub> = Σ U<sup>⊤</sup><sub>pi</sub>V<sub>jp</sub>H<sub>ij,kl</sub>U<sup>⊤</sup><sub>qk</sub>V<sub>lq</sub>이다. 이것이 다루기 쉬워지는 유일한 이유다: 특이 <i>방향</i>을 고정하는 대가로 곡률이 mn×mn에서 min(m,n)²로 줄어든다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">the estimator</span>
+        <h3>Second-order curvature from first-order gradients</h3>
+        <p class="t-en">Approximate the per-layer Hessian by the empirical Fisher, and the contraction simplifies to H̄ = (1/N)Σ ḡⁿḡⁿᵀ with ḡⁿ = diag(UᵀGⁿV). The pleasing part: by the chain rule with ∂θ<sub>ij</sub>/∂σ<sub>p</sub> = U<sub>ip</sub>V<sub>jp</sub>, that quantity <i>is</i> ∂Lₙ/∂σ<sub>p</sub> — a derivative no autodiff framework exposes, obtained here from an ordinary gradient matrix and one matmul. No second derivatives are ever computed.</p>
+        <p class="t-ko">층별 헤시안을 경험적 Fisher로 근사하면 축약이 H̄ = (1/N)Σ ḡⁿḡⁿᵀ, ḡⁿ = diag(UᵀGⁿV)로 단순해진다. 기분 좋은 대목: ∂θ<sub>ij</sub>/∂σ<sub>p</sub> = U<sub>ip</sub>V<sub>jp</sub>인 연쇄법칙에 의해 이 양은 <i>곧</i> ∂Lₙ/∂σ<sub>p</sub>다 — 어떤 자동미분 프레임워크도 노출하지 않는 도함수를, 평범한 기울기 행렬과 행렬곱 한 번으로 얻는다. 2차 도함수는 끝내 한 번도 계산되지 않는다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">the payoff</span>
+        <h3>One solve gives the update; the same algebra gives the saliency</h3>
+        <p class="t-en">Substituting δσ<sub>C</sub> = −σ<sub>C</sub> and minimizing yields δσ*<sub>S</sub> = H̄⁻¹<sub>SS</sub>H̄<sub>SC</sub>σ<sub>C</sub>. Put that back and the residual loss is the <b>Schur complement</b> ½σ<sub>C</sub>ᵀ(H̄<sub>CC</sub> − H̄<sub>CS</sub>H̄⁻¹<sub>SS</sub>H̄<sub>SC</sub>)σ<sub>C</sub>, which by block inversion equals ½σ<sub>C</sub>ᵀ([H̄⁻¹]<sub>CC</sub>)⁻¹σ<sub>C</sub> — the classical OBS result, recovered without Lagrange multipliers. For a single value it becomes σᵢ²/2[H̄⁻¹]ᵢᵢ, and when H̄ ≈ I it degenerates to σᵢ²/2: plain magnitude selection falls out as the special case.</p>
+        <p class="t-ko">δσ<sub>C</sub> = −σ<sub>C</sub>를 대입해 최소화하면 δσ*<sub>S</sub> = H̄⁻¹<sub>SS</sub>H̄<sub>SC</sub>σ<sub>C</sub>가 나온다. 이를 되돌려 넣으면 잔여 손실은 <b>Schur 보완</b> ½σ<sub>C</sub>ᵀ(H̄<sub>CC</sub> − H̄<sub>CS</sub>H̄⁻¹<sub>SS</sub>H̄<sub>SC</sub>)σ<sub>C</sub>이고, 블록 역행렬 항등식에 의해 ½σ<sub>C</sub>ᵀ([H̄⁻¹]<sub>CC</sub>)⁻¹σ<sub>C</sub>와 같다 — 라그랑주 승수 없이 되찾은 고전 OBS 결과다. 단일 값에 대해서는 σᵢ²/2[H̄⁻¹]ᵢᵢ가 되고, H̄ ≈ I이면 σᵢ²/2로 퇴화한다: 평범한 크기 기반 선택이 특수 경우로 떨어져 나온다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">the hook</span>
+        <h3>Never assuming orthonormality is the whole composability story</h3>
+        <p class="t-en">Eq. (3) is written for a general θ = UΣVᵀ, with standard SVD as a special case. This is not a stylistic choice — SVD-LLM's whitening pushes S⁻¹ into the right factor, so its Vᵀ is <i>not</i> orthonormal, and a derivation that leaned on UᵀU = VᵀV = I would not apply to the very host the paper targets. The generality is what lets it sit on top of an existing pipeline instead of replacing it.</p>
+        <p class="t-ko">식 (3)은 표준 SVD를 특수 경우로 포함하는 일반적 θ = UΣVᵀ로 쓰였다. 이는 문체 선택이 아니다 — SVD-LLM의 whitening은 S⁻¹를 오른쪽 인자로 밀어넣어 그 Vᵀ가 직교가 <i>아니고</i>, UᵀU = VᵀV = I에 기댄 유도는 정작 이 논문이 겨냥한 호스트에 적용되지 않는다. 이 일반성 덕분에 기존 파이프라인을 대체하지 않고 그 위에 앉을 수 있다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Let the host do its job, untouched.</span><span class="t-ko">호스트가 하던 일을 그대로 하게 둔다.</span></b><span class="t-en"> SVD-LLM whitens with a Cholesky factor S of the activation Gram matrix, decomposes θS = UΣṼᵀ, truncates to rank r, and maps back through S⁻¹. Target rank comes from the ratio: ρ = 1 − r(m+n)/mn.</span><span class="t-ko"> SVD-LLM은 활성 Gram 행렬의 Cholesky 인자 S로 whitening하고, θS = UΣṼᵀ로 분해하고, 랭크 r로 절단한 뒤 S⁻¹로 되돌린다. 목표 랭크는 압축률에서 나온다: ρ = 1 − r(m+n)/mn.</span></li>
+      <li><b><span class="t-en">Collect gradients on a separate calibration set.</span><span class="t-ko">별도 캘리브레이션 집합에서 기울기를 모은다.</span></b><span class="t-en"> Drawn from the same source as the host's whitening data but kept distinct, because Hessian estimation needs far more samples than whitening: N = 16,384–32,768 against the host's N<sub>cal</sub> = 256.</span><span class="t-ko"> 호스트의 whitening 데이터와 같은 출처에서 뽑되 분리해서 쓴다. 헤시안 추정에는 whitening보다 훨씬 많은 샘플이 필요하기 때문이다: 호스트의 N<sub>cal</sub> = 256에 비해 N = 16,384~32,768.</span></li>
+      <li><b><span class="t-en">Project and assemble H̄, then make it invertible.</span><span class="t-ko">사영하고 H̄를 조립한 뒤, 역행렬이 가능하게 만든다.</span></b><span class="t-en"> ḡⁿ = diag(UᵀGⁿV) per sample, outer-producted and averaged. Diagonal damping d<sub>S</sub>, d is added before inversion, and only the leading r + α(ℓ−r) block is retained, with α = 0.3 fixed everywhere.</span><span class="t-ko"> 샘플마다 ḡⁿ = diag(UᵀGⁿV)를 구해 외적하고 평균 낸다. 역행렬 전에 대각 damping d<sub>S</sub>, d를 더하고, 선행 r + α(ℓ−r) 블록만 남긴다. α = 0.3은 어디서나 고정.</span></li>
+      <li><b><span class="t-en">Solve once, scale, add.</span><span class="t-ko">한 번 풀고, 스케일하고, 더한다.</span></b><span class="t-en"> δσ*<sub>S</sub> = H̄⁻¹<sub>SS</sub>H̄<sub>SC</sub>σ<sub>C</sub>, multiplied by λ to account for the approximate Hessian, then Σ′<sub>r</sub> = Σ<sub>r</sub> + diag(δσ<sub>S</sub>). λ = 1 for all OPT models — and 0.1 for LLaMA-2-7B.</span><span class="t-ko"> δσ*<sub>S</sub> = H̄⁻¹<sub>SS</sub>H̄<sub>SC</sub>σ<sub>C</sub>를 구해, 근사 헤시안을 감안한 λ를 곱하고, Σ′<sub>r</sub> = Σ<sub>r</sub> + diag(δσ<sub>S</sub>). λ는 모든 OPT에서 1이고 — LLaMA-2-7B에서는 0.1이다.</span></li>
+      <li><b><span class="t-en">Optionally re-choose what to prune first (variant S).</span><span class="t-ko">선택적으로 무엇을 버릴지 먼저 다시 고른다 (S 변형).</span></b><span class="t-en"> Rank all triplets by σᵢ²/2[H̄⁻¹]ᵢᵢ, take the lowest as C, then apply the same compensation. This costs a pseudoinverse of the full block-truncated H̄ rather than a single linear solve.</span><span class="t-ko"> 모든 삼중항을 σᵢ²/2[H̄⁻¹]ᵢᵢ로 정렬해 최하위를 C로 잡고, 같은 보정을 적용한다. 선형 시스템 한 번이 아니라 블록 절단된 H̄ 전체의 유사역행렬이 필요하다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">A corrective layer, not a competitor. The most reusable thing here is the interface: any method producing θ = UΣVᵀ can be post-processed. That makes SVD-Surgeon composable with the stronger hosts it does <i>not</i> test — including OBD-LLM (arXiv:2604.00821), which its own related-work section calls loss-optimal.</p><p class="t-ko">경쟁자가 아니라 보정 레이어. 여기서 가장 재사용 가능한 것은 인터페이스다: θ = UΣVᵀ를 내놓는 어떤 방법이든 후처리할 수 있다. 덕분에 SVD-Surgeon은 정작 <i>시험하지 않은</i> 더 강한 호스트들과도 결합 가능하다 — 자기 관련연구 절에서 손실 최적이라 부르는 OBD-LLM(arXiv:2604.00821)을 포함해서.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Choose the basis, and the hard part disappears. Weight-space OBS spends all its ingenuity approximating an mn×mn Hessian. Move to σ-coordinates and the exact block solve is affordable — the cost is paid instead by freezing U and V, which the authors flag as the obvious next thing to relax.</p><p class="t-ko">기저를 잘 고르면 어려운 부분이 사라진다. 가중치 공간 OBS는 mn×mn 헤시안을 근사하는 데 모든 재간을 쓴다. σ 좌표로 옮기면 정확한 블록 해가 감당 가능해지고, 그 대가는 U와 V를 얼리는 것으로 치른다 — 저자들도 다음에 풀어야 할 지점으로 명시한다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Compensation ≫ selection, and that is itself a finding. Nearly all the gain comes from variant (U); re-selecting via the principled saliency adds little. Read the other way, this is quiet evidence that magnitude-based selection in a whitened basis was already close to optimal — the mistake was never <i>which</i> values to drop, but leaving the rest unadjusted.</p><p class="t-ko">보정 ≫ 선택이며, 그 자체가 하나의 발견이다. 이득의 거의 전부가 (U) 변형에서 나오고, 원리적인 saliency로 다시 고르는 것은 별로 보태지 않는다. 뒤집어 읽으면, whitening된 기저에서의 크기 기반 선택이 이미 최적에 가까웠다는 조용한 증거다 — 실수는 <i>어떤</i> 값을 버리느냐가 아니라 나머지를 손대지 않고 둔 것이었다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The paper reports Fisher assembly as "roughly 7.6 s per calibration sample" for LLaMA-2-7B and, separately in Appendix A, N = 32,768 samples. Multiplied out, that is <b>~69 hours on a single H200</b> — two orders of magnitude beyond the compression times actually plotted in Figure 2, and never stated as a total anywhere. It is genuinely one-time, offline and parallelizable, but a method sold as cheap because it avoids fine-tuning should probably show that bill. Three more things to weigh. <b>(1)</b> The single baseline is SVD-LLM with whitening only — its LoRA recovery is set aside as "orthogonal", so we never learn whether a closed-form σ-update beats, or merely duplicates, the cheap fine-tuning it is implicitly competing with. OBD-LLM, described in the related work as inducing a loss-optimal decomposition, is not compared against at all. <b>(2)</b> The dramatic numbers live where nobody deploys: at ρ=0.7 the best result is perplexity 46.36 against a dense 10.86, and at ρ≤0.4 the improvement is a few percent. Evaluation is perplexity-only on two corpora, with no downstream task accuracy, on two older model families (OPT, LLaMA-2). <b>(3)</b> The LLaMA-2 block is the tell: gains shrink to ~8% precisely where the compensation had to be damped tenfold (λ = 0.1 vs 1 for OPT). That is the second-order model being distrusted by its own authors on the one model family most people still care about — and a hyperparameter chosen by "light manual exploration" per model, which sits awkwardly beside the claim of a single-shot, plug-and-play method.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 논문은 Fisher 조립 비용을 LLaMA-2-7B 기준 "캘리브레이션 샘플당 약 7.6초"로 보고하고, 부록 A에서는 따로 N = 32,768 샘플을 쓴다고 적는다. 곱하면 <b>H200 한 장으로 약 69시간</b>이다 — 그림 2에 실제로 그려진 압축 시간보다 두 자릿수 크고, 어디에도 총량으로 명시되지 않는다. 정말로 일회성·오프라인이고 병렬화도 되지만, 파인튜닝을 피해서 싸다고 파는 방법이라면 그 청구서는 보여주는 편이 맞다. 더 따질 것 셋. <b>(1)</b> 유일한 baseline은 whitening만 적용한 SVD-LLM이다 — LoRA 회복은 "직교적"이라며 제쳐두므로, 닫힌 형태의 σ 업데이트가 사실상 경쟁 상대인 값싼 파인튜닝을 이기는지 그저 겹치는지는 끝내 알 수 없다. 관련연구에서 손실 최적 분해를 유도한다고 서술한 OBD-LLM과는 아예 비교하지 않는다. <b>(2)</b> 극적인 숫자들은 아무도 배포하지 않는 구간에 산다: ρ=0.7의 최고 결과가 perplexity 46.36인데 원본은 10.86이고, ρ≤0.4에서 개선은 몇 퍼센트다. 평가는 두 코퍼스의 perplexity뿐, 다운스트림 정확도는 없으며, 모델도 구세대 두 계열(OPT, LLaMA-2)이다. <b>(3)</b> LLaMA-2 블록이 실마리다: 보정을 10배로 눌러야 했던(λ = 0.1, OPT는 1) 바로 그 지점에서 이득이 약 8%로 줄어든다. 아직 대부분이 신경 쓰는 유일한 모델 계열에서, 저자들 스스로 자기 2차 모델을 불신했다는 뜻이다 — 게다가 그 값은 모델마다 "가벼운 수동 탐색"으로 정해졌고, 이는 단발·플러그앤플레이라는 주장 옆에 어색하게 놓인다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.23568">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.23568">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.23568">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.23568">🔎 alphaXiv</a>
+      <a href="https://github.com/mahmoud-safari/SVD-Surgeon">💻 code</a>
+    </div>
+    <span class="t-en">Why picked — <b>#4 in the 2026-08 wishlist queue (Model Compression · low-rank axis); it is the only entry that acts on the singular values you keep rather than the ones you drop, and it composes on top of the SVD compressors the rest of the queue is about</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-10.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐 4번(모델 압축·저랭크 축); 버리는 특이값이 아니라 남기는 특이값에 손대는 유일한 항목이고, 이 큐의 나머지가 다루는 SVD 압축기들 위에 그대로 얹힌다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-10.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
