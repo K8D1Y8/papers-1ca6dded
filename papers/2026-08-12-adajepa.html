@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<!-- 5-min paper summary · bilingual (EN default · KO toggle) · noindex -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · AdaJEPA</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">World Models · Test-Time Adaptation</span><span class="t-ko">월드 모델 · 테스트타임 적응</span></span>
+      <span>2026 · 06 · 30</span>
+    </div>
+    <h1>AdaJEPA<br>
+      <span class="glow t-en">— the world model stops being a fixed asset and becomes something you keep repairing while you act</span>
+      <span class="glow t-ko">— 월드 모델은 고정 자산이기를 그만두고, 행동하는 내내 계속 수리하는 무언가가 된다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Ying Wang</b> · Oumayma Bounou · Yann LeCun · Mengye Ren <span class="t-en">(last two: equal advising)</span><span class="t-ko">(뒤 두 명: 공동 지도)</span></span>
+      <span>🏛 New York University · AMI Labs</span>
+      <span>🗓 2026-06-30</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.32026">arXiv:2606.32026</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Every JEPA-plus-MPC planner has the same silent assumption: after training, the world model is <b>frozen</b>. So when the block is a shape you never saw, or the camera picks up salt-and-pepper noise, or friction changes, the predictor quietly lies — and MPC dutifully optimizes against the lie. AdaJEPA's move is almost embarrassingly small: after you execute an action, you <i>already have</i> the ground truth for the prediction you just made. The transition (o<sub>t</sub>, a<sub>t</sub>, o<sub>t+1</sub>) is a free labeled sample, and the loss to train on is the <b>same self-supervised latent-prediction loss used in pretraining</b> — no reward, no demonstrations, no separate data-collection phase. So they insert one step into the MPC loop: <b>plan → execute → adapt → replan</b>. One gradient step, on the predictor's last transformer block plus the encoder's last stage, over a buffer of the 5 most recent transitions. That costs <b>0.01–0.03 s</b> per replan. On held-out maze layouts it lifts GD planning success from <b>53.3% → 78.7%</b>; in the low-data regime (one shape, 1k trajectories) it takes PushObj from <b>28.1% → 60.8%</b>, beating a frozen model trained on 64× more data. The honest ceiling is in Table 2: on well-trained in-distribution models the gain is <b>+0.7 to +7.3 points</b>.</p>
+    <p class="t-ko">JEPA + MPC 플래너에는 늘 같은 조용한 가정이 깔려 있다: 학습이 끝나면 월드 모델은 <b>동결</b>된다는 것. 그래서 처음 보는 모양의 블록이 나오거나, 카메라에 소금-후추 노이즈가 끼거나, 마찰이 바뀌면 예측기는 조용히 거짓말을 하고 — MPC는 그 거짓말을 성실하게 최적화한다. AdaJEPA의 한 수는 민망할 만큼 작다: 행동을 실행하고 나면, 방금 한 예측의 정답을 <i>이미 손에 쥐고 있다</i>. 전이 (o<sub>t</sub>, a<sub>t</sub>, o<sub>t+1</sub>)는 공짜 라벨 샘플이고, 학습할 손실은 <b>사전학습에서 쓰던 그 자기지도 잠재 예측 손실 그대로</b>다 — 보상도, 시연도, 별도 데이터 수집 단계도 없다. 그래서 MPC 루프에 한 단계를 끼워 넣는다: <b>계획 → 실행 → 적응 → 재계획</b>. 예측기의 마지막 트랜스포머 블록과 인코더의 마지막 스테이지에 대해, 최근 전이 5개 버퍼로 기울기 한 스텝. 비용은 재계획당 <b>0.01–0.03초</b>. 미공개 미로 레이아웃에서 GD 계획 성공률을 <b>53.3% → 78.7%</b>로 끌어올리고, 저데이터 영역(한 모양·1k 궤적)에서는 PushObj를 <b>28.1% → 60.8%</b>로 만들어 64배 많은 데이터로 학습한 동결 모델을 이긴다. 정직한 상한선은 Table 2에 있다: 잘 학습된 분포 내 모델에서는 이득이 <b>+0.7 ~ +7.3점</b>이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">A world model's error is not a static quantity — it is a quantity you can measure for free, at every single step, just by comparing what you imagined to what actually happened.</p>
+    <p class="lead t-ko">월드 모델의 오차는 정적인 양이 아니다 — 상상한 것과 실제로 일어난 것을 비교하기만 하면, 매 스텝마다 공짜로 측정할 수 있는 양이다.</p>
+    <p class="t-en">The failure mode this paper attacks is specifically nasty because it is <i>invisible from inside the planner</i>. MPC minimizes ‖ẑ − z<sub>g</sub>‖² over imagined rollouts. If the predictor is miscalibrated, the planner still converges beautifully — to an action sequence that looks perfect in latent imagination and does nothing in the real world. And because MPC rolls forward H steps, a small one-step error compounds. Test-time distribution shift is where this bites: visual corruption misaligns the <b>encoder</b>, changed mass or damping misaligns the <b>predictor</b>, and either one is enough.</p>
+    <p class="t-ko">이 논문이 겨냥하는 실패 양상이 특히 고약한 이유는 <i>플래너 내부에서는 보이지 않기 때문</i>이다. MPC는 상상된 롤아웃 위에서 ‖ẑ − z<sub>g</sub>‖²를 최소화한다. 예측기가 어긋나 있어도 플래너는 여전히 아름답게 수렴한다 — 잠재 상상 속에서는 완벽해 보이지만 실제 세계에서는 아무것도 하지 않는 행동 시퀀스로. 게다가 MPC는 H 스텝을 앞으로 굴리므로, 작은 1스텝 오차가 복리로 불어난다. 테스트타임 분포 이동에서 이것이 물어뜯는다: 시각적 손상은 <b>인코더</b>를, 질량이나 감쇠 변화는 <b>예측기</b>를 어긋나게 하고, 둘 중 하나만으로 충분하다.</p>
+    <p class="t-en">The literature had both halves of the answer and never joined them. Test-time training/adaptation (TTT/TTA) exists, but mostly for classification and mostly as a one-shot pass over test inputs. Adaptive control and online model-based RL update models while acting, but typically couple that to policy or value learning, or require a target-domain fine-tuning set, or a separate exploration phase. What was missing is the trivially available thing in between: a goal-conditioned MPC agent is <i>continuously generating its own supervised transitions</i>, and a JEPA already ships with the exact loss that consumes them. AdaJEPA is what you get when you notice that.</p>
+    <p class="t-ko">문헌에는 답의 두 조각이 다 있었지만 한 번도 붙지 않았다. 테스트타임 학습/적응(TTT/TTA)은 존재하지만, 대개 분류 문제용이고 대개 테스트 입력에 대한 일회성 패스다. 적응 제어와 온라인 model-based RL은 행동하면서 모델을 갱신하지만, 보통 정책·가치 학습과 결합되거나, 타깃 도메인 파인튜닝 데이터를 요구하거나, 별도의 탐색 단계를 요구한다. 빠져 있던 것은 그 사이에 자명하게 놓여 있던 것이다: 목표 조건 MPC 에이전트는 <i>스스로 지도 학습용 전이를 끊임없이 생성하고 있고</i>, JEPA에는 그것을 소비할 손실이 이미 들어 있다. AdaJEPA는 그 사실을 알아챘을 때 나오는 물건이다.</p>
+    <figure class="fig">
+      <img src="fig/2606.32026/loop.png" alt="AdaJEPA closed-loop diagram: goal observation and current observation feed the world model, which plans an action, executes it in the environment, appends the resulting transition to a replay buffer, and takes a gradient step on the latent prediction loss before replanning.">
+      <figcaption class="t-en"><b>Figure 1a.</b> The whole method in one loop. The world model (WM) receives the goal observation o<sub>g</sub> and current observation o<sub>t</sub>, and the speech bubble shows the actual problem: from z<sub>t</sub> the model imagines a fan of futures (dotted), but only one is <i>real</i> (solid) — and the real z<sub>t+1</sub> is not the predicted ẑ<sub>t+1</sub>. (1) <b>Plan</b> an action a<sub>t</sub>, (2) <b>Execute</b> it and observe o<sub>t+1</sub>, then the orange path: the transition {o<sub>t</sub>, a<sub>t</sub>, o<sub>t+1</sub>} goes into replay buffer ℬ, and (3) <b>Adapt</b> descends the same latent prediction loss ℓ(ẑ<sub>t+1</sub>, z<sub>t+1</sub>) averaged over ℬ. The black arrow back to the left closes the loop — replan with the model you just repaired.</figcaption>
+      <figcaption class="t-ko"><b>그림 1a.</b> 방법 전체가 루프 하나에. 월드 모델(WM)은 목표 관측 o<sub>g</sub>와 현재 관측 o<sub>t</sub>를 받고, 말풍선이 진짜 문제를 보여준다: z<sub>t</sub>에서 모델은 여러 미래를 부채꼴로 상상하지만(점선) <i>실제</i>는 하나뿐이며(실선), 그 실제 z<sub>t+1</sub>은 예측된 ẑ<sub>t+1</sub>이 아니다. (1) 행동 a<sub>t</sub>를 <b>계획</b>하고, (2) <b>실행</b>해 o<sub>t+1</sub>을 관측한 뒤, 주황색 경로: 전이 {o<sub>t</sub>, a<sub>t</sub>, o<sub>t+1</sub>}이 리플레이 버퍼 ℬ로 들어가고, (3) <b>적응</b>이 ℬ 위에서 평균 낸 동일한 잠재 예측 손실 ℓ(ẑ<sub>t+1</sub>, z<sub>t+1</sub>)을 하강한다. 왼쪽으로 돌아가는 검은 화살표가 루프를 닫는다 — 방금 수리한 모델로 다시 계획한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.32026</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">1</div><div class="l"><span class="t-en">gradient step per MPC replan (default)</span><span class="t-ko">MPC 재계획당 기울기 스텝 (기본값)</span></div></div>
+      <div class="stat"><div class="n">0.01–0.03s</div><div class="l"><span class="t-en">added latency per replan, one H200</span><span class="t-ko">재계획당 추가 지연, H200 1장</span></div></div>
+      <div class="stat"><div class="n">53.3 → 78.7%</div><div class="l"><span class="t-en">unseen maze layouts, GD planner</span><span class="t-ko">미공개 미로 레이아웃, GD 플래너</span></div></div>
+      <div class="stat"><div class="n">28.1 → 60.8%</div><div class="l"><span class="t-en">PushObj seen shapes at K=1, N=1k — beats a frozen model with 64× the data (54.0%)</span><span class="t-ko">PushObj 학습 모양, K=1·N=1k — 64배 데이터의 동결 모델(54.0%)을 이김</span></div></div>
+      <div class="stat"><div class="n">+0.7 – +7.3</div><div class="l"><span class="t-en">points gained on three well-trained in-distribution JEPA implementations — the honest ceiling</span><span class="t-ko">잘 학습된 분포 내 JEPA 구현 3종에서의 이득(%p) — 정직한 상한선</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Where adaptation actually pays</span><span class="t-ko">적응이 실제로 값을 하는 곳</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> PointMaze planning success (%), mean ± std over three seeds × 50 episodes. Two adaptation targets are shown: the default <code>predlast+enclast</code> and the layout-shift favourite <code>predfirst+enclast</code>. Read the last two rows: under dynamics shifts the frozen model is already strong (the 3-frame history window seems to give it in-context correction), and adaptation buys single digits. Under <i>layout</i> shifts — new maze connectivity the predictor has never seen — the frozen model collapses to ~50%, and adapting the predictor's <b>first</b> block recovers +25.3 points. That asymmetry is the paper's real finding: adaptation matters exactly where the shift enters the transition structure, not the pixels.</caption>
+        <caption class="t-ko"><b>표 1.</b> PointMaze 계획 성공률(%), 시드 3개 × 에피소드 50개 평균 ± 표준편차. 두 가지 적응 대상: 기본값 <code>predlast+enclast</code>와 레이아웃 이동에서 강한 <code>predfirst+enclast</code>. 마지막 두 행을 보라: 동역학 이동에서는 동결 모델이 이미 강하고(3프레임 히스토리 창이 인-컨텍스트 보정을 해주는 듯하다) 적응은 한 자릿수만 벌어준다. <i>레이아웃</i> 이동 — 예측기가 본 적 없는 새 미로 연결 구조 — 에서는 동결 모델이 ~50%로 무너지고, 예측기의 <b>첫</b> 블록을 적응시키면 +25.3점을 회복한다. 이 비대칭이 이 논문의 진짜 발견이다: 적응은 이동이 픽셀이 아니라 전이 구조로 들어올 때 정확히 값을 한다.</caption>
+        <thead><tr><th>Setting</th><th>Frozen</th><th>predlast+enclast</th><th>predfirst+enclast</th></tr></thead>
+        <tbody>
+          <tr><td>default dynamics · GD</td><td>82.7 ± 6.8</td><td>83.3 ± 6.6 ↑0.7</td><td class="up">84.0 ± 1.6 ↑1.3</td></tr>
+          <tr><td>low mass (×0.2) · GD</td><td>77.3 ± 8.2</td><td>80.0 ± 3.3 ↑2.7</td><td class="up">82.0 ± 1.6 ↑4.7</td></tr>
+          <tr><td>high damping (×20) · GD</td><td>77.3 ± 5.0</td><td>77.3 ± 10.5</td><td class="up">78.7 ± 4.7 ↑1.3</td></tr>
+          <tr><td>unseen layouts · GD</td><td>53.3 ± 8.2</td><td>66.0 ± 7.1 ↑12.7</td><td class="up">78.7 ± 5.0 ↑25.3</td></tr>
+          <tr><td>unseen layouts · CEM</td><td>49.3 ± 6.2</td><td>55.3 ± 5.0 ↑6.0</td><td class="up">70.7 ± 3.8 ↑21.3</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Plan</span><span class="t-ko">계획</span></div>
+          <div class="sub"><span class="t-en">GD or CEM over horizon H</span><span class="t-ko">지평선 H 위에서 GD 또는 CEM</span></div>
+          <div class="latent">min Σ α<sub>k</sub>‖ẑ<sub>t+k</sub> − z<sub>g</sub>‖²</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Execute</span><span class="t-ko">실행</span></div>
+          <div class="sub"><span class="t-en">first action chunk only</span><span class="t-ko">첫 행동 청크만</span></div>
+          <div class="latent">a<sub>t</sub> → o<sub>t+1</sub></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Adapt</span><span class="t-ko">적응</span></div>
+          <div class="sub"><span class="t-en">1 step · recent-5 buffer · training LR</span><span class="t-ko">1 스텝 · 최근 5개 버퍼 · 학습 시 LR</span></div>
+          <div class="latent">Ω ← Ω − η∇<sub>Ω</sub> ℓ(f<sub>θ</sub>(z<sub>i</sub>, u<sub>i</sub>), sg(z<sub>i+1</sub>))</div>
+        </div>
+        <div class="flow">↺</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Replan</span><span class="t-ko">재계획</span></div>
+          <div class="sub"><span class="t-en">with the repaired model</span><span class="t-ko">수리된 모델로</span></div>
+          <div class="latent"><span class="t-en">max 20–30 MPC steps</span><span class="t-ko">MPC 스텝 최대 20–30</span></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Nothing new is learned — something old is re-aimed.</b> The adaptation loss is byte-for-byte the pretraining loss, including the stop-gradient on the target branch. Ω is a small slice of {φ, ψ, θ}. And every episode starts from a fresh copy of the pretrained checkpoint with an empty buffer, so none of this accumulates.</div>
+      <div class="cap t-ko"><b>새로 배우는 것은 없다 — 원래 있던 것의 조준을 다시 맞출 뿐이다.</b> 적응 손실은 타깃 브랜치의 stop-gradient까지 포함해 사전학습 손실과 한 글자도 다르지 않다. Ω는 {φ, ψ, θ}의 얇은 조각이다. 그리고 모든 에피소드는 사전학습 체크포인트의 새 복사본과 빈 버퍼에서 시작하므로, 이 중 어느 것도 누적되지 않는다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Three design choices that make it free</span><span class="t-ko">이것을 공짜로 만드는 세 가지 설계 선택</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">signal</span>
+        <h3>The label was already there</h3>
+        <p class="t-en">ℒ<sub>ada</sub>(ℬ) = (1/|ℬ|) Σ ℓ( f<sub>θ</sub>(z<sub>i</sub>, ℰ<sub>a</sub>(a<sub>i</sub>)), sg(z<sub>i+1</sub>) ). This is equation (4), and it is equation (2) — the pretraining objective — with a different data source. That identity is the whole reason there is no reward model, no demonstrations, and no risk of optimizing a proxy: the agent is graded on the one thing it is actually being asked to do, predict the next latent. The stop-gradient carries over as the anti-collapse stabilizer; the authors report that <i>removing</i> it while updating only the last layers for one step gives similar planning performance, which is a good sign that the restricted update is itself doing the regularizing.</p>
+        <p class="t-ko">ℒ<sub>ada</sub>(ℬ) = (1/|ℬ|) Σ ℓ( f<sub>θ</sub>(z<sub>i</sub>, ℰ<sub>a</sub>(a<sub>i</sub>)), sg(z<sub>i+1</sub>) ). 이것은 식 (4)이고, 동시에 사전학습 목적함수인 식 (2)이며, 다른 것은 데이터 출처뿐이다. 이 동일성이야말로 보상 모델도, 시연도, 대리 목표를 최적화할 위험도 없는 이유다: 에이전트는 실제로 요구받은 단 하나 — 다음 잠재 상태 예측 — 로만 채점된다. stop-gradient는 붕괴 방지 장치로 그대로 이어진다. 저자들은 마지막 층만 한 스텝 갱신하는 조건에서 그것을 <i>빼도</i> 계획 성능이 비슷하다고 보고하는데, 제한된 갱신 자체가 정칙화 역할을 한다는 좋은 신호다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">cost</span>
+        <h3>One step, two layers, five samples</h3>
+        <p class="t-en">Ω defaults to the predictor's last transformer block (including its final LayerNorm) plus the encoder's last stage — a Linear–GELU–Linear–LayerNorm projection head. One gradient step, at the <i>training</i> learning rates (η<sub>pred</sub> = 5e-4, η<sub>enc</sub> = 1e-5), over a recent-5 buffer. The ablation is unusually reassuring: <b>every</b> variant beats frozen, including LoRA (rank 8, α=16) and including <b>no buffer at all</b>. On the seen shape T, buffer choice moves success only within 81–87%; the frozen baseline sits at 50%. The method is not living on a hyperparameter cliff.</p>
+        <p class="t-ko">Ω의 기본값은 예측기의 마지막 트랜스포머 블록(최종 LayerNorm 포함)과 인코더의 마지막 스테이지 — Linear–GELU–Linear–LayerNorm 사영 헤드 — 다. 최근 5개 버퍼 위에서, <i>학습 때</i> 쓰던 학습률(η<sub>pred</sub> = 5e-4, η<sub>enc</sub> = 1e-5)로 기울기 한 스텝. 절제 실험이 유난히 안심을 준다: LoRA(rank 8, α=16)를 포함해, 심지어 <b>버퍼가 아예 없는</b> 경우까지, <b>모든</b> 변형이 동결 모델을 이긴다. 학습 모양 T에서 버퍼 선택은 성공률을 81–87% 안에서만 움직이고, 동결 기준선은 50%에 앉아 있다. 이 방법은 하이퍼파라미터 절벽 위에 살고 있지 않다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">scope</span>
+        <h3>Per-episode, deliberately</h3>
+        <p class="t-en">Each episode starts from the same pretrained model and keeps its own copy and its own buffer. This is a real design decision, not an oversight — it makes adaptation trivially safe (a bad episode cannot poison the next one) and it is why the in-distribution result is "does no harm" rather than "slowly drifts". But it also fixes the ceiling: AdaJEPA is <i>recalibration</i>, not learning. The visualization section confirms this from the other side — decode an adapted rollout and an unseen red block still comes out gray, an unseen shape still decodes to the nearest training shape. The latent manifold does not move; only the aim does.</p>
+        <p class="t-ko">각 에피소드는 동일한 사전학습 모델에서 시작해 자기만의 복사본과 자기만의 버퍼를 유지한다. 이것은 실수가 아니라 실제 설계 결정이다 — 적응을 자명하게 안전하게 만들고(나쁜 에피소드가 다음 에피소드를 오염시킬 수 없다), 분포 내 결과가 "천천히 표류한다"가 아니라 "해를 끼치지 않는다"인 이유다. 하지만 동시에 상한선을 못 박는다: AdaJEPA는 <i>재보정</i>이지 학습이 아니다. 시각화 절이 반대편에서 이를 확인해 준다 — 적응된 롤아웃을 디코딩하면 처음 보는 빨간 블록은 여전히 회색으로 나오고, 처음 보는 모양은 여전히 가장 가까운 학습 모양으로 디코딩된다. 잠재 다양체는 움직이지 않는다. 조준만 움직인다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Pretrain a perfectly ordinary JEPA. </span><span class="t-ko">완전히 평범한 JEPA를 사전학습한다. </span></b><span class="t-en">ResNet encoder → global latent, transformer predictor, frameskip 5, history window 3, stop-gradient on the target branch plus curvature regularization to straighten latent trajectories. Trained on reward-free offline trajectories. Nothing about this stage is modified — which is exactly why the method drops onto DINO-WM unchanged.</span><span class="t-ko">ResNet 인코더 → 전역 잠재, 트랜스포머 예측기, frameskip 5, 히스토리 창 3, 타깃 브랜치 stop-gradient에 잠재 궤적을 곧게 펴는 곡률 정칙화. 보상 없는 오프라인 궤적으로 학습. 이 단계는 하나도 바뀌지 않는다 — 그래서 이 방법이 DINO-WM 위에 그대로 얹힌다.</span></li>
+      <li><b><span class="t-en">Plan with what you have. </span><span class="t-ko">가진 것으로 계획한다. </span></b><span class="t-en">Receding-horizon MPC minimizes Σ<sub>k</sub> α<sub>k</sub>·‖ẑ<sub>t+k</sub> − z<sub>g</sub>‖² over a 25-step subplanner horizon, solved either by Adam on the actions (100 steps, lr 0.1, zero init) or CEM (200 samples, 10 iterations). Execute the first 5-action chunk.</span><span class="t-ko">후퇴 지평선 MPC가 25스텝 서브플래너 지평선에서 Σ<sub>k</sub> α<sub>k</sub>·‖ẑ<sub>t+k</sub> − z<sub>g</sub>‖²를 최소화한다. 행동에 대한 Adam(100 스텝, lr 0.1, 0 초기화) 또는 CEM(샘플 200개, 10회 반복)으로 푼다. 첫 5개 행동 청크를 실행한다.</span></li>
+      <li><b><span class="t-en">Bank the transition. </span><span class="t-ko">전이를 적립한다. </span></b><span class="t-en">Append (o<sub>t</sub>, a<sub>t</sub>, o<sub>t+1</sub>) to buffer ℬ and trim to N. Two policies were tried — <code>recent-N</code> (sliding window, the default) and <code>hard-N</code> (keep the N highest-error transitions). recent-5 wins on stability, not on peak: on the unseen square shape, <code>hard-5</code> scores 35.3% and an unbounded buffer 44.0% against recent-5's 41.3%.</span><span class="t-ko">(o<sub>t</sub>, a<sub>t</sub>, o<sub>t+1</sub>)을 버퍼 ℬ에 넣고 N개로 자른다. 두 정책을 시도했다 — <code>recent-N</code>(슬라이딩 창, 기본값)과 <code>hard-N</code>(오차가 가장 큰 N개 유지). recent-5가 이기는 것은 안정성이지 최고점이 아니다: 미공개 square 모양에서 <code>hard-5</code>는 35.3%, 무제한 버퍼는 44.0%로, recent-5의 41.3%보다 높다.</span></li>
+      <li><b><span class="t-en">Take the step, then immediately reuse the model. </span><span class="t-ko">스텝을 밟고, 즉시 그 모델을 다시 쓴다. </span></b><span class="t-en">Ω ← Ω − η∇<sub>Ω</sub>ℒ<sub>ada</sub>(ℬ), U times (U = 1 by default). The updated model is used for the very next planning problem — there is no waiting, no batching across episodes. Loop until goal or step cap.</span><span class="t-ko">Ω ← Ω − η∇<sub>Ω</sub>ℒ<sub>ada</sub>(ℬ)를 U번(기본 U = 1). 갱신된 모델은 바로 다음 계획 문제에 쓰인다 — 기다림도, 에피소드 간 배치도 없다. 목표 도달 또는 스텝 상한까지 반복.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">If you are running JEPA + MPC and freezing the model, you are leaving points on the table for ~0.02 s per replan. The claim to actually trust is Table 2: three different implementations (global vs. spatial features, different objectives, including DINO-WM), all in-distribution, all improved, +0.7 to +7.3 points. That is the number to budget against — the doubling headlines come from OOD settings the authors constructed.</p><p class="t-ko">JEPA + MPC를 돌리면서 모델을 동결하고 있다면, 재계획당 ~0.02초에 점수를 그냥 흘리고 있는 것이다. 실제로 믿을 주장은 Table 2다: 서로 다른 구현 3종(전역 vs. 공간 특징, 다른 목적함수, DINO-WM 포함), 전부 분포 내, 전부 개선, +0.7 ~ +7.3점. 예산을 잡을 숫자는 이것이다 — 두 배가 되었다는 헤드라인은 저자들이 구성한 OOD 설정에서 나온다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The adaptation target should follow where the shift enters. Predictor-only updates suffice for shape shifts (the pretrained representation already generalizes across geometry) but fail on visual and layout shifts, where the mismatch enters through the representation. And <code>predfirst</code> beating <code>predlast</code> by 12.7 points on layouts is a genuinely useful diagnostic: the predictor's first block sits closest to the latent and action inputs, so it is where new transition structure gets recalibrated.</p><p class="t-ko">적응 대상은 이동이 들어오는 지점을 따라가야 한다. 모양 이동에는 예측기만 갱신해도 충분하지만(사전학습 표현이 이미 기하학을 넘어 일반화한다), 시각·레이아웃 이동에서는 불일치가 표현을 통해 들어오므로 실패한다. 그리고 레이아웃에서 <code>predfirst</code>가 <code>predlast</code>를 12.7점 앞선 것은 진짜로 쓸모 있는 진단이다: 예측기의 첫 블록이 잠재·행동 입력에 가장 가까이 있으므로, 새로운 전이 구조가 재보정되는 자리다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Test-time adaptation and data scaling are substitutes at the low end and complements at the high end. The heatmap is the paper's most quotable result: an adapted model trained on one shape with 1k trajectories hits 60.8% on seen shapes, beating the frozen model trained on four shapes × 16k (54.0%) — 64× the data. But at the top of the grid adaptation still adds ~27 points, so it is not merely a data substitute. Also note the orthogonal finding: at a fixed 16k budget, spreading across four shapes beats concentrating on one (51.9% vs. 45.8% unseen, adapted). Diversity &gt; volume.</p><p class="t-ko">테스트타임 적응과 데이터 스케일링은 저데이터 구간에서는 대체재, 고데이터 구간에서는 보완재다. 히트맵이 이 논문에서 가장 인용할 만한 결과다: 한 모양·1k 궤적으로 학습한 적응 모델이 학습 모양에서 60.8%를 찍어, 네 모양 × 16k(54.0%)로 학습한 동결 모델 — 64배 데이터 — 을 이긴다. 하지만 격자 맨 위에서도 적응은 여전히 ~27점을 더하므로, 단순한 데이터 대체재는 아니다. 직교하는 발견도 함께 보라: 총 16k 예산을 고정했을 때, 네 모양에 분산하는 쪽이 하나에 몰아주는 쪽을 이긴다(미공개 모양 적응 후 51.9% vs. 45.8%). 다양성 &gt; 물량.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the headline gains and the trustworthy gains are not the same gains. Every OOD number comes from shifts the authors constructed on their own pretrained checkpoints (blur, salt-and-pepper, recoloring, ×0.2 mass, ×20 damping), and the only evaluation on <i>someone else's</i> world model — DINO-WM in Table 2 — yields +2.0 (GD) and +3.3 (CEM). Worse, the biggest advertised win, +25.3 on unseen layouts, comes from <code>predfirst+enclast</code>, which is <i>not</i> the paper's stated default and which the authors themselves concede was picked per-environment ("the best adaptation target is environment-dependent"). The default configuration buys +12.7 there. And there is no baseline that isolates <i>why</i> it works: no comparison against simply giving the frozen model more replanning steps, a larger CEM sample budget, or test-time augmentation — all of which also spend compute at deployment. Given that a single gradient step on 5 samples improves an <i>in-distribution</i> model by 7.3 points, at least part of this may be plain overfitting-to-the-current-episode rather than shift correction, and the paper never separates the two.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 헤드라인 이득과 믿을 만한 이득은 같은 이득이 아니다. 모든 OOD 숫자는 저자들이 자기 사전학습 체크포인트 위에 직접 구성한 이동(블러, 소금-후추, 색 변경, 질량 ×0.2, 감쇠 ×20)에서 나오고, <i>남의</i> 월드 모델에 대한 유일한 평가 — Table 2의 DINO-WM — 는 +2.0(GD)과 +3.3(CEM)을 준다. 더 나쁜 것은, 가장 크게 광고된 승리인 미공개 레이아웃 +25.3이 논문이 명시한 기본값이 <i>아닌</i> <code>predfirst+enclast</code>에서 나오고, 저자들 스스로 이것이 환경별로 골라진 것임을 인정한다("최적 적응 대상은 환경 의존적이다"). 기본 설정이 거기서 사주는 것은 +12.7이다. 그리고 <i>왜</i> 작동하는지를 분리하는 기준선이 없다: 동결 모델에 재계획 스텝을 더 주거나, CEM 샘플 예산을 늘리거나, 테스트타임 증강을 쓰는 것 — 모두 배포 시점에 연산을 쓰는 방법들 — 과의 비교가 하나도 없다. 샘플 5개에 대한 기울기 한 스텝이 <i>분포 내</i> 모델을 7.3점 올린다는 사실을 감안하면, 이 중 일부는 이동 보정이 아니라 그냥 현재 에피소드에 대한 과적합일 수 있는데, 논문은 둘을 끝내 분리하지 않는다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.32026">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.32026">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.32026">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.32026">🔎 alphaXiv</a>
+      <a href="https://agenticlearning.ai/adajepa">🌐 project page</a>
+    </div>
+    <span class="t-en">Why picked — <b>#5 in the 2026-08 wishlist queue (Shared World Models axis) and the queue's top community-reaction entry; it is the one item that questions whether a world model should be a fixed artifact at all, which is the assumption the other latent-communication and compression entries all quietly inherit</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-12.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐 5번(공유 월드 모델 축)이자 큐에서 커뮤니티 반응이 가장 좋은 항목. 월드 모델이 애초에 고정된 산출물이어야 하는가를 묻는 유일한 항목이고, 이 가정은 큐의 나머지 잠재 통신·압축 항목들이 조용히 물려받고 있는 바로 그 가정이다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-12.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
