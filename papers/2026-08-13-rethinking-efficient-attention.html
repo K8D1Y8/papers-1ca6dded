@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<!-- 5-min paper summary · bilingual (EN default · KO toggle) · noindex -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Rethinking the Role of Efficient Attention in Hybrid Architectures</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Efficient Sequence Models · Hybrid Attention</span><span class="t-ko">효율적 시퀀스 모델 · 하이브리드 어텐션</span></span>
+      <span>2026 · 06 · 13</span>
+    </div>
+    <h1>Rethinking the Role of Efficient Attention<br>
+      <span class="glow t-en">— your Mamba layer is not carrying the long context. It is deciding how lazy full attention gets to be.</span>
+      <span class="glow t-ko">— 당신의 Mamba 층은 긴 문맥을 나르고 있지 않다. 풀 어텐션이 얼마나 게을러져도 되는지를 정하고 있을 뿐이다.</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Ziqing Qiao</b> · Yinuo Xu · Chaojun Xiao · Zhou Su · Zihan Zhou · Yingfa Chen · Xiaoyue Xu · Xu Han · Zhiyuan Liu <span class="t-en">(first two: equal contribution)</span><span class="t-ko">(앞 두 명: 공동 1저자)</span></span>
+      <span>🏛 Tsinghua University · OpenBMB</span>
+      <span>🗓 2026-06-13</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.15378">arXiv:2606.15378</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Every frontier model now interleaves full attention with something cheap — SWA in Gemma and gpt-oss, Gated DeltaNet or Mamba-2 or Lightning in the newer releases. The tacit story is that the efficient module <i>helps carry</i> long context, so a better efficient module buys you a better long-context model. This paper trains <b>10 architectures × 5 scales (15M–477M) × 6 token budgets</b>, fits separable power laws to both validation loss and log(LongPPL), and reports that the tacit story is wrong on both halves. First: efficient-attention design barely moves validation loss at all, and moves log(LongPPL) only <i>early</i> — every hybrid converges to roughly the same long-context level given enough tokens. Second, mechanistically: clamp the efficient layers' receptive field to 2048 at inference and almost nothing happens, <i>even for recurrent mixers with unbounded state</i>; clamp full attention's and log(LongPPL) blows up. Layer-wise NIAH probing agrees — the accuracy gains live entirely in the odd-numbered full-attention layers. So efficient attention is not a carrier; it is an <b>optimization prior</b>. And that yields the counter-intuitive punchline the authors call <b>Large-Window Laziness</b>: a <i>bigger</i> SWA window makes the model <i>worse</i> at long context for longer, because the local window already answers next-token prediction and the gradient pressure that would have forged retrieval heads in the full-attention layers never arrives. Acting on that, they apply <b>NoPE to the full-attention layers only</b> of a SWA-128 hybrid: at 0.22B it takes RULER from <b>25.09 → 44.80</b> and RULER-NIAH from <b>35.95 → 67.81</b>, with ShortAvg unchanged (38.13 → 37.88).</p>
+    <p class="t-ko">요즘 프런티어 모델은 전부 풀 어텐션 사이에 값싼 무언가를 끼워 넣는다 — Gemma와 gpt-oss의 SWA, 최근 릴리스의 Gated DeltaNet·Mamba-2·Lightning. 암묵적 서사는 효율 모듈이 긴 문맥을 <i>같이 날라준다</i>는 것이고, 따라서 더 좋은 효율 모듈을 넣으면 더 좋은 롱컨텍스트 모델이 나온다는 것이다. 이 논문은 <b>아키텍처 10종 × 스케일 5개(15M–477M) × 토큰 예산 6개</b>를 학습시키고, validation loss와 log(LongPPL) 양쪽에 분리형 거듭제곱 법칙을 적합시킨 뒤, 그 서사가 두 부분 모두 틀렸다고 보고한다. 첫째: 효율 어텐션 설계는 validation loss를 거의 움직이지 못하고, log(LongPPL)은 <i>초반에만</i> 움직인다 — 토큰이 충분하면 모든 하이브리드가 대략 같은 롱컨텍스트 수준으로 수렴한다. 둘째, 메커니즘: 추론 시 효율 층의 수용 영역을 2048로 조여도 거의 아무 일도 없다. <i>상태가 무한대인 recurrent mixer조차</i> 그렇다. 반면 풀 어텐션 쪽을 조이면 log(LongPPL)이 폭발한다. 층별 NIAH 프로빙도 같은 말을 한다 — 정확도 상승분은 전부 홀수 번째 풀 어텐션 층에 산다. 그러니 효율 어텐션은 운반자가 아니라 <b>최적화 사전(prior)</b>이다. 여기서 저자들이 <b>Large-Window Laziness</b>라 부르는 반직관적 결론이 나온다: SWA 창이 <i>클수록</i> 모델은 더 오래 롱컨텍스트에 <i>약하다</i>. 로컬 창이 이미 다음 토큰 예측을 해결해 버리므로, 풀 어텐션 층에 retrieval head를 벼려낼 기울기 압력이 애초에 도착하지 않기 때문이다. 이를 따라 그들은 SWA-128 하이브리드의 <b>풀 어텐션 층에만 NoPE</b>를 적용한다: 0.22B에서 RULER가 <b>25.09 → 44.80</b>, RULER-NIAH가 <b>35.95 → 67.81</b>로 오르고 ShortAvg는 그대로다(38.13 → 37.88).</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">If the efficient module is an optimization prior rather than a carrier, then most of the hybrid-architecture literature has been optimizing the wrong component.</p>
+    <p class="lead t-ko">효율 모듈이 운반자가 아니라 최적화 사전이라면, 하이브리드 아키텍처 문헌 대부분은 엉뚱한 부품을 최적화해 온 셈이다.</p>
+    <p class="t-en">Consider what the field has actually been doing. Lightning Attention → Mamba-2 → Gated DeltaNet is a progression of increasingly expressive recurrent update rules: GDN adds a data-dependent decay α<sub>t</sub> <i>and</i> a delta-rule term that erases the old association at k<sub>t</sub> before writing the new one. Each step is a real improvement in how much history a fixed-size state can hold. This paper's receptive-field experiment says that in a 1:1 hybrid, none of that extra state capacity is being used for long-range recall at inference time. GDN's beautiful update rule is, for long-context purposes, doing local work.</p>
+    <p class="t-ko">이 분야가 실제로 무엇을 해왔는지 보라. Lightning Attention → Mamba-2 → Gated DeltaNet은 점점 표현력이 커지는 재귀 갱신 규칙의 계보다: GDN은 데이터 의존 감쇠 α<sub>t</sub>에 더해, 새 연관을 쓰기 전에 k<sub>t</sub>의 옛 연관을 지우는 델타 규칙 항까지 넣는다. 매 단계가 고정 크기 상태가 담을 수 있는 과거의 양을 실제로 늘렸다. 그런데 이 논문의 수용 영역 실험은, 1:1 하이브리드에서 그 늘어난 상태 용량이 추론 시 장거리 회상에 <i>전혀 쓰이지 않고 있다</i>고 말한다. GDN의 아름다운 갱신 규칙은, 롱컨텍스트 관점에서는, 국소적인 일을 하고 있다.</p>
+    <p class="t-en">The practical consequence flips a design instinct. When your hybrid underperforms on long context, the reflex is to widen the window or upgrade the mixer. This paper says that reflex is actively harmful under a limited training budget: widening the window is precisely what starves full attention of the gradient signal it needs. The bottleneck is not the efficient module's power — it is whether the training distribution still leaves enough dependencies <i>outside</i> the window to force full attention to go looking.</p>
+    <p class="t-ko">실용적 귀결은 설계 본능을 뒤집는다. 하이브리드가 롱컨텍스트에서 부진하면 반사적으로 창을 넓히거나 mixer를 업그레이드한다. 이 논문은 제한된 학습 예산에서 그 반사가 오히려 해롭다고 말한다. 창을 넓히는 것이야말로 풀 어텐션이 필요로 하는 기울기 신호를 굶기는 행위이기 때문이다. 병목은 효율 모듈의 성능이 아니라, 학습 분포가 여전히 창 <i>바깥</i>에 충분한 의존성을 남겨 풀 어텐션이 찾아 나서게 만드는가다.</p>
+    <figure class="fig">
+      <img src="fig/2606.15378/compare_2.png" alt="Two panels of predicted curves at S5 scale against training tokens. Left: validation loss curves for all seven architectures lie nearly on top of each other. Right: log(LongPPL) curves are widely separated at small token budgets, with SWA-2048 highest, and converge toward a common level as tokens increase.">
+      <figcaption class="t-en"><b>Figure 2.</b> The entire RQ1 answer in two panels — predicted Loss and log(LongPPL) at S5 scale (N = 0.48B) as a function of training tokens D, extrapolated from the S1–S3 fits. <b>Left:</b> every hybrid's validation-loss curve sits on top of Full's. Whatever the efficient module is doing, it is not changing short-context modeling quality. <b>Right:</b> the same architectures fan out dramatically on log(LongPPL) at small D — with SWA-2048 the worst — and then close ranks as D grows. Read the two panels together and the claim writes itself: efficient-attention design is a statement about the <i>training trajectory</i>, not about the <i>destination</i>.</figcaption>
+      <figcaption class="t-ko"><b>그림 2.</b> RQ1의 답 전체가 두 패널에 — S1–S3 적합에서 외삽한, S5 스케일(N = 0.48B)에서 학습 토큰 D에 따른 예측 Loss와 log(LongPPL). <b>왼쪽:</b> 모든 하이브리드의 validation loss 곡선이 Full 위에 포개진다. 효율 모듈이 무엇을 하고 있든, 짧은 문맥의 모델링 품질을 바꾸고 있지는 않다. <b>오른쪽:</b> 같은 아키텍처들이 작은 D에서 log(LongPPL) 위로 극적으로 벌어지고 — SWA-2048이 최악 — D가 커지면 다시 모인다. 두 패널을 함께 읽으면 주장이 저절로 쓰인다: 효율 어텐션 설계는 <i>도착지</i>가 아니라 <i>학습 궤적</i>에 관한 진술이다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.15378</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">10 × 5 × 6</div><div class="l"><span class="t-en">architectures × model scales (15M–477M) × token budgets (100N–1000N), all trained from scratch at 16K context</span><span class="t-ko">아키텍처 × 모델 스케일(15M–477M) × 토큰 예산(100N–1000N), 전부 16K 문맥으로 처음부터 학습</span></div></div>
+      <div class="stat"><div class="n">R² ≥ 0.95</div><div class="l"><span class="t-en">held-out S4 verification R² for aN<sup>−α</sup> + bD<sup>−β</sup> on every one of the 10 architectures, on both targets</span><span class="t-ko">10개 아키텍처 전부 · 두 지표 모두에서 aN<sup>−α</sup> + bD<sup>−β</sup>의 S4 검증 R²</span></div></div>
+      <div class="stat"><div class="n">2048</div><div class="l"><span class="t-en">token distance past which next-token gradient influence G(d) flattens out — the window size above which SWA stops leaving work for full attention</span><span class="t-ko">다음 토큰 기울기 영향 G(d)가 평평해지는 거리 — 이 창 크기를 넘으면 SWA가 풀 어텐션에 일을 남기지 않는다</span></div></div>
+      <div class="stat"><div class="n">25.09 → 44.80</div><div class="l"><span class="t-en">RULER at S4 (0.22B, ≈100B tokens): Full → SWA-128-NoPE</span><span class="t-ko">S4(0.22B, ≈100B 토큰) RULER: Full → SWA-128-NoPE</span></div></div>
+      <div class="stat"><div class="n">35.95 → 67.81</div><div class="l"><span class="t-en">RULER-NIAH at the same scale — the retrieval subset nearly doubles</span><span class="t-ko">같은 스케일의 RULER-NIAH — 검색 계열 부분집합이 거의 두 배</span></div></div>
+      <div class="stat"><div class="n">−0.25</div><div class="l"><span class="t-en">points of ShortAvg paid for it at S4 (38.13 → 37.88); at S5 it is +0.86</span><span class="t-ko">S4에서 그 대가로 치른 ShortAvg(38.13 → 37.88); S5에서는 오히려 +0.86</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The design payoff — and where to look twice</span><span class="t-ko">설계의 성과 — 그리고 두 번 봐야 할 곳</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2.</b> Downstream evaluation at S4 (0.22B) and S5 (0.66B), both at ≈100B tokens. RULER<sub>NIAH</sub> averages the 8 needle-in-a-haystack sub-tasks; RULER is the average over all 13; ShortAvg averages 19 short-context benchmarks. The story the authors tell is the NIAH column, and it is a real story. The story worth reading yourself is the gap <i>between</i> the two RULER columns at S5: NIAH goes 67.14 → 82.31 (+15.2) while the full 13-task average moves only 47.17 → 52.88 (+5.7). Back out the other five tasks and they fall from an average of 15.21 to 5.80 — <code>fwe</code> alone collapses from 40.17 to 0.50. NoPE on full attention buys retrieval and sells aggregation.</caption>
+        <caption class="t-ko"><b>표 2.</b> S4(0.22B)와 S5(0.66B) 다운스트림 평가, 둘 다 ≈100B 토큰. RULER<sub>NIAH</sub>는 needle-in-a-haystack 계열 8개 하위 과제 평균, RULER는 13개 전체 평균, ShortAvg는 짧은 문맥 벤치마크 19개 평균이다. 저자가 들려주는 이야기는 NIAH 열이고, 그건 진짜 이야기다. 다만 직접 읽어볼 만한 이야기는 S5에서 두 RULER 열 <i>사이의 간격</i>이다: NIAH는 67.14 → 82.31(+15.2)로 가는데 13과제 전체 평균은 47.17 → 52.88(+5.7)에 그친다. 나머지 다섯 과제를 역산하면 평균 15.21에서 5.80으로 떨어진다 — <code>fwe</code> 하나만 해도 40.17에서 0.50으로 붕괴한다. 풀 어텐션 NoPE는 검색을 사고 집계를 판다.</caption>
+        <thead><tr><th>Setting</th><th>Model</th><th>ShortAvg</th><th>RULER (16K)</th><th>RULER<sub>NIAH</sub> (16K)</th><th>LongBench (16K)</th><th>RULER (32K)</th></tr></thead>
+        <tbody>
+          <tr><td>S4 · 0.22B</td><td>Full</td><td>38.13</td><td>25.09</td><td>35.95</td><td>15.09</td><td>—</td></tr>
+          <tr><td>S4 · 0.22B</td><td>SWA-128</td><td>38.03</td><td>35.33</td><td>49.58</td><td>15.88</td><td>—</td></tr>
+          <tr><td>S4 · 0.22B</td><td>SWA-128-NoPE</td><td>37.88</td><td class="up">44.80</td><td class="up">67.81</td><td class="up">16.43</td><td>—</td></tr>
+          <tr><td>S5 · 0.66B</td><td>Full</td><td>40.46</td><td>47.17</td><td>67.14</td><td>18.44</td><td>43.90</td></tr>
+          <tr><td>S5 · 0.66B</td><td>SWA-128</td><td>41.31</td><td>46.13</td><td>65.91</td><td>17.52</td><td>41.86</td></tr>
+          <tr><td>S5 · 0.66B</td><td>SWA-128-NoPE</td><td class="up">41.32</td><td class="up">52.88</td><td class="up">82.31</td><td class="up">19.02</td><td class="up">46.98</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Small window</span><span class="t-ko">작은 창</span></div>
+          <div class="sub"><span class="t-en">SWA-128 covers little</span><span class="t-ko">SWA-128은 조금밖에 못 덮는다</span></div>
+          <div class="latent">w = 128 ≪ 2048</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Signal left over</span><span class="t-ko">남는 신호</span></div>
+          <div class="sub"><span class="t-en">G(d) is still large for d ∈ [512, 2048]</span><span class="t-ko">d ∈ [512, 2048]에서 G(d)가 여전히 크다</span></div>
+          <div class="latent">∂s(x)/∂e<sub>T−d</sub> ≠ 0</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Pressure on full attention</span><span class="t-ko">풀 어텐션에 걸리는 압력</span></div>
+          <div class="sub"><span class="t-en">only route to the leftover dependency</span><span class="t-ko">남은 의존성으로 가는 유일한 경로</span></div>
+          <div class="latent">‖∇<sub>W<sub>Q</sub></sub>ℒ‖<sub>F</sub> ↑ early</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Retrieval heads form</span><span class="t-ko">retrieval head 형성</span></div>
+          <div class="sub"><span class="t-en">entropy H(t) drops, Q/K distance d<sup>QK</sup>(t) converges</span><span class="t-ko">엔트로피 H(t) 하강, Q/K 거리 d<sup>QK</sup>(t) 수렴</span></div>
+          <div class="latent">log(LongPPL) ↓</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Now delete the first box and write w = 2048 instead, and every arrow reverses.</b> The window already covers the range where G(d) lives, next-token prediction is satisfiable locally, the gradient on the full-attention Q projections stays small, H(t) stays high, d<sup>QK</sup>(t) shrinks slowly, and long-context capability arrives late. That is Large-Window Laziness in one line — and note that it is a statement about <i>training</i>, so it dissolves at large D, exactly as Figure 2's right panel shows.</div>
+      <div class="cap t-ko"><b>이제 첫 상자를 지우고 w = 2048로 바꿔 써 보라. 모든 화살표가 뒤집힌다.</b> 창이 이미 G(d)가 사는 구간을 덮으므로 다음 토큰 예측이 국소적으로 해결되고, 풀 어텐션 Q 사영에 걸리는 기울기는 작게 유지되며, H(t)는 높은 채로 남고, d<sup>QK</sup>(t)는 천천히 줄고, 롱컨텍스트 능력은 늦게 도착한다. 이것이 한 줄로 쓴 Large-Window Laziness다 — 그리고 이것이 <i>학습</i>에 관한 진술이기 때문에 D가 커지면 녹아 없어진다. 그림 2 오른쪽 패널이 보여주는 그대로.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Two experiments that carry the whole argument</span><span class="t-ko">논증 전체를 지탱하는 두 실험</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">who carries it</span>
+        <h3>Receptive-field constraint</h3>
+        <p class="t-en">Take S4 models trained at D = 1000N and, <i>at inference only</i>, clamp one side's receptive field to ≈2048 tokens. Clamp the efficient layers — including Lightning, Mamba-2 and GDN, whose recurrent states are in principle unbounded — and log(LongPPL) barely moves. Clamp the full-attention layers and it rises sharply, in every hybrid. The delicate delta-rule state in GDN turns out to hold almost no long-range information at inference. Layer-wise NIAH probing tells the same story from a different angle: incremental probing accuracy climbs almost exclusively at the odd-numbered (full-attention) middle layers, while the even-numbered efficient layers contribute nothing and sometimes <i>reduce</i> accuracy. Full attention is the carrier; that shared carrier is why all seven hybrids converge to the same place.</p>
+        <p class="t-ko">D = 1000N으로 학습한 S4 모델을 가져와, <i>추론 시에만</i> 한쪽의 수용 영역을 ≈2048 토큰으로 조인다. 효율 층 쪽을 조이면 — 원리상 상태가 무한한 Lightning·Mamba-2·GDN을 포함해 — log(LongPPL)이 거의 움직이지 않는다. 풀 어텐션 층 쪽을 조이면 모든 하이브리드에서 급격히 치솟는다. GDN의 정교한 델타 규칙 상태는 추론 시 장거리 정보를 거의 담고 있지 않은 것으로 드러난다. 층별 NIAH 프로빙이 다른 각도에서 같은 이야기를 한다: 증분 프로빙 정확도는 거의 전적으로 홀수 번째(풀 어텐션) 중간 층에서 오르고, 짝수 번째 효율 층은 기여가 없거나 때로는 정확도를 <i>떨어뜨린다</i>. 운반자는 풀 어텐션이다. 그리고 그 운반자를 공유하기 때문에 하이브리드 7종이 같은 곳으로 수렴한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">why the rates differ</span>
+        <h3>Gradient influence + retrieval-head tracing</h3>
+        <p class="t-en">Two independent probes for the laziness claim. (1) Measure G(d) = 𝔼[‖∂s(x)/∂e<sub>T−d</sub>‖₂] on Llama-3.1-8B over long pretraining documents: substantial signal survives out to 2048 tokens, then flattens to a baseline. So a 2048 window captures nearly all of the exploitable next-token signal, and a 128 window leaves most of it outside. (2) Densely checkpoint S4 runs before D = 200N, identify retrieval heads by NIAH attention mass, and track normalized attention entropy H(t) and relative Q/K parameter distance d<sup>QK</sup>(t). SWA-2048 is the visible outlier on both: entropy stays high, Q/K distance shrinks slowly, and the Frobenius norm of the gradient on those heads' Q projections rises later. Note the honest limitation baked into probe (1) — G(d) is measured on a <i>different</i>, full-attention model and assumed transferable.</p>
+        <p class="t-ko">게으름 주장을 뒷받침하는 독립적인 두 탐침. (1) 긴 사전학습 문서에서 Llama-3.1-8B로 G(d) = 𝔼[‖∂s(x)/∂e<sub>T−d</sub>‖₂]를 측정한다: 2048 토큰까지 상당한 신호가 살아 있다가 그 뒤로 기준선으로 평평해진다. 즉 2048 창은 활용 가능한 다음 토큰 신호를 거의 다 담고, 128 창은 대부분을 바깥에 남긴다. (2) D = 200N 이전 구간에서 S4 학습을 촘촘히 체크포인트하고, NIAH 어텐션 질량으로 retrieval head를 식별한 뒤, 정규화 어텐션 엔트로피 H(t)와 상대 Q/K 파라미터 거리 d<sup>QK</sup>(t)를 추적한다. 둘 다에서 SWA-2048이 눈에 띄는 이상치다: 엔트로피가 높게 유지되고, Q/K 거리가 천천히 줄고, 그 head들의 Q 사영에 걸리는 기울기 Frobenius 노름이 더 늦게 올라온다. 탐침 (1)에 내장된 정직한 한계도 짚어두자 — G(d)는 <i>다른</i> 풀 어텐션 모델에서 측정한 뒤 전이 가능하다고 가정한 값이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Build a controlled zoo. </span><span class="t-ko">통제된 동물원을 짓는다. </span></b><span class="t-en">Full baseline plus six 1:1 layer-wise hybrids — SWA-128 / 512 / 2048, Lightning, Mamba-2, GDN — matched on layers, hidden size, GQA grouping and head dim, with FFN width or state dimension nudged so total parameters line up. Full attention gets a learnable per-head softmax sink to defuse attention-sink artifacts. Pretrain at 16K on a 1:1 long/short mixture under a WSD schedule (90% stable, 10% decay).</span><span class="t-ko">Full 기준선에 1:1 층별 하이브리드 6종 — SWA-128/512/2048, Lightning, Mamba-2, GDN — 을 더한다. 층 수·은닉 차원·GQA 그룹·헤드 차원을 맞추고, FFN 폭이나 상태 차원을 미세 조정해 총 파라미터를 일치시킨다. 풀 어텐션에는 attention-sink 아티팩트를 눌러 주는 학습 가능한 헤드별 softmax sink를 넣는다. WSD 스케줄(안정 90%, 감쇠 10%)로 긴/짧은 데이터 1:1 혼합 위에서 16K로 사전학습.</span></li>
+      <li><b><span class="t-en">Fit two power laws, not one. </span><span class="t-ko">거듭제곱 법칙을 하나가 아니라 둘 적합시킨다. </span></b><span class="t-en">L(N, D) = aN<sup>−α</sup> + bD<sup>−β</sup>, fitted separately per architecture for validation loss (40K held-out C4 samples) and for log(LongPPL) (GovReport, Llama-3.1-8B picking the long-context-dependent tokens). Fit on the 18 S1–S3 points, hold out the 6 S4 points as verification. The S1/D=100N checkpoint is dropped from the LongPPL fit as unstable, leaving 17 points there.</span><span class="t-ko">L(N, D) = aN<sup>−α</sup> + bD<sup>−β</sup>를 아키텍처별로 두 번 적합한다: validation loss(C4 홀드아웃 4만 샘플)와 log(LongPPL)(GovReport, 장문맥 의존 토큰은 Llama-3.1-8B가 선별). S1–S3의 18개 점으로 적합하고 S4의 6개 점을 검증용으로 남긴다. LongPPL 적합에서는 S1/D=100N 체크포인트를 불안정하다는 이유로 빼서 17개 점을 쓴다.</span></li>
+      <li><b><span class="t-en">Ask where the information lives. </span><span class="t-ko">정보가 어디 사는지 묻는다. </span></b><span class="t-en">Inference-time receptive-field clamping on each side separately, then layer-wise logistic-regression probing on NIAH hidden states. Both point at the full-attention layers, which explains the convergence half of the scaling result.</span><span class="t-ko">양쪽을 따로 추론 시 수용 영역 제한으로 조이고, 이어서 NIAH 은닉 상태에 층별 로지스틱 회귀 프로빙을 돌린다. 둘 다 풀 어텐션 층을 가리키고, 이것이 스케일링 결과의 수렴 쪽 절반을 설명한다.</span></li>
+      <li><b><span class="t-en">Ask why the rates differ. </span><span class="t-ko">속도가 왜 다른지 묻는다. </span></b><span class="t-en">Gradient influence profiling gives the 2048-token cliff; retrieval-head tracing catches SWA-2048 forming its heads late. Together these explain the divergence half.</span><span class="t-ko">기울기 영향 프로파일링이 2048 토큰 절벽을 주고, retrieval head 추적이 SWA-2048의 늦은 head 형성을 잡아낸다. 둘이 합쳐 발산 쪽 절반을 설명한다.</span></li>
+      <li><b><span class="t-en">Turn the mechanism into a knob. </span><span class="t-ko">메커니즘을 손잡이로 바꾼다. </span></b><span class="t-en">Three design probes: a 1:3 full-to-efficient ratio (worse at small scale, gap closes at large); head-wise vs. layer-wise mixing (head-wise converges slower, no advantage); and NoPE on the full-attention layers of SWA-128 (large log(LongPPL) drop, validation loss untouched). Only the third is then trained to 0.22B/0.66B at ≈100B tokens and benchmarked, with S5 further extended 5B tokens at 32K.</span><span class="t-ko">설계 탐침 세 가지: 1:3 풀-대-효율 비율(작은 스케일에서 나쁘고, 큰 스케일에서 간격이 닫힘), 헤드별 vs 층별 혼합(헤드별이 더 느리게 수렴, 이점 없음), 그리고 SWA-128의 풀 어텐션 층에 NoPE(log(LongPPL) 큰 폭 하락, validation loss는 그대로). 이 중 세 번째만 0.22B/0.66B에서 ≈100B 토큰으로 학습해 벤치마크하고, S5는 32K로 5B 토큰을 더 이어 학습한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">If you are training a hybrid under a fixed token budget, prefer the <i>small</i> window. This inverts the usual instinct and it is the most immediately actionable result here: SWA-128 beats SWA-2048 on long context precisely because it is weaker locally. And since validation loss is flat across all of these choices, your short-context eval will not warn you that you picked wrong — the cost of a large window shows up only in log(LongPPL), and only while you are still token-limited.</p><p class="t-ko">고정된 토큰 예산으로 하이브리드를 학습한다면 <i>작은</i> 창을 택하라. 통상의 본능을 뒤집는, 이 논문에서 가장 즉시 써먹을 수 있는 결과다: SWA-128이 롱컨텍스트에서 SWA-2048을 이기는 이유는 바로 국소적으로 약하기 때문이다. 게다가 이 선택들 전반에서 validation loss가 평평하므로, 짧은 문맥 평가는 당신이 잘못 골랐다고 경고해 주지 않는다 — 큰 창의 대가는 오직 log(LongPPL)에서만, 그리고 토큰이 아직 부족한 동안에만 드러난다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">"Unbounded receptive field" is a property of the recurrence, not of the trained model. Mamba-2 and GDN <i>can</i> hold arbitrarily old information in S<sub>t</sub>; in a 1:1 hybrid trained this way, they demonstrably do not. Anyone reaching for a linear-attention layer because its state is theoretically unbounded should treat that as a hypothesis to test on their own checkpoint — the receptive-field clamp is a cheap, inference-only diagnostic that you can run in an afternoon.</p><p class="t-ko">"무한한 수용 영역"은 재귀식의 성질이지 학습된 모델의 성질이 아니다. Mamba-2와 GDN은 임의로 오래된 정보를 S<sub>t</sub>에 담을 <i>수</i> 있지만, 이렇게 학습된 1:1 하이브리드에서는 실증적으로 담지 않는다. 상태가 이론상 무한하다는 이유로 선형 어텐션 층을 집어 드는 사람은 그것을 자기 체크포인트에서 검증할 가설로 다뤄야 한다 — 수용 영역 제한은 추론만으로 되는 값싼 진단이고, 반나절이면 돌린다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Read Table 2's two RULER columns against each other before you adopt NoPE. The +15.2 on NIAH is real and large, but the five non-NIAH RULER tasks fall from 15.21 to 5.80 at S5, with frequent-word extraction going 40.17 → 0.50. The intervention appears to sharpen positional-agnostic <i>lookup</i> at the direct expense of tasks needing counting and order. If your long-context workload is retrieval-shaped (RAG, needle recall, long-doc QA) this is a good trade; if it involves aggregation over the whole context, the headline number is not measuring your task.</p><p class="t-ko">NoPE를 채택하기 전에 표 2의 두 RULER 열을 서로 대조해 읽으라. NIAH의 +15.2는 진짜이고 크지만, NIAH가 아닌 RULER 5개 과제는 S5에서 15.21에서 5.80으로 떨어지고, 빈출 단어 추출은 40.17 → 0.50이 된다. 이 개입은 위치에 둔감한 <i>조회</i>를 날카롭게 만드는 대신 세기와 순서가 필요한 과제를 직접적인 대가로 치르는 것으로 보인다. 롱컨텍스트 워크로드가 검색형(RAG, needle 회상, 장문서 QA)이라면 좋은 거래지만, 문맥 전체에 대한 집계가 섞여 있다면 헤드라인 숫자는 당신의 과제를 재고 있지 않다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the central claim — "all hybrids converge to comparable long-context capability under sufficient training" — is the one claim this setup is least equipped to establish, and the paper is candid that the largest model is 0.66B trained on ≈100B tokens. Convergence is asserted from extrapolated fits at S5, and a power law that fits beautifully in-range (R² ≥ 0.95 held out) says nothing about whether the architectural gap re-opens at 7B or at 2T tokens; a "gap that shrinks with D" and a "gap that shrinks with D and then reappears" are indistinguishable inside this window. Two further gaps are worth naming. The receptive-field clamp is an <i>out-of-training-distribution intervention</i>: restricting full attention to 2048 tokens at inference also destroys the position distribution and attention normalization it was trained under, so part of the sharp log(LongPPL) rise could be intervention shock rather than evidence about where information is stored — no control (e.g. clamping a Full baseline, or a matched-perturbation placebo) is reported. And LongPPL, the metric carrying the entire scaling argument, defines "long-context-dependent tokens" using Llama-3.1-8B, a full-attention RoPE transformer. Using a full-attention model to select the tokens on which you then show that full attention does the work is not circular by construction, but it is close enough that a second reference model would have cost little and settled it.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 핵심 주장 — "충분한 학습 하에서 모든 하이브리드는 비슷한 롱컨텍스트 능력으로 수렴한다" — 은 이 실험 설계가 가장 입증하기 어려운 바로 그 주장이고, 논문도 최대 모델이 ≈100B 토큰으로 학습한 0.66B임을 솔직히 인정한다. 수렴은 S5에서의 외삽 적합으로 주장되는데, 범위 안에서 아름답게 맞는 거듭제곱 법칙(홀드아웃 R² ≥ 0.95)은 7B나 2T 토큰에서 아키텍처 간 격차가 다시 열리는지에 대해 아무 말도 하지 않는다. "D에 따라 줄어드는 격차"와 "D에 따라 줄었다가 다시 나타나는 격차"는 이 창 안에서 구분되지 않는다. 짚어둘 구멍이 둘 더 있다. 수용 영역 제한은 <i>학습 분포 밖의 개입</i>이다: 추론 시 풀 어텐션을 2048로 조이면 학습 때의 위치 분포와 어텐션 정규화도 함께 부순다. 따라서 log(LongPPL)의 급상승 중 일부는 정보가 어디 저장되어 있는지에 대한 증거가 아니라 개입 충격일 수 있는데, 대조군(예: Full 기준선을 같은 방식으로 조이거나, 동등한 세기의 위약 교란)이 보고되지 않는다. 그리고 스케일링 논증 전체를 떠받치는 지표 LongPPL은 "장문맥 의존 토큰"을 풀 어텐션 RoPE 트랜스포머인 Llama-3.1-8B로 정의한다. 풀 어텐션 모델로 토큰을 고른 뒤 그 위에서 풀 어텐션이 일한다는 것을 보이는 것은 구성상 순환은 아니지만, 참조 모델을 하나 더 썼으면 적은 비용으로 정리되었을 만큼은 가깝다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.15378">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.15378">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.15378">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.15378">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>#6 in the 2026-08 wishlist queue (Efficient Sequence Models axis). It is the direct counterweight to the Mamba-3 entry from 2026-08-06: that paper asks how much better a recurrent mixer can get, this one asks whether the mixer was ever the thing carrying long context in a hybrid</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-13.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐 6번(효율적 시퀀스 모델 축). 2026-08-06의 Mamba-3 항목에 대한 직접적인 대칭추다: 그 논문은 recurrent mixer가 얼마나 더 좋아질 수 있는지를 묻고, 이 논문은 하이브리드에서 애초에 mixer가 긴 문맥을 나르고 있기는 했는지를 묻는다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-13.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
