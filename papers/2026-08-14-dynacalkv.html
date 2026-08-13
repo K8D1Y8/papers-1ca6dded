@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · DynaCalKV: KV Cache Compression via Head Grouping and Adaptive Rank Allocation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache · Low-rank</span><span class="t-ko">모델 압축 · KV 캐시 · 저랭크</span></span>
+      <span>2026.08.14</span>
+    </div>
+    <h1>DynaCalKV: KV Cache Compression via Head Grouping and Adaptive Rank Allocation<br>
+      <span class="glow t-en">— stop fixing the group size, let CKA decide it</span>
+      <span class="glow t-ko">— 그룹 크기를 고정하지 말고, CKA가 정하게 하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Tan T. Nguyen</b> · Quan V. Dang</span>
+      <span>🏛 Full Stack Data Science · UCL</span>
+      <span>🗓 2026-07-27</span>
+      <span>📄 <a href="https://arxiv.org/abs/2607.24331">arXiv:2607.24331</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">ReCalKV compresses the Key cache by chopping attention heads into <b>fixed groups of four</b> and handing every group the <b>same rank</b>. DynaCalKV replaces both halves of that: heads are clustered by CKA similarity so group sizes come out uneven, and each group's rank is set proportional to its singular-value energy, then greedily trimmed until the total parameter count is provably no larger than ReCalKV's. Key-cache parameters drop 16.00–65.23% across three ~1.7B models at roughly unchanged zero-shot accuracy. The interesting result is the failure mode: on LongBench the method loses only −1.02 average on an MHA model but −8.03 on a GQA model, because GQA has already done the head merging once and the second pass over-compresses eight surviving Key heads.</p>
+    <p class="t-ko">ReCalKV는 어텐션 헤드를 <b>4개씩 고정 그룹</b>으로 자르고 모든 그룹에 <b>같은 랭크</b>를 주는 방식으로 Key 캐시를 압축한다. DynaCalKV는 그 두 축을 모두 갈아엎는다. 헤드를 CKA 유사도로 클러스터링해 그룹 크기가 제각각 나오게 하고, 각 그룹의 랭크는 특이값 에너지에 비례해 정한 뒤, 총 파라미터 수가 ReCalKV 이하임이 보장될 때까지 탐욕적으로 깎는다. ~1.7B 모델 3종에서 Key 캐시 파라미터가 16.00–65.23% 줄었고 제로샷 정확도는 대체로 유지된다. 정작 흥미로운 건 실패 방식이다. LongBench에서 MHA 모델은 평균 −1.02로 거의 안 떨어지는데 GQA 모델은 −8.03이 빠진다. GQA는 이미 헤드 병합을 한 번 한 구조라, 살아남은 Key 헤드 8개에 두 번째 병합을 걸면 과압축이 되기 때문이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Low-rank KV compression has quietly converged on a shared recipe — split heads into groups, factor each group with SVD, spend the rank budget evenly — and almost nobody has asked whether the <i>grouping itself</i> should be a hyperparameter.</p>
+    <p class="lead t-ko">저랭크 KV 압축은 어느새 하나의 공통 레시피로 수렴했다. 헤드를 그룹으로 나누고, 각 그룹을 SVD로 분해하고, 랭크 예산을 균등하게 쓴다. 그런데 <i>그룹 나누기 자체</i>가 하이퍼파라미터여야 하는지 묻는 사람은 거의 없었다.</p>
+    <p class="t-en">The premise behind grouped Key compression is that some attention heads encode nearly the same thing, so they can share one low-rank basis. But "group size = 4" is an assertion about how redundancy is distributed, and it is almost certainly wrong: redundancy is not uniform across layers, and it is not uniform across architectures. This paper takes the obvious next step — measure head similarity with CKA, run agglomerative clustering on it, and let the number and size of groups fall out of the data. Figure 1 below is the payoff of that move, and it is more informative than any accuracy table in the paper: the three models produce completely different grouping structures, and those structures predict how much compression each model can absorb. Qwen1.5 (head dim 128) refuses to merge — 59 singleton groups — while SmolLM2 (head dim 64, 32 heads) collapses whole layers into a single 32-head group. Same algorithm, same budget, radically different outcome.</p>
+    <p class="t-ko">그룹 단위 Key 압축의 전제는, 어떤 어텐션 헤드들은 거의 같은 것을 인코딩하므로 하나의 저랭크 기저를 공유해도 된다는 것이다. 그런데 "그룹 크기 = 4"는 중복이 어떻게 분포하는지에 대한 주장이고, 거의 확실히 틀렸다. 중복은 층마다 균일하지 않고, 아키텍처마다도 균일하지 않다. 이 논문은 당연한 다음 수순을 밟는다. CKA로 헤드 유사도를 재고, 그 위에 병합적 클러스터링을 돌리고, 그룹의 개수와 크기가 데이터에서 나오게 둔다. 아래 그림 1이 그 대가이고, 논문의 어떤 정확도 표보다 정보량이 많다. 모델 셋이 완전히 다른 그룹 구조를 만들어내고, 그 구조가 각 모델이 얼마나 압축을 견딜 수 있는지를 예측한다. Qwen1.5(head dim 128)는 병합을 거부해 싱글턴 그룹이 59개인 반면, SmolLM2(head dim 64, 헤드 32개)는 한 층 전체를 32-헤드 단일 그룹으로 뭉갠다. 같은 알고리즘, 같은 예산, 전혀 다른 결과다.</p>
+    <figure class="fig">
+      <img src="fig/2607.24331/structure.png" alt="Head grouping structures for Llama-3.2-1B-Instruct, Qwen1.5-1.8B-Chat and SmolLM2-1.7B-Instruct; each block is a group, width is group dimension, color is heads per group.">
+      <figcaption class="t-en"><b>Figure 1.</b> Every horizontal strip is one layer's Key projection; each block is a cluster, block width is the group's dimension and color encodes heads per group (pink = singleton, yellow = 31–32 heads). Read it left to right: Llama-3.2-1B has only 8 Key heads to work with, Qwen1.5 fragments into 59 singletons, and SmolLM2 fuses most layers into one giant group. The 65.23% parameter saving on SmolLM2 is exactly this yellow block, and so is its fragility.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> 가로 띠 하나가 한 층의 Key 사영이다. 블록 하나가 클러스터이고, 블록 너비는 그룹 차원, 색은 그룹당 헤드 수다(분홍 = 싱글턴, 노랑 = 31–32 헤드). 왼쪽부터 보면, Llama-3.2-1B는 다룰 Key 헤드가 8개뿐이고, Qwen1.5는 싱글턴 59개로 파편화되며, SmolLM2는 대부분의 층을 하나의 거대 그룹으로 융합한다. SmolLM2의 65.23% 파라미터 절감은 정확히 이 노란 블록이고, 그 취약성도 마찬가지다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2607.24331</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">65.23%</div><div class="l"><span class="t-en">Key-cache parameter cut on SmolLM2-1.7B (MHA, 32 heads) — 22.17M fewer</span><span class="t-ko">SmolLM2-1.7B(MHA, 헤드 32)의 Key 캐시 파라미터 절감 — 2,217만 개 감소</span></div></div>
+      <div class="stat"><div class="n">16.00%</div><div class="l"><span class="t-en">the same cut on Qwen1.5-1.8B (MHA, head dim 128) — heads refuse to merge</span><span class="t-ko">Qwen1.5-1.8B(MHA, head dim 128)에서의 같은 절감 — 헤드가 병합을 거부한다</span></div></div>
+      <div class="stat"><div class="n">−1.02</div><div class="l"><span class="t-en">LongBench average change vs ReCalKV on Qwen1.5 (MHA)</span><span class="t-ko">Qwen1.5(MHA)에서 ReCalKV 대비 LongBench 평균 변화</span></div></div>
+      <div class="stat"><div class="n">−8.03</div><div class="l"><span class="t-en">LongBench average change on Llama-3.2-1B (GQA, 8 Key heads)</span><span class="t-ko">Llama-3.2-1B(GQA, Key 헤드 8개)에서의 LongBench 평균 변화</span></div></div>
+      <div class="stat"><div class="n">4r / h</div><div class="l"><span class="t-en">the parameter budget cap Σ r<sub>i</sub>α<sub>i</sub> must respect — inherited from ReCalKV's group-of-4</span><span class="t-ko">Σ r<sub>i</sub>α<sub>i</sub>가 지켜야 하는 파라미터 예산 상한 — ReCalKV의 4-헤드 그룹에서 물려받았다</span></div></div>
+      <div class="stat"><div class="n">1 × T4</div><div class="l"><span class="t-en">the entire compute budget; all models are ≤1.8B</span><span class="t-ko">실험 전체의 컴퓨트 예산. 모든 모델이 1.8B 이하다</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The result that actually splits the paper in two</span><span class="t-ko">논문을 둘로 가르는 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table III.</b> LongBench scores, DynaCalKV vs the authors' re-implementation of ReCalKV. The MHA model barely notices; the GQA model loses a fifth of its retrieval score. SmolLM2 is missing from this table because Palu, ReCalKV and DynaCalKV all score near zero on it — the authors say so explicitly.</caption>
+        <caption class="t-ko"><b>표 III.</b> LongBench 점수, DynaCalKV vs 저자들이 재구현한 ReCalKV. MHA 모델은 거의 눈치채지 못하고, GQA 모델은 retrieval 점수의 5분의 1을 잃는다. SmolLM2가 이 표에 없는 이유는 Palu·ReCalKV·DynaCalKV 모두 이 모델에서 거의 0점이기 때문이다 — 저자들이 명시적으로 밝힌 사실이다.</caption>
+        <thead><tr><th>Model / Method</th><th>TriviaQA</th><th>Qasper</th><th>TREC</th><th>SAMSum</th><th>LCC</th><th>RepoBench-P</th><th>QMSum</th><th>MultiNews</th><th>Avg Δ</th></tr></thead>
+        <tbody>
+          <tr><td>Llama-3.2-1B (GQA) · ReCalKV</td><td>56.40</td><td>15.10</td><td>33.00</td><td>24.84</td><td>22.24</td><td>27.86</td><td>17.33</td><td>19.19</td><td>—</td></tr>
+          <tr><td>Llama-3.2-1B (GQA) · DynaCalKV</td><td>37.44</td><td>6.00</td><td>20.50</td><td>14.34</td><td>21.67</td><td>24.85</td><td>15.15</td><td>11.79</td><td class="up">−8.03</td></tr>
+          <tr><td>Qwen1.5-1.8B (MHA) · ReCalKV</td><td>68.37</td><td>17.20</td><td>42.00</td><td>33.01</td><td>28.59</td><td>30.44</td><td>17.04</td><td>23.68</td><td>—</td></tr>
+          <tr><td>Qwen1.5-1.8B (MHA) · DynaCalKV</td><td>67.52</td><td>15.35</td><td>38.00</td><td>33.72</td><td>27.15</td><td>29.62</td><td>17.26</td><td>23.53</td><td class="up">−1.02</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Measure</span><span class="t-ko">측정</span></div>
+          <div class="sub"><span class="t-en">pairwise head similarity</span><span class="t-ko">헤드 쌍별 유사도</span></div>
+          <div class="latent">S ∈ ℝ<sup>h×h</sup>, CKA</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Cluster</span><span class="t-ko">클러스터링</span></div>
+          <div class="sub"><span class="t-en">uneven groups, no fixed size</span><span class="t-ko">크기 제각각, 고정 크기 없음</span></div>
+          <div class="latent">K groups, α<sub>i</sub> = h<sub>i</sub>/h</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Allocate by energy</span><span class="t-ko">에너지 기준 배분</span></div>
+          <div class="sub"><span class="t-en">rank ∝ sum of squared singular values</span><span class="t-ko">랭크 ∝ 특이값 제곱합</span></div>
+          <div class="latent">r<sub>i</sub> = round(r · E<sub>i</sub>/E)</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Greedy trim</span><span class="t-ko">탐욕적 삭감</span></div>
+          <div class="sub"><span class="t-en">drop the cheapest rank until the budget holds</span><span class="t-ko">예산을 만족할 때까지 가장 싼 랭크부터 뺀다</span></div>
+          <div class="latent">min ΔE<sub>i</sub>/α<sub>i</sub> · until Σ r<sub>i</sub>α<sub>i</sub> ≤ 4r/h</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Pick K</span><span class="t-ko">K 선택</span></div>
+          <div class="sub"><span class="t-en">sweep candidates, keep the best objective</span><span class="t-ko">후보를 훑고 목적함수 최적을 남긴다</span></div>
+          <div class="latent">Σ‖W<sub>i</sub> − L<sub>i</sub>R<sub>i</sub>‖<sub>F</sub><sup>2</sup> + λ(r − Σ r<sub>i</sub>)</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Every box runs offline, once, before deployment — inference cost is identical to ReCalKV.</b> The chain is worth reading backwards too: because the greedy trim only ever <i>removes</i> rank, the final Σ r<sub>i</sub> is strictly below the allocated budget r, which is why the method can claim a parameter reduction at all. The λ(r − Σ r<sub>i</sub>) penalty exists precisely to stop the clustering step from choosing a configuration that throws away rank it did not need to.</div>
+      <div class="cap t-ko"><b>모든 상자는 배포 전에 오프라인으로 한 번만 돈다. 추론 비용은 ReCalKV와 동일하다.</b> 이 사슬은 거꾸로 읽을 가치도 있다. 탐욕적 삭감은 랭크를 <i>빼기만</i> 하므로 최종 Σ r<sub>i</sub>는 배정된 예산 r보다 엄격히 작고, 그래서 애초에 파라미터 절감을 주장할 수 있다. λ(r − Σ r<sub>i</sub>) 페널티는 클러스터링 단계가 굳이 버리지 않아도 될 랭크까지 버리는 구성을 고르지 못하게 막으려고 존재한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two moving parts</span><span class="t-ko">움직이는 두 부품</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">key side</span>
+        <h3>CKA clustering + energy-proportional rank</h3>
+        <p class="t-en">The Key projection W<sup>(k)</sup> ∈ ℝ<sup>m×n</sup> is split column-wise into K submatrices, one per head cluster. Two independent decisions used to be frozen — how many heads per group, and how much rank per group — and this paper unfreezes both. Grouping comes from agglomerative clustering on the CKA matrix; rank comes from each group's share of the total squared-singular-value energy. The constraint that keeps it honest is Σ r<sub>i</sub>α<sub>i</sub> ≤ 4r/h, which is literally ReCalKV's parameter count written as a ceiling, so any win is a win at equal-or-lower memory. A greedy loop enforces it by repeatedly killing the rank whose normalized energy cost ΔE<sub>i</sub>/α<sub>i</sub> is smallest — note this preferentially cuts <i>large</i> groups, since α<sub>i</sub> sits in the denominator.</p>
+        <p class="t-ko">Key 사영 W<sup>(k)</sup> ∈ ℝ<sup>m×n</sup>을 헤드 클러스터 단위로 열 방향 K개 부분행렬로 자른다. 지금까지 얼어붙어 있던 두 결정 — 그룹당 헤드 수, 그룹당 랭크 — 을 이 논문이 둘 다 녹인다. 그룹은 CKA 행렬 위의 병합적 클러스터링에서 나오고, 랭크는 각 그룹이 차지하는 특이값 제곱합 에너지 비율에서 나온다. 정직성을 지켜주는 제약이 Σ r<sub>i</sub>α<sub>i</sub> ≤ 4r/h인데, 이건 말 그대로 ReCalKV의 파라미터 수를 천장으로 적어놓은 것이라, 이기면 메모리가 같거나 더 적은 상태에서 이긴 것이 된다. 탐욕 루프가 정규화 에너지 비용 ΔE<sub>i</sub>/α<sub>i</sub>가 가장 작은 랭크를 반복해서 죽여 이 제약을 강제한다 — α<sub>i</sub>가 분모에 있으므로 <i>큰</i> 그룹이 우선적으로 깎인다는 점에 주목할 것.</p>
+      </div>
+      <div class="m">
+        <span class="tag">value side</span>
+        <h3>Untouched: ReCalKV's offline calibration</h3>
+        <p class="t-en">The Value cache gets no new idea at all — it is ReCalKV's procedure verbatim. W<sup>(v)</sup> is factored by plain SVD with no grouping, then the two factors are refined against WikiText-2 activations by alternating closed-form least squares: L<sub>v</sub> = W<sup>(v)</sup>XXᵀR<sub>v</sub>ᵀ(R<sub>v</sub>XXᵀR<sub>v</sub>ᵀ)<sup>−1</sup>, then R<sub>v</sub> = (L<sub>v</sub>ᵀL<sub>v</sub>)<sup>−1</sup>L<sub>v</sub>ᵀW<sup>(v)</sup>. The justification is that the Fisher-information allocation step already told them the Value projection matters more, so it should be reconstructed faithfully rather than clustered. This is a defensible choice, but it also means the paper's entire contribution lives on the Key side, and every number in it is a Key-side number.</p>
+        <p class="t-ko">Value 캐시에는 새 아이디어가 전혀 없다. ReCalKV의 절차 그대로다. W<sup>(v)</sup>는 그룹화 없이 평범한 SVD로 분해하고, 두 인자를 WikiText-2 활성값에 대해 교대 폐형해 최소제곱으로 정련한다: L<sub>v</sub> = W<sup>(v)</sup>XXᵀR<sub>v</sub>ᵀ(R<sub>v</sub>XXᵀR<sub>v</sub>ᵀ)<sup>−1</sup>, 이어서 R<sub>v</sub> = (L<sub>v</sub>ᵀL<sub>v</sub>)<sup>−1</sup>L<sub>v</sub>ᵀW<sup>(v)</sup>. 근거는 Fisher 정보 기반 배분 단계가 이미 Value 사영이 더 중요하다고 알려줬으니, 클러스터링하지 말고 충실히 복원해야 한다는 것이다. 방어 가능한 선택이지만, 동시에 이 논문의 기여 전체가 Key 쪽에만 살아 있고 논문의 모든 숫자가 Key 쪽 숫자라는 뜻이기도 하다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Spread the budget across layers first. </span><span class="t-ko">먼저 층 사이로 예산을 뿌린다. </span></b><span class="t-en">Following Palu, layer-wise Fisher information is computed on WikiText-2 and used to hand each layer its rank budget r. This step is inherited, not new, and it is also where the paper learns that Value projections carry more Fisher information than Key projections — the fact that later justifies leaving Value alone.</span><span class="t-ko">Palu를 따라 WikiText-2에서 층별 Fisher 정보를 계산해 각 층에 랭크 예산 r을 배정한다. 물려받은 단계이지 새 단계가 아니며, 동시에 Value 사영이 Key 사영보다 Fisher 정보를 더 많이 담는다는 사실을 이 지점에서 알게 된다 — 나중에 Value를 건드리지 않는 근거가 되는 사실이다.</span></li>
+      <li><b><span class="t-en">Build the CKA similarity matrix and cluster. </span><span class="t-ko">CKA 유사도 행렬을 만들고 클러스터링한다. </span></b><span class="t-en">Linear CKA between head representations fills S ∈ ℝ<sup>h×h</sup>; agglomerative clustering turns it into K groups of variable size h<sub>i</sub>. Unlike ReCalKV there is no head reordering into equal blocks and no group-size hyperparameter to tune.</span><span class="t-ko">헤드 표현 사이의 선형 CKA가 S ∈ ℝ<sup>h×h</sup>를 채우고, 병합적 클러스터링이 이를 크기 h<sub>i</sub>가 제각각인 K개 그룹으로 바꾼다. ReCalKV와 달리 헤드를 같은 크기 블록으로 재배열하는 과정도, 조율할 그룹 크기 하이퍼파라미터도 없다.</span></li>
+      <li><b><span class="t-en">Give each group rank in proportion to its energy, then take some back. </span><span class="t-ko">각 그룹에 에너지 비례로 랭크를 주고, 다시 일부를 회수한다. </span></b><span class="t-en">r<sub>i</sub> starts at round(r · E<sub>i</sub>/E). That initialization generally violates Σ r<sub>i</sub>α<sub>i</sub> ≤ 4r/h, so ranks are shed one at a time from whichever group has the smallest ΔE<sub>i</sub>/α<sub>i</sub> until the budget is satisfied. Σ r<sub>i</sub> ends up below r, and that gap is the reported saving.</span><span class="t-ko">r<sub>i</sub>는 round(r · E<sub>i</sub>/E)로 시작한다. 이 초기화는 대개 Σ r<sub>i</sub>α<sub>i</sub> ≤ 4r/h를 위반하므로, ΔE<sub>i</sub>/α<sub>i</sub>가 가장 작은 그룹에서 랭크를 하나씩 떼어내 예산을 만족시킨다. 결국 Σ r<sub>i</sub>는 r보다 작아지고, 그 차이가 보고된 절감분이다.</span></li>
+      <li><b><span class="t-en">Sweep the number of clusters and keep the winner. </span><span class="t-ko">클러스터 개수를 훑고 승자를 남긴다. </span></b><span class="t-en">For each candidate K the pipeline is run end to end and scored by Σ‖W<sub>i</sub> − L<sub>i</sub>R<sub>i</sub>‖<sub>F</sub><sup>2</sup> + λ(r − Σ r<sub>i</sub>) with λ = 1 — reconstruction error plus a penalty for wasted rank. The argmin K* and its factors are what ships. All of this is offline, so inference-time cost matches ReCalKV exactly.</span><span class="t-ko">후보 K마다 파이프라인을 끝까지 돌리고 Σ‖W<sub>i</sub> − L<sub>i</sub>R<sub>i</sub>‖<sub>F</sub><sup>2</sup> + λ(r − Σ r<sub>i</sub>), λ = 1로 점수를 매긴다 — 복원 오차에 낭비된 랭크 페널티를 더한 것이다. argmin K*와 그 인자들이 실제로 배포된다. 전 과정이 오프라인이므로 추론 시점 비용은 ReCalKV와 정확히 같다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Head-group size deserves to be data-driven, and the cost of making it so is zero at inference. If you are running any grouped low-rank KV method, swapping a fixed group size for CKA clustering is a cheap experiment with a clear theoretical guardrail — the Σ r<sub>i</sub>α<sub>i</sub> ≤ 4r/h constraint means you cannot accidentally spend more memory than the fixed-group baseline.</p><p class="t-ko">헤드 그룹 크기는 데이터가 정하게 할 가치가 있고, 그렇게 만드는 비용은 추론 시점에 0이다. 그룹 단위 저랭크 KV 방법을 쓰고 있다면 고정 그룹 크기를 CKA 클러스터링으로 바꿔보는 건 값싼 실험이고, 이론적 안전장치도 명확하다 — Σ r<sub>i</sub>α<sub>i</sub> ≤ 4r/h 제약 때문에 고정 그룹 베이스라인보다 메모리를 더 쓰는 사고는 날 수 없다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The real finding is that GQA has already spent the redundancy budget. Grouped Key compression and grouped-query attention are the same trick applied at different times; stacking them on a model with 8 Key heads costs −8.03 LongBench average, concentrated in retrieval (−18.96 TriviaQA, −12.50 TREC). Any head-merging compressor should be reported separately for MHA and GQA, and this paper is a clean demonstration of why.</p><p class="t-ko">진짜 발견은 GQA가 이미 중복 예산을 다 써버렸다는 것이다. 그룹 단위 Key 압축과 grouped-query attention은 같은 트릭을 다른 시점에 적용한 것이고, Key 헤드가 8개인 모델에 둘을 겹쳐 쌓으면 LongBench 평균 −8.03을 치르며 그 손실이 retrieval에 몰린다(TriviaQA −18.96, TREC −12.50). 헤드를 병합하는 압축기라면 MHA와 GQA를 나눠서 보고해야 하고, 이 논문이 그 이유를 깔끔하게 보여준다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Head dimension predicts mergeability better than head count. Qwen1.5's d<sub>h</sub> = 128 heads are too individually expressive to cluster (59 singletons, only 16.00% saved), while the d<sub>h</sub> = 64 models merge freely. If you want to know in advance whether a compressor of this family will help you, plot the CKA matrix first — it costs one forward pass over calibration data and tells you more than running the whole pipeline.</p><p class="t-ko">헤드 차원이 헤드 개수보다 병합 가능성을 더 잘 예측한다. Qwen1.5의 d<sub>h</sub> = 128 헤드들은 개별적으로 너무 표현력이 커서 클러스터링되지 않고(싱글턴 59개, 절감 16.00%), d<sub>h</sub> = 64 모델들은 자유롭게 병합된다. 이 계열의 압축기가 내 모델에 도움이 될지 미리 알고 싶다면 CKA 행렬부터 그려보라. 캘리브레이션 데이터로 순전파 한 번이면 되고, 파이프라인 전체를 돌리는 것보다 많은 걸 알려준다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the comparison is not iso-budget in the direction that matters. DynaCalKV uses strictly <i>fewer</i> parameters and strictly fewer total ranks than ReCalKV, and then reports that accuracy drops slightly — but ReCalKV is never re-run at the same reduced budget, so nothing distinguishes "dynamic grouping is smarter" from "we simply compressed harder and paid for it." There is also no ablation separating CKA clustering from energy-proportional rank allocation, no sweep of λ, and no wall-clock or memory measurement — only parameter counts. Worst of all, the model with the headline 65.23% saving is SmolLM2, the one the authors excluded from LongBench because all three methods score near zero on it; its zero-shot baselines (ReCalKV: 29.90 HellaSwag, 35.94 ARC-e) are already close to degenerate, which makes the celebrated +4.72% HellaSwag gain hard to read as evidence of anything.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 중요한 방향에서 등예산 비교가 아니다. DynaCalKV는 ReCalKV보다 파라미터도, 총 랭크도 엄격히 <i>적게</i> 쓰고서 정확도가 조금 떨어졌다고 보고한다. 그런데 ReCalKV를 같은 축소 예산으로 다시 돌린 적이 없으므로, "동적 그룹화가 더 똑똑하다"와 "그냥 더 세게 압축하고 대가를 치렀다"를 구분할 근거가 없다. CKA 클러스터링과 에너지 비례 랭크 배분을 분리하는 ablation도, λ 스윕도, 실측 속도·메모리도 없다. 있는 건 파라미터 수뿐이다. 가장 곤란한 건, 65.23%라는 간판 절감을 낸 모델이 하필 저자들이 LongBench에서 제외한 SmolLM2라는 점이다. 세 방법 모두 거의 0점이라는 이유였는데, 제로샷 베이스라인부터(ReCalKV: HellaSwag 29.90, ARC-e 35.94) 이미 퇴화에 가깝다. 그러니 자랑스럽게 적힌 HellaSwag +4.72%도 무언가의 증거로 읽기 어렵다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2607.24331">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2607.24331">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2607.24331">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2607.24331">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>#7 in the 2026-08 wishlist queue (Model Compression · KV · low-rank axis). It is the direct sequel to SVD-Surgeon from 2026-08-10 and AnchorKV from 2026-08-07: those decide which singular directions or which tokens to keep, this one decides which heads get to share a basis at all — and then discovers that GQA already answered that question</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-14.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐 7번(Model Compression · KV · 저랭크 축). 2026-08-10의 SVD-Surgeon, 2026-08-07의 AnchorKV의 직계 후속이다. 그 둘이 어떤 특이 방향 혹은 어떤 토큰을 남길지 정한다면, 이 논문은 애초에 어떤 헤드들이 기저를 공유할지를 정한다 — 그리고 GQA가 그 질문에 이미 답해버렸다는 걸 발견한다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-14.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
