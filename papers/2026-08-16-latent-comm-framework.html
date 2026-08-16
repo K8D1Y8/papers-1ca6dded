@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Beyond Tokens: A Unified Framework for Latent Communication in LLM-based Multi-Agent Systems</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent Systems · Latent Communication · Survey</span><span class="t-ko">멀티에이전트 · 잠재 통신 · 서베이</span></span>
+      <span>2026.08.16</span>
+    </div>
+    <h1>Beyond Tokens: A Unified Framework for Latent Communication in LLM-based Multi-Agent Systems<br>
+      <span class="glow t-en">— three questions that pin down every latent channel</span>
+      <span class="glow t-ko">— 모든 잠재 채널을 특정하는 세 가지 질문</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Yingzhuo Liu</b> <span class="t-en">(sole author)</span><span class="t-ko">(단독 저자)</span></span>
+      <span>🏛 BUPT <span class="t-en">(inferred from email — affiliation left blank in the paper)</span><span class="t-ko">(이메일 기준 추정 — 논문에는 소속란이 비어 있음)</span></span>
+      <span>🗓 2026-06-04</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.05711">arXiv:2606.05711</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Eighteen papers have now proposed letting LLM agents skip text and hand each other raw internal state — embeddings, hidden states, KV-caches — and each one invented its own vocabulary for doing it. This survey argues that all of them collapse onto a single triple: <b>WHAT</b> you ship (embedding / hidden state / KV-cache / other), <b>WHICH</b> parts of sender and receiver you line up (latent-space alignment + layer alignment), and <b>HOW</b> you fuse it in (concat / prepend / math op / cross-attention / cache restoration). The framing is worth having: it makes the design space multiplicative (3 × 3 × 5 ≈ 45 cells, of which the 18 known methods occupy about 17), it exposes a clean ordering — KV-cache &gt; hidden state &gt; embedding on information, transport cost <i>and</i> architecture lock-in simultaneously — and it makes the field's real blind spot obvious: almost everything assumes sender and receiver are the same model, and nobody is working on latent-channel security. What it does not do is measure anything. There are no new experiments; every number is lifted from the original papers, which used different backbones and different benchmarks.</p>
+    <p class="t-ko">LLM 에이전트가 텍스트를 건너뛰고 내부 상태(임베딩·히든 스테이트·KV 캐시)를 그대로 주고받게 하자는 논문이 지금까지 18편 나왔고, 각자 자기만의 용어를 만들어 썼다. 이 서베이의 주장은 그 전부가 하나의 삼중항으로 환원된다는 것이다. <b>WHAT</b> 무엇을 보내나(임베딩 / 히든 스테이트 / KV 캐시 / 기타), <b>WHICH</b> 송신자와 수신자의 어느 부분을 맞추나(잠재공간 정렬 + 레이어 정렬), <b>HOW</b> 어떻게 수신자에 융합하나(concat / prepend / 수식 연산 / 교차 어텐션 / 캐시 복원). 이 틀은 쓸모가 있다. 설계 공간이 덧셈이 아니라 곱셈 구조(3 × 3 × 5 ≈ 45칸, 알려진 18개 방법이 그중 약 17칸 점유)가 되고, 정보량·전송 비용·아키텍처 종속성이 <i>동시에</i> KV 캐시 &gt; 히든 스테이트 &gt; 임베딩 순으로 정렬된다는 사실이 드러나며, 이 분야의 진짜 사각지대가 선명해진다. 거의 전부가 송·수신자를 같은 모델로 가정하고, 잠재 채널 보안을 연구하는 사람은 사실상 없다. 다만 이 논문은 아무것도 직접 측정하지 않는다. 새 실험이 없고, 모든 수치는 백본과 벤치마크가 제각각인 원 논문에서 그대로 옮겨온 것이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The argument for latent communication is one number: sampling a token throws away roughly three to four orders of magnitude of what the sender actually knew.</p>
+    <p class="lead t-ko">잠재 통신을 정당화하는 근거는 숫자 하나다. 토큰 하나를 샘플링하는 순간, 송신자가 실제로 알고 있던 것의 약 3~4자릿수가 버려진다.</p>
+    <p class="t-en">The paper makes the case tightly. A sender's hidden state lives in ℝ<sup>d</sup> with d ≥ 4096 in fp32, so its raw capacity is on the order of 40,000 bits. The token it gets compressed into carries at most log₂|V| ≈ 15–17 bits. What is discarded is not noise: it is the alternatives the sender considered, their relative probabilities, its calibrated uncertainty, and which parts of the context it was actually attending to. On top of that, the receiver has to spend a full prefill re-encoding a message the sender just spent a full decode producing — so text costs roughly <b>2×</b> the message's generation cost before either agent does any reasoning of its own. Latent communication deletes both halves of that round trip.</p>
+    <p class="t-ko">논지는 촘촘하다. 송신자의 히든 스테이트는 d ≥ 4096의 fp32 벡터이므로 원시 표현 용량이 약 40,000비트다. 그것이 압축되어 들어가는 토큰 하나는 많아야 log₂|V| ≈ 15~17비트를 담는다. 버려지는 것은 잡음이 아니다. 송신자가 고려했던 대안들, 그 상대 확률, 보정된 불확실성, 그리고 문맥의 어느 부분에 실제로 주의를 두고 있었는지가 함께 사라진다. 게다가 수신자는 송신자가 방금 디코딩으로 만들어낸 메시지를 프리필로 다시 인코딩해야 한다. 즉 텍스트 채널은 두 에이전트가 자기 추론을 시작하기도 전에 메시지 생성 비용의 약 <b>2배</b>를 쓴다. 잠재 통신은 이 왕복의 양쪽을 모두 지운다.</p>
+    <p class="t-en">Where the survey earns its keep is not that argument — it is already folklore — but the observation that the field has no shared vocabulary for it. One paper says it transmits "activations," another "hidden states," a third "thoughts," and all three may mean different tensors at different depths fused in different ways. The 3-axis framework is a naming convention, and naming conventions are how a scattered literature becomes comparable.</p>
+    <p class="t-ko">이 서베이의 값어치는 그 논증 자체(이미 상식에 가깝다)가 아니라, 이 분야에 공통 어휘가 없다는 관찰에 있다. 어떤 논문은 "activation"을 보낸다고 하고, 다른 논문은 "hidden state", 또 다른 논문은 "thought"라고 하는데, 셋이 서로 다른 깊이의 서로 다른 텐서를 서로 다른 방식으로 융합하는 것일 수 있다. 3축 프레임워크는 명명 규약이고, 흩어진 문헌이 비교 가능해지는 것은 바로 명명 규약을 통해서다.</p>
+    <figure class="fig">
+      <img src="fig/2606.05711/framework-overview.png" alt="The unified 3-axis framework: WHAT (embedding, hidden state, KV-cache, others), WHICH (latent information alignment, layer alignment), HOW (concat, prepend, math operation, cross-attention).">
+      <figcaption class="t-en"><b>Figure 3.</b> The three axes, in the order a message travels them: the sender picks <b>WHAT</b> to expose, the pair agrees on <b>WHICH</b> spaces and layers correspond, and the receiver decides <b>HOW</b> to fuse. The paper's claim is that these are orthogonal — you can pick each independently — which is why the design space multiplies out to ~45 cells rather than listing 18 one-off recipes.</figcaption>
+      <figcaption class="t-ko"><b>그림 3.</b> 메시지가 지나가는 순서대로 놓인 세 축이다. 송신자가 무엇을 노출할지(<b>WHAT</b>)를 고르고, 양쪽이 어떤 공간·레이어가 대응하는지(<b>WHICH</b>)에 합의하고, 수신자가 어떻게 융합할지(<b>HOW</b>)를 정한다. 이 논문의 주장은 세 축이 직교한다는 것, 즉 각각을 독립적으로 고를 수 있다는 것이다. 그래서 설계 공간이 18개의 일회성 레시피 나열이 아니라 약 45칸으로 곱해진다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.05711</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">18</div><div class="l"><span class="t-en">methods categorised (2024–2026)</span><span class="t-ko">분류된 방법 수 (2024–2026)</span></div></div>
+      <div class="stat"><div class="n">3 × 3 × 5</div><div class="l"><span class="t-en">design space; ~17 of ~45 cells occupied</span><span class="t-ko">설계 공간 · 약 45칸 중 17칸만 채워짐</span></div></div>
+      <div class="stat"><div class="n">15 → 40,000</div><div class="l"><span class="t-en">bits per token vs. per hidden state</span><span class="t-ko">토큰 1개 vs 히든 스테이트 1개의 비트 수</span></div></div>
+      <div class="stat"><div class="n">9 / 18</div><div class="l"><span class="t-en">use the KV-cache as the channel</span><span class="t-ko">KV 캐시를 채널로 쓰는 방법</span></div></div>
+      <div class="stat"><div class="n">13 / 18</div><div class="l"><span class="t-en">fully training-free</span><span class="t-ko">완전 무학습(training-free)</span></div></div>
+      <div class="stat"><div class="n">2–24×</div><div class="l"><span class="t-en">reported latency reduction vs. text</span><span class="t-ko">텍스트 대비 보고된 지연 감소</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Ten methods, placed</span><span class="t-ko">방법 10개, 좌표에 찍어보면</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table (from Appendix A, condensed).</b> The same ten methods you would otherwise read ten papers to compare. Read the columns as a coordinate: LatentMAS and Cache-to-Cache differ <i>only</i> in HOW (prepend vs. learned fuser), and that one difference is what makes one training-free and the other not.</caption>
+        <caption class="t-ko"><b>표 (부록 A 축약).</b> 원래라면 논문 10편을 읽어야 비교되는 것들이다. 각 열을 좌표로 읽으면 된다. LatentMAS와 Cache-to-Cache는 <i>오직</i> HOW에서만 다른데(prepend vs 학습형 fuser), 바로 그 차이 하나가 한쪽은 무학습, 다른 쪽은 학습 필요로 갈라놓는다.</caption>
+        <thead><tr><th>Method</th><th>WHAT</th><th>WHICH</th><th>HOW</th><th>Training-free</th></tr></thead>
+        <tbody>
+          <tr><td>CIPHER</td><td>Weighted embedding</td><td>Last → First</td><td>Concat</td><td class="up">✓</td></tr>
+          <tr><td>AC</td><td>Hidden state (sel. layer)</td><td>Sel. → Sel.</td><td>Math (add)</td><td class="up">✓</td></tr>
+          <tr><td>Interlat</td><td>Hidden state (last layer)</td><td>Last → First (+proj.)</td><td>Concat</td><td>mostly</td></tr>
+          <tr><td>SDE</td><td>State-delta trajectory</td><td>All → Corr.</td><td>Math (add)</td><td class="up">✓</td></tr>
+          <tr><td>Mixture of Thoughts</td><td>Hidden state (projected)</td><td>Learned interaction</td><td>Cross-attention</td><td>—</td></tr>
+          <tr><td>KVComm</td><td>KV-cache (sel. layers)</td><td>Sel. → Sel.</td><td>Prepend</td><td class="up">✓</td></tr>
+          <tr><td>Cache-to-Cache</td><td>KV-cache (all layers)</td><td>All → Corr.</td><td>Math (learned fuser)</td><td>—</td></tr>
+          <tr><td>LatentMAS</td><td>KV-cache (prefill+decode)</td><td>All → Corr.</td><td>Prepend</td><td class="up">✓</td></tr>
+          <tr><td>LRAgent</td><td>KV-cache (base + low-rank)</td><td>Same backbone</td><td>Add (fused kernel)</td><td class="up">✓</td></tr>
+          <tr><td>Vision Wormhole</td><td>Hidden state (via UVC)</td><td>Hub-and-spoke</td><td>Visual injection</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three axes</span><span class="t-ko">세 개의 축</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">AXIS 1</span>
+        <h3>WHAT — what you ship</h3>
+        <p class="t-en">Embedding, hidden state, KV-cache, or something exotic (state deltas, a disk-persistent Q4 cache, a shared workspace, or a hidden state rendered into a VLM's <i>visual</i> input). The survey's sharpest single observation is that these three rank identically on three different scales: KV-cache &gt; hidden state &gt; embedding for information richness, <i>and</i> for transport cost, <i>and</i> for architecture lock-in. There is no free lunch on this axis — a 4096-d Llama cache cannot be poured into a 5120-d Qwen.</p>
+        <p class="t-ko">임베딩, 히든 스테이트, KV 캐시, 아니면 좀 특이한 것들(상태 델타, 디스크에 상주하는 Q4 캐시, 공유 워크스페이스, VLM의 <i>시각</i> 입력 공간으로 렌더링된 히든 스테이트). 이 서베이의 가장 날카로운 관찰 하나는, 이 셋의 순위가 서로 다른 세 척도에서 동일하다는 것이다. 정보 풍부도도, 전송 비용도, 아키텍처 종속성도 모두 KV 캐시 &gt; 히든 스테이트 &gt; 임베딩 순이다. 이 축에 공짜 점심은 없다. 4096차원 Llama 캐시를 5120차원 Qwen에 그대로 부을 수는 없다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">AXIS 2</span>
+        <h3>WHICH — what lines up with what</h3>
+        <p class="t-en">Two sub-questions. First, do the two latent spaces match? If both agents are the same checkpoint, alignment is free; different fine-tunes of one backbone need a learned projection; genuinely different architectures need a universal codec or learned interaction layers. Second, which layer feeds which? The recurring patterns are <b>last → first</b> (simple, works when the last layer is the semantic summary), <b>all → corresponding</b> (the default for KV-cache methods, preserves layer structure), and <b>selected → selected</b> (more complexity, pays off when the signal is concentrated in a few layers).</p>
+        <p class="t-ko">두 개의 하위 질문이다. 첫째, 두 잠재공간이 맞는가? 두 에이전트가 같은 체크포인트면 정렬은 공짜다. 같은 백본의 서로 다른 파인튜닝이면 학습형 사영이 필요하고, 진짜로 다른 아키텍처면 범용 코덱이나 학습형 상호작용 레이어가 필요하다. 둘째, 어느 레이어가 어느 레이어로 들어가는가? 반복되는 패턴은 <b>last → first</b>(단순하고, 마지막 레이어가 의미 요약일 때 잘 작동), <b>all → corresponding</b>(KV 캐시 방법의 기본값, 레이어 구조를 보존), <b>selected → selected</b>(복잡도는 늘지만 신호가 몇몇 레이어에 몰려 있을 때 이득)이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">AXIS 3</span>
+        <h3>HOW — how the receiver absorbs it</h3>
+        <p class="t-en">Five options, ordered by expressiveness against cost. <b>Concatenation</b> and <b>prepending</b> dominate because they are training-free — prepending in particular lets the receiver attend over the sender's context as if it were the opening tokens of its own prompt. <b>Math ops</b> (addition, gating, a learned fuser) are more expressive but need compatible geometry. <b>Cross-attention</b> is the most expressive and always needs training. <b>Cache restoration</b> — just overwrite part of your own cache — is the cheapest of all, but it is a recomputation-avoidance trick, not a way to mix two agents' reasoning.</p>
+        <p class="t-ko">표현력 대 비용 순으로 다섯 가지다. <b>Concat</b>과 <b>prepend</b>가 지배적인데 무학습이기 때문이다. 특히 prepend는 수신자가 송신자의 문맥을 마치 자기 프롬프트의 앞부분인 것처럼 어텐션할 수 있게 해준다. <b>수식 연산</b>(덧셈, 게이팅, 학습형 fuser)은 표현력이 더 높지만 기하학적 호환성이 필요하다. <b>교차 어텐션</b>은 가장 표현력이 높고 항상 학습이 필요하다. <b>캐시 복원</b>(자기 캐시 일부를 그냥 덮어쓰기)은 가장 저렴하지만, 두 에이전트의 추론을 섞는 방법이 아니라 재계산 회피 기법이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How to use the framework</span><span class="t-ko">이 프레임워크를 쓰는 법</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Ask what leaves the sender.</span><span class="t-ko">송신자에서 무엇이 나가는지 묻는다.</span></b><span class="t-en">Not "activations" — which tensor, at which depth, from which phase? KV-cache methods live in prefill (the cache is a prefill by-product), embedding and hidden-state methods live in decode (the last-token state is what predicts the next token). The phase choice is the whole ballgame: if the receiver only needs prefill-phase state, the sender's decode can be skipped outright.</span><span class="t-ko">"activation"이라는 말로는 부족하다. 어느 텐서를, 어느 깊이에서, 어느 단계에서 꺼내는가? KV 캐시 방법은 프리필에 산다(캐시가 프리필의 부산물이므로). 임베딩·히든 스테이트 방법은 디코드에 산다(마지막 토큰 상태가 다음 토큰을 예측하므로). 이 단계 선택이 승부처다. 수신자가 프리필 단계 상태만 필요로 한다면, 송신자의 디코드 자체를 통째로 건너뛸 수 있다.</span></li>
+      <li><b><span class="t-en">Ask whether the two spaces even match.</span><span class="t-ko">두 공간이 애초에 맞는지 묻는다.</span></b><span class="t-en">Same checkpoint → nothing to do. Same backbone, different fine-tunes → a small learned projection. Different architectures → you are in the research frontier, and you will be training something. This is where most of the 18 methods quietly restrict their scope.</span><span class="t-ko">같은 체크포인트면 할 일이 없다. 같은 백본의 다른 파인튜닝이면 작은 학습형 사영이면 된다. 다른 아키텍처면 연구 최전선이고, 무언가를 반드시 학습시켜야 한다. 18개 방법 대부분이 조용히 범위를 좁히는 지점이 바로 여기다.</span></li>
+      <li><b><span class="t-en">Ask where it lands inside the receiver.</span><span class="t-ko">수신자 안에서 어디에 꽂히는지 묻는다.</span></b><span class="t-en">Layer-to-layer mapping first (last → first, all → corresponding, or a selected subset), then the fusion operator. Fixing the mapping usually fixes the operator: all → corresponding on a KV-cache almost forces prepending or a per-layer fuser.</span><span class="t-ko">먼저 레이어 대응(last → first, all → corresponding, 혹은 선택된 부분집합)을 정하고, 그다음 융합 연산자를 정한다. 보통 대응을 정하면 연산자는 따라온다. KV 캐시에 all → corresponding을 쓰면 사실상 prepend나 레이어별 fuser로 강제된다.</span></li>
+      <li><b><span class="t-en">Then check the empty cells.</span><span class="t-ko">그다음 빈 칸을 확인한다.</span></b><span class="t-en">The framework's real payoff is generative, not taxonomic: ~45 positions exist, ~17 are taken. Compressed-KV × heterogeneous-alignment × cross-attention, for instance, is nobody's paper yet.</span><span class="t-ko">이 틀의 진짜 소득은 분류가 아니라 생성에 있다. 약 45개 좌표 중 약 17개만 점유되어 있다. 예를 들어 압축 KV × 이종 정렬 × 교차 어텐션 조합은 아직 아무의 논문도 아니다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><b>KV-cache has quietly become the default channel</b> — 9 of the 18 methods, and rising. The reason is infrastructural rather than scientific: the cache was already a first-class optimisation target with mature compression, sharing, and offload tooling, so latent-communication methods get to piggy-back on someone else's engineering.</p><p class="t-ko"><b>KV 캐시가 어느새 기본 채널이 되었다</b> — 18개 중 9개, 그리고 늘고 있다. 이유는 과학적이기보다 인프라적이다. 캐시는 이미 압축·공유·오프로드 도구가 성숙한 일급 최적화 대상이었기 때문에, 잠재 통신 방법들이 남이 해둔 엔지니어링에 무임승차할 수 있다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><b>The homogeneity assumption is the field's load-bearing wall.</b> 13 of 18 methods are training-free, and they are training-free almost entirely because they assume sender and receiver are the same model. The moment you drop that assumption — Vision Wormhole, Mixture of Thoughts — you are training an alignment module. A training-free, O(N) cross-architecture channel does not exist yet, and it is the single most valuable open problem here.</p><p class="t-ko"><b>동질성 가정이 이 분야의 내력벽이다.</b> 18개 중 13개가 무학습인데, 그게 가능한 이유는 거의 전적으로 송·수신자를 같은 모델로 가정하기 때문이다. 그 가정을 놓는 순간(Vision Wormhole, Mixture of Thoughts) 정렬 모듈을 학습시키게 된다. 무학습이면서 O(N)인 이종 아키텍처 채널은 아직 없고, 여기서 가장 값진 열린 문제다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><b>Nobody is guarding the latent channel.</b> The survey flags this as a critical gap and it is right: a hidden state carries no text to inspect, so an adversarial sender could embed a perturbation that leaves the receiver's output <i>reading</i> fine while steering its behaviour — and a compromised receiver exfiltrates the sender's full context in one tensor. Every property that makes the channel efficient also makes it unauditable.</p><p class="t-ko"><b>잠재 채널을 지키는 사람이 아무도 없다.</b> 서베이는 이를 치명적 공백으로 지목하는데, 타당하다. 히든 스테이트에는 검사할 텍스트가 없으므로, 적대적 송신자는 수신자의 출력이 <i>읽기에는</i> 멀쩡하면서 행동은 조종되도록 하는 섭동을 심을 수 있다. 반대로 침해된 수신자는 송신자의 전체 문맥을 텐서 하나로 통째로 유출한다. 이 채널을 효율적으로 만드는 모든 성질이 동시에 감사 불가능하게 만든다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> this is a single-author survey with zero new measurements, and the headline numbers should be read accordingly. The "2–24× latency," "4.7×–136× TTFT," and "+27% accuracy" figures are each self-reported by a different paper, on a different backbone, on a different benchmark — the survey says so itself, then quotes them side by side anyway, which invites exactly the cross-method comparison it disclaims. The trade-off table that looks most decision-ready (Table 5, methods scored on accuracy / latency / generality / complexity) is hand-assigned one-to-three stars with no stated rubric. And the taxonomy's central claim — that the three axes are <i>orthogonal</i> — is asserted rather than shown; the paper's own examples undercut it, since choosing KV-cache on WHAT largely forces all → corresponding on WHICH and prepend-or-fuser on HOW. Treat this as a map and a vocabulary, which is what it is good at, not as evidence that latent communication works.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이것은 새 측정이 전혀 없는 단독 저자 서베이이고, 대표 수치들은 그에 맞게 읽어야 한다. "지연 2–24×", "TTFT 4.7×–136×", "정확도 +27%"는 각각 다른 논문이, 다른 백본에서, 다른 벤치마크로 자체 보고한 값이다. 서베이도 이를 스스로 인정해놓고 나란히 인용하는데, 이는 자기가 부인한 바로 그 교차 비교를 유도한다. 가장 의사결정에 쓸 만해 보이는 트레이드오프 표(표 5 · 정확도/지연/일반성/복잡도에 별점)는 기준 없이 손으로 매긴 1~3개 별이다. 그리고 이 분류의 핵심 주장인 "세 축은 <i>직교</i>한다"는 증명이 아니라 선언이다. 논문 자신의 예시가 이를 갉아먹는다. WHAT에서 KV 캐시를 고르면 WHICH는 사실상 all → corresponding으로, HOW는 prepend 아니면 fuser로 강제되기 때문이다. 잠재 통신이 작동한다는 증거가 아니라, 지도와 어휘집으로 쓰는 게 맞다 — 그건 이 논문이 실제로 잘하는 일이다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.05711">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.05711">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.05711">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.05711">🔎 alphaXiv</a>
+      <a href="https://github.com/enochliu98/Awesome-Latent-Communication">💻 Awesome-Latent-Communication</a>
+    </div>
+    <span class="t-en">Why picked — <b>#8 in the 2026-08 wishlist queue (Multi-Agent · latent communication axis). This is the map for a corner of the archive that has been filled in one paper at a time: LatentMAS (2511.20639), Cache-to-Cache (2510.03215), RelayCaching (2604.13349) and LRAgent (2602.01053) all appear here as single rows in one table. Worth reading after them, not before — it is the index, and it tells you which cells are still empty</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-16.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐 8번(멀티에이전트 · 잠재 통신 축). 그동안 한 편씩 채워온 아카이브의 한 구석을 통째로 그린 지도다. LatentMAS(2511.20639), Cache-to-Cache(2510.03215), RelayCaching(2604.13349), LRAgent(2602.01053)이 여기서는 표 하나의 각 행으로 등장한다. 먼저 읽을 게 아니라 그 논문들을 읽은 뒤에 읽을 것 — 이건 색인이고, 어느 칸이 아직 비어 있는지를 알려준다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-16.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
