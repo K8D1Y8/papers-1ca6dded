@@ -76,10 +76,14 @@ const DATA = {
         ['DroidSpeak','method','KV-cache sharing for cross-LLM communication','2411.02820'],
         ['KVCOMM','method','Online cross-context KV-cache communication between agents','2510.12872'],
         ['Latent-space agents','method','Agents communicate fully in latent space, no tokens','2511.09149'],
-        ['LCGuard','method','Safety guard for shared KV latent communication','2605.22863'],
+        ['LCGuard','method','Safety guard for shared KV latent communication','2605.22786'],
         ['Dual Latent Memory','method','Shared dual latent memories across a visual multi-agent system (L2-VMAS) · ICML 2026','2602.00471'],
         ['LatentMem','method','Customizable per-agent latent memory shared across an LLM multi-agent system','2602.03036'],
-        ['Heterogeneous Latent Comm','method','Dense KV-cache communication across heterogeneous (different-architecture) agents','2606.13594'] ]},
+        ['Heterogeneous Latent Comm','method','Dense KV-cache communication across heterogeneous (different-architecture) agents','2606.13594'],
+        ['ThoughtComm','method','Agents share disentangled latent "thoughts" instead of text messages','2510.20733'],
+        ['StateBridge','method','Training-free hidden-state alignment enabling latent communication across agents','2608.13317'],
+        ['Latent Cache Flow','method','Model-to-model communication by flowing KV caches without any text','2605.22863'],
+        ['Latent Channel Audit','concept','Causal audit asking whether latent channels actually carry information','2607.26773'] ]},
       { name:'Efficient MAS Serving', blurb:'Cache reuse, prefix sharing and compression to cut MAS cost.', nodes:[
         ['KVFlow','method','Prefix caching that accelerates multi-agent workflows','2507.07400'],
         ['TokenDance','method','Collective KV-cache sharing for scalable serving','2604.03143'],
@@ -133,7 +137,9 @@ const DATA = {
         ['TTT KV-Binding','method','Test-time training with KV binding is secretly learned linear attention · ICML 2026','2602.21204'],
         ['MesaNet','model','Sequence layer performing locally optimal test-time (mesa) optimization','2506.05233'],
         ['Preconditioned DeltaNet','method','Curvature-aware preconditioning for delta-rule linear recurrences','2604.21100'],
-        ['TTT Done Right','method','Corrected large-scale test-time-training layers for long-context modeling','2505.23884'] ]},
+        ['TTT Done Right','method','Corrected large-scale test-time-training layers for long-context modeling','2505.23884'],
+        ['Linear-Attn Hippocampus','method','Adds an exact side memory for associations the recurrent state forgets','2607.02303'],
+        ['Parallax','model','Parameterized local linear attention as a new sequence-modeling primitive','2605.29157'] ]},
       { name:'Recurrent Alternatives', blurb:'RNN-style and retention-based transformer successors.', nodes:[
         ['RetNet','model','Retention with parallel, recurrent, chunkwise forms','2307.08621'],
         ['RWKV-7','model','Receptance weighted key-value, dynamic state','2503.14456'],
@@ -146,7 +152,10 @@ const DATA = {
         ['Kimi Linear','model','Hybrid linear attention beating full attention','2510.26692'],
         ['RWKV-X','model','RWKV plus sparse attention for long context','2504.21463'],
         ['Native Hybrid Attention','method','Single-layer fusion of linear and full attention','2510.07019'],
-        ['Hybrid Tradeoffs','concept','Characterizes expressivity-efficiency tradeoffs of attention-SSM hybrids','2603.08859'] ]},
+        ['Hybrid Tradeoffs','concept','Characterizes expressivity-efficiency tradeoffs of attention-SSM hybrids','2603.08859'],
+        ['Morphing to Hybrid','method','Converts a pretrained attention model into a hybrid by morphing selected layers','2606.30562'],
+        ['Efficient-Attn Roles','concept','Asks what the efficient-attention layers actually contribute in a hybrid','2606.15378'],
+        ['STILL','method','Selects tokens for intra-layer hybrid attention to linearize LLMs','2602.02180'] ]},
       { name:'Linearization & Analysis', blurb:'Distilling attention LLMs into efficient models; recall benchmarks.', nodes:[
         ['MOHAWK','method','Distilling Transformers into Mamba','2408.10189'],
         ['RADLADS','method','Rapid attention distillation to linear decoders','2505.03005'],
@@ -155,7 +164,9 @@ const DATA = {
         ['Long Range Arena','benchmark','Benchmark suite for long-sequence models','2011.04006'],
         ['Recall-throughput tradeoff','concept','Fixed-state recurrence trades recall for speed','2402.18668'],
         ['Retrieval-Aware Distillation','method','Keep ~2% retrieval heads as attention, distill the rest to SSM · ICML 2026','2602.11374'],
-        ['Mamba Training Dynamics','concept','Theory of Mamba training: filtering relevant features for SSM generalization','2602.12499'] ]} ]},
+        ['Mamba Training Dynamics','concept','Theory of Mamba training: filtering relevant features for SSM generalization','2602.12499'],
+        ['STILL','method','Selects tokens for intra-layer hybrid attention to linearize LLMs','2602.02180'],
+        ['Priming','method','Builds hybrid state-space models out of pretrained Transformers','2605.08301'] ]} ]},
 
     { key:'comp', subs:[
       { name:'Quantization', blurb:'Low-bit weights/activations, taming outliers via scaling/rotation.', nodes:[
@@ -175,7 +186,8 @@ const DATA = {
         ['N:M sparsity','concept','Hardware-friendly fine-grained sparse patterns',''],
         ['GHOST','method','Structured pruning of Mamba-2 states via a balanced-truncation proxy · ICML 2026','2602.11408'],
         ['R-Sparse','method','Rank-aware activation sparsity for efficient LLM inference','2504.19449'],
-        ['ARMOR','method','High-performance semi-structured (N:M) pruning via adaptive matrix factorization','2510.05528'] ]},
+        ['ARMOR','method','High-performance semi-structured (N:M) pruning via adaptive matrix factorization','2510.05528'],
+        ['SVD-Surgeon','method','Optimal-brain-surgeon pruning carried out in the singular-value basis','2606.23568'] ]},
       { name:'Low-Rank Decomposition', blurb:'Factorize weights into low-rank products via activation/loss-aware SVD.', nodes:[
         ['ASVD','method','Activation-aware SVD for post-training compression','2312.05821'],
         ['SVD-LLM','method','Truncation-aware SVD linking singulars to loss','2403.07378'],
@@ -188,7 +200,10 @@ const DATA = {
         ['MLRA','method','Multi-head low-rank attention factorizing the attention projections','2603.02188'],
         ['SkipCat','method','Rank-maximized low-rank compression via shared projection and block skipping','2512.13494'],
         ['OBD-LLM','method','Optimal brain decomposition: bi-directional whitening for optimal low-rank compression','2604.00821'],
-        ['TSVD','method','Efficient LLM pretraining via truncated-SVD orthonormal low-rank layers','2605.28573'] ]},
+        ['TSVD','method','Efficient LLM pretraining via truncated-SVD orthonormal low-rank layers','2605.28573'],
+        ['SVD-Surgeon','method','Optimal-brain-surgeon pruning carried out in the singular-value basis','2606.23568'],
+        ['UniRank','method','Unified rank allocation across layers for low-rank LLM compression','2606.21847'],
+        ['DynaCalKV','method','KV-cache compression via head grouping and adaptive rank allocation','2607.24331'] ]},
       { name:'Knowledge Distillation', blurb:'Transfer teacher behavior into a smaller student.', nodes:[
         ['MiniLLM','method','Reverse-KL on-policy white-box distillation','2306.08543'],
         ['GKD','method','Generalized on-policy distillation over samples','2306.13649'],
@@ -209,7 +224,12 @@ const DATA = {
         ['OBCache','method','Optimal-brain (Hessian) KV-cache pruning for long-context inference','2510.07651'],
         ['MatryoshkaKV','method','Adaptive low-rank KV compression via trainable nested orthogonal projections','2410.14731'],
         ['CURDKV','method','Value-guided KV-cache compression via approximated CUR decomposition','2509.15038'],
-        ['MoE-nD','method','Per-layer mixture-of-experts routing for multi-axis KV-cache compression','2604.17695'] ]} ]},
+        ['MoE-nD','method','Per-layer mixture-of-experts routing for multi-axis KV-cache compression','2604.17695'],
+        ['AnchorKV','method','Anchor-residual KV compression, keeping anchors plus a compressed residual','2608.02901'],
+        ['DynaCalKV','method','KV-cache compression via head grouping and adaptive rank allocation','2607.24331'],
+        ['JoLT-KV','method','Near-lossless KV compression via joint Tucker plus JL-residual allocation','2607.12550'],
+        ['ManifoldKV','method','Training-free KV compression using Euclidean outlier detection','2602.08343'],
+        ['DeltaKV','method','Residual-based KV-cache compression storing deltas rather than full states','2602.08005'] ]} ]},
 
     { key:'world', subs:[
       { name:'World-Model Foundations', blurb:'Single-agent latent-dynamics models that train policies in imagination.', nodes:[
@@ -224,7 +244,10 @@ const DATA = {
         ['Co-Evolving LAW','method','Latent action model and world model co-evolve from unlabeled video','2510.26433'],
         ['villa-X','model','Enhances latent-action modeling within vision-language-action models','2507.23682'],
         ['Olaf-World','method','Orienting latent actions for video world modeling','2602.10104'],
-        ['DiLA','method','Disentangled latent action world models','2605.15725'] ]},
+        ['DiLA','method','Disentangled latent action world models','2605.15725'],
+        ['AdaJEPA','method','Test-time adaptation of a JEPA world model inside the MPC control loop','2606.32026'],
+        ['Mixture-of-World Models','method','Modular latent dynamics scaling multi-task RL by mixing world models','2602.01270'],
+        ['Sparse Imagination','method','Sparse rollouts making visual world-model planning cheaper','2506.01392'] ]},
       { name:'Multi-Agent World Models', blurb:'Model-based MARL with shared/factored latent dynamics.', nodes:[
         ['CoDreamer','method','Decentralized world models with learned comm','2406.13600'],
         ['COMBO','method','Compositional world models for embodied cooperation','2404.10775'],
@@ -232,7 +255,8 @@ const DATA = {
         ['MAMBA','method','Dreamer-style model-based MARL in imagination','2303.14745'],
         ['Diffusion MARL world model','method','Diffusion multi-agent modeling of joint dynamics','2505.20922'],
         ['Agent modeling','concept','Predicting other agents within latent dynamics',''],
-        ['SeqWM','method','Sequential world models empowering multi-robot cooperation','2509.13095'] ]},
+        ['SeqWM','method','Sequential world models empowering multi-robot cooperation','2509.13095'],
+        ['Dreamer-CPC','method','Learns inter-agent messages with world models for decentralized MARL','2607.19809'] ]},
       { name:'Generative Game World Models', blurb:'Action-conditioned video/diffusion models as playable simulators.', nodes:[
         ['Genie','model','Generative interactive environments from video','2402.15391'],
         ['GameNGen','model','Diffusion model as a real-time game engine','2408.14837'],
@@ -248,7 +272,10 @@ const DATA = {
         ['KV-cache reuse','concept','Reuse prefilled context across agents',''],
         ['Latent-space communication','concept','Agents exchange hidden states, not tokens',''],
         ['LatentMem','method','Customizable per-agent latent memory shared across an LLM multi-agent system','2602.03036'],
-        ['Heterogeneous Latent Comm','method','Dense KV-cache communication across heterogeneous (different-architecture) agents','2606.13594'] ]} ]}
+        ['Heterogeneous Latent Comm','method','Dense KV-cache communication across heterogeneous (different-architecture) agents','2606.13594'],
+        ['ThoughtComm','method','Agents share disentangled latent "thoughts" instead of text messages','2510.20733'],
+        ['StateBridge','method','Training-free hidden-state alignment enabling latent communication across agents','2608.13317'],
+        ['Latent Cache Flow','method','Model-to-model communication by flowing KV caches without any text','2605.22863'] ]} ]}
   ],
   links: [
     ['Cache-to-Cache','MLA','KV-cache compression'],
@@ -316,7 +343,36 @@ const DATA = {
     ['MEMO','E-mem','long-term multi-agent memory'],
     ['SeqWM','MATWM','multi-agent world model for cooperation'],
     ['Olaf-World','Latent Action World Models','latent-action video world model'],
-    ['DiLA','Latent Action World Models','disentangled latent actions from video']
+    ['DiLA','Latent Action World Models','disentangled latent actions from video'],
+    ['ThoughtComm','LatentMAS','sharing latent thoughts instead of text'],
+    ['StateBridge','Heterogeneous Latent Comm','aligning hidden states across model families'],
+    ['StateBridge','Cache-to-Cache','training-free cross-model latent transfer'],
+    ['Latent Cache Flow','Cache-to-Cache','text-free model-to-model KV communication'],
+    ['LCGuard','Latent Cache Flow','safety guard over flowed latent caches'],
+    ['Latent Channel Audit','LatentMAS','causal audit of claimed latent-communication gains'],
+    ['Latent Channel Audit','ThoughtComm','does the latent channel actually carry the thought?'],
+    ['Linear-Attn Hippocampus','DeltaNet','exact memory for what the recurrent state forgets'],
+    ['Parallax','GLA','parameterized local linear attention'],
+    ['Morphing to Hybrid','Native Hybrid Attention','turning attention layers into a hybrid'],
+    ['Morphing to Hybrid','Liger','linearizing a pretrained attention model'],
+    ['Priming','MOHAWK','hybrid SSM built from a pretrained Transformer'],
+    ['Efficient-Attn Roles','Hybrid Tradeoffs','what efficient attention contributes in hybrids'],
+    ['STILL','Native Hybrid Attention','intra-layer mix of linear and full attention'],
+    ['AnchorKV','H2O','anchor tokens versus heavy-hitter eviction'],
+    ['AnchorKV','SnapKV','prompt-time KV selection lineage'],
+    ['DynaCalKV','STAR-KV','adaptive-rank low-rank KV compression'],
+    ['DynaCalKV','Adaptive rank allocation','per-head adaptive rank budgeting'],
+    ['JoLT-KV','xKV','low-rank / tensor factorization of the KV cache'],
+    ['DeltaKV','R-KV','residual and redundancy-aware KV compression'],
+    ['ManifoldKV','KIVI','training-free outlier-aware KV compression'],
+    ['SVD-Surgeon','SVD-LLM','optimal-brain surgery in the singular-value basis'],
+    ['SVD-Surgeon','SparseGPT','optimal-brain-surgeon compression lineage'],
+    ['UniRank','Adaptive rank allocation','unified per-layer rank budgeting'],
+    ['UniRank','SVD-LLM','rank allocation for low-rank weight compression'],
+    ['AdaJEPA','TD-MPC2','test-time adaptation inside the MPC loop'],
+    ['Dreamer-CPC','CoDreamer','learned messages in decentralized world models'],
+    ['Mixture-of-World Models','DreamerV3','modular latent dynamics for multi-task RL'],
+    ['Sparse Imagination','Imagination training','cheaper rollouts in a learned world model']
   ]
 };
 
