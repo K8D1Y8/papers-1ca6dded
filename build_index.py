@@ -52,7 +52,7 @@ def meta(path):
     venue = ""
     for region in (re.search(r"<footer.*?</footer>", txt, re.S), re.search(r'<div class="meta">.*?</div>', txt, re.S)):
         if region:
-            v = re.search(r"(ICLR|ICML|NeurIPS|AAAI|ACL|EMNLP|SIGCOMM)\s*20(\d\d)", region.group(0))
+            v = re.search(r"(ICLR|ICML|NeurIPS|AAAI|ACL|EMNLP|COLM|SIGCOMM)\s*20(\d\d)", region.group(0))
             if v:
                 venue = f"{v.group(1)}'{v.group(2)}"
                 break
@@ -65,7 +65,7 @@ items = sorted((meta(p) for p in glob.glob(os.path.join(PAPERS, "*.html"))),
                key=lambda x: x["sort"], reverse=True)
 
 # venue tabs (ICLR'26, ICML'26, …) — ordered, only those present
-_order = ["ICLR'26", "ICML'26", "NeurIPS'26", "NeurIPS'25", "AAAI'26", "AAAI'25", "ICLR'25", "ICML'25"]
+_order = ["ICLR'26", "ICML'26", "NeurIPS'26", "NeurIPS'25", "COLM'26", "AAAI'26", "AAAI'25", "ICLR'25", "ICML'25"]
 venues = []
 for it in items:
     if it["venue"] and it["venue"] not in venues:

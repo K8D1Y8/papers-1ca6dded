@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · StateBridge: Training-free Hidden-state Alignment for Latent Communication in LLM Multi-Agent Systems</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent Systems · Latent Communication</span><span class="t-ko">멀티에이전트 · 잠재 통신</span></span>
+      <span>2026.08.19</span>
+    </div>
+    <h1>StateBridge: Training-free Hidden-state Alignment for Latent Communication in LLM Multi-Agent Systems<br>
+      <span class="glow t-en">— The problem was never sending richer states. It was making them readable.</span>
+      <span class="glow t-ko">— 문제는 더 풍부한 상태를 보내는 게 아니었다. 그것을 읽히게 만드는 것이었다.</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Yanwen Peng</b> <span class="t-en">, Delvin Ce Zhang, Xi Wang · senior author: Nikolaos Aletras</span><span class="t-ko">, Delvin Ce Zhang, Xi Wang · 책임저자: Nikolaos Aletras</span></span>
+      <span>🏛 University of Sheffield</span>
+      <span>🗓 2026-08-13</span>
+      <span>🏆 COLM 2026</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.13317">arXiv:2608.13317</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">When LLM agents talk in text, the sender collapses continuous hidden states into token ids and the receiver recovers only those ids — a lossy round trip. Prior fixes either inject KV caches across every transformer layer or train a projector, and both cost portability. StateBridge does neither: it takes the last <b>K=64</b> final-layer hidden states of the sender's message and maps them into the receiver's <i>input embedding</i> space with a closed-form <b>orthogonal Procrustes</b> rotation — center, whiten, rotate via SVD, un-whiten — then fixes two practical mismatches (hidden states carry roughly <b>140×</b> the norm of input embeddings, and aligned vectors drift away from real vocabulary regions) with norm calibration and a 30% blend toward the nearest vocabulary embedding. The result is prepended as a continuous prefix. <b>Zero learnable parameters.</b> Across 4 models, 2 families and 8 benchmarks it is best or tied-best on <b>22 of 26</b> model–task pairs, beating the strongest baseline by <b>+2.4 to +2.9</b> average points. The sharpest evidence is the ablation: swapping the orthogonal rotation for ridge regression — which fits the target <i>better</i> pointwise — loses <b>7.5</b> points, because it shears the pairwise geometry that carried the meaning.</p>
+    <p class="t-ko">LLM 에이전트가 텍스트로 대화하면, 송신자는 연속적인 은닉 상태를 토큰 id로 뭉개고 수신자는 그 id만 복원한다. 손실이 있는 왕복이다. 기존 해법은 KV 캐시를 모든 트랜스포머 레이어에 주입하거나 프로젝터를 학습시키는 것이었고, 둘 다 이식성을 대가로 치른다. StateBridge는 어느 쪽도 하지 않는다. 송신 메시지의 마지막 <b>K=64</b>개 최종 레이어 은닉 상태를 가져와, 닫힌 형식의 <b>직교 프로크루스테스</b> 회전(중심화 → 백색화 → SVD 회전 → 역백색화)으로 수신자의 <i>입력 임베딩</i> 공간에 정렬한다. 그리고 두 가지 현실적 불일치를 보정한다. 은닉 상태의 노름은 입력 임베딩의 약 <b>140배</b>이고, 정렬된 벡터는 실제 어휘 임베딩이 사는 영역에서 벗어나 있다. 노름 보정과 가장 가까운 어휘 임베딩 쪽으로의 30% 혼합이 이를 처리한다. 결과는 연속 프리픽스로 앞에 붙는다. <b>학습 파라미터는 0개다.</b> 모델 4종·계열 2개·벤치마크 8종에서 <b>26개 모델–태스크 쌍 중 22개</b>가 최고 또는 공동 최고이며, 최강 베이스라인 대비 평균 <b>+2.4 ~ +2.9</b>점이다. 가장 날카로운 증거는 절제 실험이다. 직교 회전을 릿지 회귀로 바꾸면 — 점별 재구성 오차는 <i>더 낮은데도</i> — <b>7.5</b>점이 날아간다. 의미를 담고 있던 쌍별 기하 구조를 비틀어버리기 때문이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Two agents can share the exact same weights, the exact same hidden dimension — and still fail to understand each other's vectors. Dimensionality is not compatibility.</p>
+    <p class="lead t-ko">두 에이전트가 완전히 같은 가중치, 완전히 같은 은닉 차원을 공유해도 서로의 벡터를 이해하지 못할 수 있다. 차원이 같다는 것과 호환된다는 것은 다른 얘기다.</p>
+    <p class="t-en">This is the observation the paper is built on. A decoder's final-layer hidden states and its input token embeddings live in the same <i>ℝ<sup>d</sup></i>, but not in the same region of it: the model was pretrained to read embeddings at the input layer, while final-layer states were shaped by the next-token prediction objective and by residual accumulation across every layer. Hand a receiver raw hidden states and you have given it vectors of the right shape and the wrong geometry. It will read them, and read them wrong.</p>
+    <p class="t-ko">논문이 딛고 선 관찰이 이것이다. 디코더의 최종 레이어 은닉 상태와 입력 토큰 임베딩은 같은 <i>ℝ<sup>d</sup></i>에 살지만, 그 안의 같은 영역에 있지는 않다. 모델은 입력 레이어에서 임베딩을 읽도록 사전학습되었고, 최종 레이어 상태는 다음 토큰 예측 목적함수와 레이어마다 누적된 잔차가 빚어낸 것이다. 수신자에게 날것의 은닉 상태를 건네면, 모양은 맞고 기하는 틀린 벡터를 준 셈이다. 수신자는 그것을 읽되, 잘못 읽는다.</p>
+    <p class="t-en">The two existing escapes both have a cost. KV-cache transfer (Cache-to-Cache, LatentMAS) sidesteps the input layer entirely by injecting states across all transformer layers — which binds the method to a specific layer structure. Learned projectors (Interlat, ThoughtComm) fit the mapping, but the projector is then welded to the model and task it was trained on. StateBridge asks a question neither had asked: is the mismatch severe enough to <i>need</i> learning, or is it just a coordinate-system difference that a closed-form transform can undo? The answer, empirically, is the latter — and that turns latent communication from a training project into a function you can call.</p>
+    <p class="t-ko">기존의 두 탈출구에는 각각 대가가 있다. KV 캐시 전송(Cache-to-Cache, LatentMAS)은 상태를 모든 트랜스포머 레이어에 주입해 입력 레이어를 통째로 우회하지만, 그 대가로 특정 레이어 구조에 묶인다. 학습된 프로젝터(Interlat, ThoughtComm)는 매핑을 잘 맞추지만, 그 프로젝터는 학습에 쓴 모델과 태스크에 용접된다. StateBridge는 둘 다 던지지 않은 질문을 던진다. 이 불일치가 정말 <i>학습이 필요할</i> 만큼 심각한가, 아니면 닫힌 형식의 변환으로 되돌릴 수 있는 좌표계 차이일 뿐인가? 실험적 답은 후자다. 그리고 그 순간 잠재 통신은 학습 프로젝트에서 그냥 호출하는 함수가 된다.</p>
+    <figure class="fig">
+      <img src="fig/2608.13317/main.svg" alt="Overview of StateBridge: text communication samples the sender's hidden states into discrete tokens (information loss), while StateBridge extracts final-layer hidden states, passes them through Procrustes alignment, norm calibration and vocabulary anchoring, and prepends the result to the receiver's prompt embeddings.">
+      <figcaption class="t-en"><b>Figure 1.</b> Top (a): text communication. The sender's final-layer hidden states are sampled down to token identities, the receiver re-embeds those identities, and everything the tokens did not encode is gone. Bottom (b): StateBridge. The same hidden states go through the alignment interface — Procrustes alignment, norm calibration, vocabulary anchoring — and enter the receiver as a continuous prefix sitting alongside its ordinary prompt embeddings. Note where the intervention sits: at the embedding layer only, which is why nothing inside the transformer stack has to change.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> 위(a): 텍스트 통신. 송신자의 최종 레이어 은닉 상태는 샘플링을 거쳐 토큰 정체성으로 내려앉고, 수신자는 그 정체성을 다시 임베딩한다. 토큰이 담지 못한 것은 전부 사라진다. 아래(b): StateBridge. 같은 은닉 상태가 정렬 인터페이스 — 프로크루스테스 정렬, 노름 보정, 어휘 앵커링 — 를 통과해, 수신자의 평범한 프롬프트 임베딩 옆에 연속 프리픽스로 들어간다. 개입 지점을 눈여겨볼 것. 오직 임베딩 레이어다. 트랜스포머 스택 내부는 아무것도 바꿀 필요가 없는 이유가 여기 있다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.13317</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">22/26</div><div class="l"><span class="t-en">model–task pairs best or tied-best</span><span class="t-ko">최고·공동 최고를 차지한 모델–태스크 쌍</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">learnable parameters — closed-form only</span><span class="t-ko">학습 파라미터 — 전부 닫힌 형식</span></div></div>
+      <div class="stat"><div class="n">+2.9</div><div class="l"><span class="t-en">best avg gain over strongest baseline (Qwen3-32B)</span><span class="t-ko">최강 베이스라인 대비 최대 평균 향상 (Qwen3-32B)</span></div></div>
+      <div class="stat"><div class="n">140×</div><div class="l"><span class="t-en">hidden-state norm vs input embedding norm (Qwen3-4B)</span><span class="t-ko">은닉 상태 노름 대 입력 임베딩 노름 (Qwen3-4B)</span></div></div>
+      <div class="stat"><div class="n">−7.5</div><div class="l"><span class="t-en">drop when Procrustes → ridge regression</span><span class="t-ko">프로크루스테스를 릿지 회귀로 바꿨을 때 하락</span></div></div>
+      <div class="stat"><div class="n">64</div><div class="l"><span class="t-en">hidden states transmitted per message (K)</span><span class="t-ko">메시지당 전송되는 은닉 상태 개수 (K)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The results, and what breaks</span><span class="t-ko">결과, 그리고 무엇이 무너지는가</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Average score per model setting across the shared five benchmarks (Qwen3-8B and Qwen3-32B additionally average in AIME24, AIME25 and GPQA-Diamond). Δ is StateBridge vs. the <i>best</i> baseline in that row. The row to stare at is OLMo3: switching model family collapses LatentMAS from 73.9-competitive to <b>55.1</b> — below even single-agent generation — because injecting a KV cache across all layers assumes a layer structure that did not carry over. StateBridge touches only the embedding layer and survives the switch.</caption>
+        <caption class="t-ko"><b>표 1.</b> 모델 설정별 평균 점수(공통 5개 벤치마크 기준. Qwen3-8B와 Qwen3-32B는 AIME24·AIME25·GPQA-Diamond를 추가로 평균에 포함). Δ는 해당 행에서 <i>최고</i> 베이스라인 대비 StateBridge의 차이다. 주목할 행은 OLMo3다. 모델 계열을 바꾸자 LatentMAS는 73.9와 겨루던 수준에서 <b>55.1</b>로 무너진다. 단일 에이전트보다도 낮다. KV 캐시를 전 레이어에 주입하는 방식이 그대로 넘어오지 않는 레이어 구조를 전제했기 때문이다. StateBridge는 임베딩 레이어만 건드리므로 계열 전환을 견딘다.</caption>
+        <thead><tr><th>Model setting</th><th>Single</th><th>TextMAS</th><th>LatentMAS</th><th>StateBridge</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>Qwen3-4B</td><td>71.6</td><td>78.9</td><td>80.0</td><td>82.4</td><td class="up">↑2.4</td></tr>
+          <tr><td>Qwen3-8B</td><td>62.6</td><td>70.2</td><td>71.8</td><td>74.3</td><td class="up">↑2.5</td></tr>
+          <tr><td>Qwen3-32B</td><td>76.9</td><td>78.1</td><td>76.4</td><td>81.0</td><td class="up">↑2.9</td></tr>
+          <tr><td>OLMo3-7B-Think</td><td>71.8</td><td>73.9</td><td>55.1</td><td>76.7</td><td class="up">↑2.8</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">The gains are not spread evenly, and that pattern is itself the argument. StateBridge helps most exactly where a text handoff has the most to lose — GPQA-Diamond on Qwen3-8B goes 45.5 → <b>52.5</b> (+7.0), AIME24 goes 56.7 → <b>63.3</b> (+6.6), MedQA on OLMo3 goes 54.0 → <b>59.0</b> (+5.0). It <i>loses</i> where the answer is a short exact string: GSM8K drops 2.6 points on Qwen3-8B and 2.5 on Qwen3-32B, which the authors attribute to continuous prefixes disturbing output formatting under exact-match grading — plausible, but they run no experiment isolating format errors from reasoning errors, so it stays a hypothesis.</p>
+    <p class="t-ko">향상은 고르게 퍼져 있지 않고, 그 편중 자체가 논거다. StateBridge는 텍스트 인계에서 잃을 것이 가장 많은 지점에서 가장 크게 돕는다. Qwen3-8B의 GPQA-Diamond는 45.5 → <b>52.5</b>(+7.0), AIME24는 56.7 → <b>63.3</b>(+6.6), OLMo3의 MedQA는 54.0 → <b>59.0</b>(+5.0). 반대로 정답이 짧은 정확 문자열인 곳에서는 <i>진다</i>. GSM8K는 Qwen3-8B에서 2.6점, Qwen3-32B에서 2.5점 떨어진다. 저자들은 연속 프리픽스가 정확 일치 채점 아래에서 출력 형식을 흔들기 때문이라고 본다. 그럴듯하지만, 형식 오류와 추론 오류를 분리하는 실험은 없어 가설로 남는다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2.</b> Ablation on Qwen3-4B. Ridge regression is the informative row: it minimizes pointwise reconstruction error <i>better</i> than the orthogonal rotation does, and still loses 7.5 points — 18.7 of them on HumanEval+ alone. Fitting the target more closely while shearing the relative geometry destroys exactly the information latent communication was supposed to carry. Random noise is the sanity check: the gains are not "prepend any 64 vectors."</caption>
+        <caption class="t-ko"><b>표 2.</b> Qwen3-4B 절제 실험. 릿지 회귀 행이 정보가 많다. 점별 재구성 오차는 직교 회전보다 <i>더 잘</i> 줄이면서도 7.5점을 잃는다. 그중 18.7점이 HumanEval+ 한 곳에서 나온다. 목표에 더 가깝게 맞추면서 상대 기하를 비틀면, 잠재 통신이 실어 나르기로 했던 바로 그 정보가 파괴된다. 랜덤 노이즈는 위생 검사다. 향상은 "아무 벡터 64개나 앞에 붙이면 된다"가 아니다.</caption>
+        <thead><tr><th>Variant</th><th>ARC-C</th><th>MedQA</th><th>GSM8K</th><th>MBPP+</th><th>HumanEval+</th><th>Avg.</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>Full StateBridge</td><td>93.7</td><td>70.3</td><td>89.8</td><td>75.9</td><td>82.3</td><td>82.4</td><td>—</td></tr>
+          <tr><td>Ridge regression</td><td>93.0</td><td>68.0</td><td>88.6</td><td>61.5</td><td>63.6</td><td>74.9</td><td>↓7.5</td></tr>
+          <tr><td>Random noise</td><td>32.2</td><td>30.7</td><td>84.5</td><td>48.2</td><td>48.2</td><td>48.8</td><td>↓33.6</td></tr>
+          <tr><td>w/o norm calibration</td><td>90.9</td><td>68.0</td><td>87.1</td><td>71.7</td><td>79.9</td><td>79.5</td><td>↓2.9</td></tr>
+          <tr><td>w/o vocabulary anchoring</td><td>91.7</td><td>66.7</td><td>88.9</td><td>73.0</td><td>80.5</td><td>80.2</td><td>↓2.2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three pieces of the bridge</span><span class="t-ko">다리를 이루는 세 조각</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">geometry</span>
+        <h3>Orthogonal Procrustes</h3>
+        <p class="t-en">Treat the K hidden states S and the embeddings R of the tokens they decoded to as two point clouds describing one message in two coordinate systems. Center both (kill the offset), whiten both (stop a few high-variance directions from dominating), then solve min<sub>Q</sub> ‖S<sub>w</sub>Q − R<sub>w</sub>‖<sub>F</sub> subject to QᵀQ = I. The solution is one SVD: Q* = UVᵀ. Because Q* is orthogonal it is an isometry — pairwise distances and angles survive. That constraint is the whole point: geometric proximity in hidden space <i>is</i> semantic similarity, so a transform allowed to shear would be allowed to lie.</p>
+        <p class="t-ko">K개의 은닉 상태 S와, 그것이 디코딩된 토큰들의 임베딩 R을, 하나의 메시지를 두 좌표계로 기술한 두 점구름으로 본다. 둘 다 중심화하고(오프셋 제거), 둘 다 백색화한 뒤(분산 큰 몇 방향이 정렬을 지배하지 못하게), QᵀQ = I 제약 아래 min<sub>Q</sub> ‖S<sub>w</sub>Q − R<sub>w</sub>‖<sub>F</sub>를 푼다. 해는 SVD 한 번이다. Q* = UVᵀ. Q*가 직교이므로 등거리 사상이고, 쌍별 거리와 각도가 살아남는다. 이 제약이 핵심 전부다. 은닉 공간에서의 기하적 근접성이 <i>곧</i> 의미적 유사성이므로, 비틀기를 허용한 변환은 거짓말을 허용한 변환이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">compatibility</span>
+        <h3>Norm calibration + vocabulary anchoring</h3>
+        <p class="t-en">Alignment fixes orientation, not scale or neighbourhood. Final-layer states carry ~140× the norm of input embeddings on Qwen3-4B (residual accumulation plus the next-token objective), and left alone they would dominate every dot-product attention score — the receiver would attend to the prefix whether or not it was relevant. So each vector is rescaled to the mean vocabulary-embedding norm. Then each is nudged 30% (α=0.3) toward its nearest vocabulary embedding by cosine similarity. This is not snapping to tokens: the prefix stays continuous, it just moves into a region the model actually saw during pretraining. Removing them costs 2.9 and 2.2 points respectively.</p>
+        <p class="t-ko">정렬은 방향을 맞출 뿐 크기나 이웃을 맞추지 않는다. Qwen3-4B에서 최종 레이어 상태의 노름은 입력 임베딩의 약 140배다(잔차 누적 + 다음 토큰 예측 목적함수). 그대로 두면 내적 어텐션 점수를 전부 지배해, 수신자는 관련 여부와 무관하게 프리픽스만 쳐다보게 된다. 그래서 각 벡터를 어휘 임베딩의 평균 노름으로 재조정한다. 이어 각 벡터를 코사인 유사도상 가장 가까운 어휘 임베딩 쪽으로 30%(α=0.3)만큼 민다. 토큰으로 스냅시키는 게 아니다. 프리픽스는 연속으로 남고, 다만 모델이 사전학습에서 실제로 본 영역 안으로 옮겨갈 뿐이다. 각각을 빼면 2.9점과 2.2점을 잃는다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">portability</span>
+        <h3>Embedding layer only</h3>
+        <p class="t-en">The design choice that pays the largest dividend is also the least glamorous: the intervention happens once, at the input embedding layer, via <code>inputs_embeds</code>. No attention mask surgery, no per-layer hooks, no architecture change — the prefix takes positions 0…K−1 and the model treats it exactly like ordinary token embeddings. That is why the OLMo3 result looks the way it does, and it also cuts memory: the paper stores O(Kd) after a single forward hook on the last layer, against O(TLd) for KV-cache transfer.</p>
+        <p class="t-ko">가장 큰 배당을 주는 설계 결정이 동시에 가장 화려하지 않은 결정이다. 개입은 <code>inputs_embeds</code>를 통해 입력 임베딩 레이어에서 단 한 번 일어난다. 어텐션 마스크 수술도, 레이어별 훅도, 구조 변경도 없다. 프리픽스는 0…K−1 위치를 차지하고 모델은 그것을 평범한 토큰 임베딩과 똑같이 취급한다. OLMo3 결과가 그렇게 나온 이유이고, 메모리도 줄어든다. 마지막 레이어에 훅 하나만 걸어 O(Kd)를 저장하며, KV 캐시 전송의 O(TLd)와 대비된다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Extract. </span><span class="t-ko">추출. </span></b><span class="t-en">The sender generates its message normally. A forward hook on the last transformer layer records only that layer's output at each decoding step, and only the final K=64 states are kept — later positions have already aggregated the earlier context. For reasoning models like Qwen3, everything between ⟨think⟩ and ⟨/think⟩ is discarded; only the segment meant for the receiver survives.</span><span class="t-ko">송신자는 평소대로 메시지를 생성한다. 마지막 트랜스포머 레이어에 건 포워드 훅이 디코딩 스텝마다 그 레이어의 출력만 기록하고, 그중 마지막 K=64개 상태만 남긴다. 뒤쪽 위치는 이미 앞 문맥을 집약하고 있기 때문이다. Qwen3 같은 추론 모델에서는 ⟨think⟩와 ⟨/think⟩ 사이를 전부 버리고, 수신자에게 전할 구간만 남긴다.</span></li>
+      <li><b><span class="t-en">Build the target. </span><span class="t-ko">목표를 만든다. </span></b><span class="t-en">Look up the tokens those K states decoded to in the shared embedding matrix: R = W<sub>emb</sub>[y]. R is the alignment target — the same message, written in the language the receiver's input layer speaks. Worth noticing: the sampling step still happens; the tokens y are computed and then <i>not transmitted</i>. StateBridge does not skip the discrete bottleneck, it declines to send its output through it.</span><span class="t-ko">그 K개 상태가 디코딩된 토큰들을 공유 임베딩 행렬에서 찾는다. R = W<sub>emb</sub>[y]. R이 정렬 목표다. 같은 메시지를, 수신자의 입력 레이어가 쓰는 언어로 적은 것이다. 짚어둘 점: 샘플링 단계는 여전히 일어난다. 토큰 y는 계산되고, 그리고 <i>전송되지 않는다</i>. StateBridge는 이산 병목을 건너뛰는 게 아니라, 자기 출력을 그 병목으로 흘려보내기를 거부하는 것이다.</span></li>
+      <li><b><span class="t-en">Rotate. </span><span class="t-ko">회전. </span></b><span class="t-en">Center and whiten S and R, take the SVD of S<sub>w</sub>ᵀR<sub>w</sub> = UDVᵀ, set Q* = UVᵀ, then restore R's scale and location: S̃ = S<sub>w</sub>Q*Σ<sub>R</sub><sup>1/2</sup> + 1<sub>K</sub>μ<sub>R</sub>ᵀ. One eigendecomposition, one SVD, done once per batch — cheaper than a single autoregressive forward pass.</span><span class="t-ko">S와 R을 중심화·백색화하고, S<sub>w</sub>ᵀR<sub>w</sub> = UDVᵀ의 SVD를 취해 Q* = UVᵀ로 두고, R의 스케일과 위치를 복원한다. S̃ = S<sub>w</sub>Q*Σ<sub>R</sub><sup>1/2</sup> + 1<sub>K</sub>μ<sub>R</sub>ᵀ. 고유분해 한 번, SVD 한 번, 배치당 한 번이면 끝이다. 자기회귀 순전파 한 번보다 싸다.</span></li>
+      <li><b><span class="t-en">Make it readable. </span><span class="t-ko">읽을 수 있게 만든다. </span></b><span class="t-en">Rescale every row to the average ℓ₂ norm of the vocabulary embeddings, then blend 30% toward its nearest vocabulary embedding. Stack the rows into the final prefix S̄ ∈ ℝ<sup>K×d</sup>.</span><span class="t-ko">각 행을 어휘 임베딩의 평균 ℓ₂ 노름으로 재조정한 뒤, 가장 가까운 어휘 임베딩 쪽으로 30% 혼합한다. 행들을 쌓아 최종 프리픽스 S̄ ∈ ℝ<sup>K×d</sup>를 만든다.</span></li>
+      <li><b><span class="t-en">Inject. </span><span class="t-ko">주입. </span></b><span class="t-en">Prepend: X = [S̄; P] where P is the receiver's prompt embeddings. Positions run sequentially, 0…K−1 for the prefix and K onward for the prompt. The receiver runs its standard forward pass. In the four-agent Planner → Critic → Refiner → Judger pipeline, the prompt simply tells the agent its input arrives "in embedding representation format."</span><span class="t-ko">앞에 붙인다. X = [S̄; P], 여기서 P는 수신자의 프롬프트 임베딩이다. 위치는 순차적으로, 프리픽스가 0…K−1, 프롬프트가 K부터다. 수신자는 표준 순전파를 그대로 돈다. Planner → Critic → Refiner → Judger 4-에이전트 파이프라인에서 프롬프트는 그저 입력이 "임베딩 표현 형식으로" 들어온다고 알려줄 뿐이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Latent communication no longer requires a training run. A rotation, a rescale and a nudge — all closed-form, all computable in less time than one generation pass — beat both a text channel and a trained-free KV-cache channel. The deployment story changes completely when the method has no weights to ship.</p><p class="t-ko">잠재 통신에 더 이상 학습이 필요하지 않다. 회전 하나, 재조정 하나, 살짝 밀기 하나 — 전부 닫힌 형식이고 생성 한 번보다 짧은 시간에 계산된다 — 로 텍스트 채널과 무학습 KV 캐시 채널을 모두 이긴다. 배포할 가중치가 없다는 것은 배포 이야기 전체를 바꾼다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The reframing is the contribution: informativeness was never the bottleneck, <i>readability</i> was. Raw hidden states are strictly richer than tokens and still lose to text when handed over unaligned. And the fix must preserve relative geometry, not minimize reconstruction error — ridge regression fits better and performs 7.5 points worse.</p><p class="t-ko">재정의가 곧 기여다. 병목은 정보량이 아니라 <i>가독성</i>이었다. 날것의 은닉 상태는 토큰보다 엄밀히 더 풍부한데도, 정렬 없이 건네면 텍스트에 진다. 그리고 해법은 재구성 오차를 줄이는 게 아니라 상대 기하를 보존해야 한다. 릿지 회귀는 더 잘 맞추고 7.5점 더 못한다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Where you place the interface decides how far it travels. Embedding-layer injection crossed a model-family boundary that layer-wise KV injection did not survive (OLMo3: 55.1 vs 76.7). If you are designing an agent protocol, the shallowest injection point that works is the one that will still work next quarter.</p><p class="t-ko">인터페이스를 어디에 두느냐가 그것이 얼마나 멀리 가는지를 정한다. 임베딩 레이어 주입은 레이어 단위 KV 주입이 넘지 못한 모델 계열 경계를 넘었다(OLMo3: 55.1 대 76.7). 에이전트 프로토콜을 설계한다면, 작동하는 가장 얕은 주입 지점이 다음 분기에도 여전히 작동할 지점이다.</p></div>
+      <div class="t"><span class="ic">⚖️</span><p class="t-en">Read the scope carefully before generalizing. Every agent shares one set of weights — the alignment target R is drawn from a <i>shared</i> W<sub>emb</sub>, so the heterogeneous case the framing gestures at is explicitly left to future work. The same holds for K: a single global rotation is fit to all K states, which is why K=128 hurts.</p><p class="t-ko">일반화하기 전에 적용 범위를 정확히 읽을 것. 모든 에이전트가 하나의 가중치를 공유한다. 정렬 목표 R이 <i>공유된</i> W<sub>emb</sub>에서 나오므로, 문제 설정이 암시하는 이종 모델 사례는 명시적으로 향후 과제로 남겨져 있다. K도 마찬가지다. 전역 회전 하나를 K개 상태 전부에 맞추기 때문에 K=128에서 오히려 나빠진다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the two most quotable gains sit on the two thinnest pieces of evidence. AIME24 on Qwen3-8B moves 56.7 → 63.3, and the paper calls it +6.6 — but AIME24 is <b>exactly 30 problems</b> (Appendix B.1), so that headline is <b>two questions</b>, and AIME25 is 30 as well. Every number in the paper is a single run at temperature 0.6 with top-p 0.95; there are no seeds, no repeats, and no error bars or confidence intervals anywhere in Tables 1–3. Separately, K=64 and α=0.3 were selected by tuning on <b>MedQA with Qwen3-4B</b> (§6.2) — and MedQA/Qwen3-4B is then reported in Table 1 as a headline +4.0 win, i.e. the tuning cell is also a result cell. The portability collapse (LatentMAS 55.1 on OLMo3) and the ridge-regression ablation (−7.5, with −18.7 on HumanEval+ alone) are far too large to be noise and carry the paper. The flagship reasoning gains on AIME and GPQA are not yet distinguishable from decoding variance, and one extra table of repeated runs would have settled it.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 가장 인용하기 좋은 두 향상이 가장 얇은 증거 위에 서 있다. Qwen3-8B의 AIME24는 56.7 → 63.3으로 움직이고 논문은 이를 +6.6이라 부르지만, AIME24는 <b>정확히 30문제</b>다(부록 B.1). 즉 저 대표 숫자는 <b>두 문제</b>다. AIME25도 30문제다. 논문의 모든 수치는 temperature 0.6, top-p 0.95의 단일 실행이며, 표 1~3 어디에도 시드, 반복, 오차 막대나 신뢰구간이 없다. 별개로 K=64와 α=0.3은 <b>Qwen3-4B의 MedQA</b>에서 튜닝해 고른 값인데(§6.2), 그 MedQA/Qwen3-4B가 표 1에서 +4.0의 대표 승리로 보고된다. 튜닝한 칸이 곧 결과 칸이다. 이식성 붕괴(OLMo3에서 LatentMAS 55.1)와 릿지 회귀 절제(−7.5, HumanEval+ 한 곳에서만 −18.7)는 노이즈로 보기엔 너무 커서 논문을 떠받친다. 그러나 AIME와 GPQA의 간판 추론 향상은 아직 디코딩 분산과 구분되지 않으며, 반복 실행 표 하나면 정리됐을 문제다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.13317">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.13317">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.13317">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.13317">🔎 alphaXiv</a>
+      <a href="https://github.com/YanwenPneg/StateBridge">💻 code</a>
+    </div>
+    <span class="t-en">Why picked — <b>venue: COLM 2026. The 2026-08 wishlist queue is exhausted, so this came from the fallback search on the Multi-Agent Latent Communication axis. It answers the two cards immediately before it: LatentMAS (2511.20639) is the KV-cache baseline it beats and breaks, and "Beyond tokens" (2606.05711) mapped the design space this fills the training-free corner of</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-19.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>venue: COLM 2026. 2026-08 위시리스트 큐가 소진되어, 멀티에이전트 잠재 통신 축의 폴백 검색에서 골랐다. 바로 앞의 두 카드에 답하는 논문이다. LatentMAS(2511.20639)는 이 논문이 이기고 또 무너뜨리는 KV 캐시 베이스라인이고, "Beyond tokens"(2606.05711)는 이 논문이 무학습 구석을 채우는 설계 공간을 그렸다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-19.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
