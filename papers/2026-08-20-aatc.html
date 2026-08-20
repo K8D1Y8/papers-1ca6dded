@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · KV Cache Compression Through the Lens of Transform Coding</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache</span><span class="t-ko">모델 압축 · KV 캐시</span></span>
+      <span>2026.08.20</span>
+    </div>
+    <h1>KV Cache Compression Through the Lens of Transform Coding<br>
+      <span class="glow t-en">— Stop minimizing the error in the cache. Minimize the error it causes in the output.</span>
+      <span class="glow t-ko">— 캐시 안의 오차를 줄이지 마라. 그 오차가 출력에 만드는 오차를 줄여라.</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Hannah Laus</b> <span class="t-en">· Claudio Mayrink Verdun · Hao Wang · Flavio du Pin Calmon · Felix Krahmer</span><span class="t-ko">· Claudio Mayrink Verdun · Hao Wang · Flavio du Pin Calmon · Felix Krahmer</span></span>
+      <span>🏛 TU Darmstadt / TU Munich · MIT · Red Hat AI &amp; MIT-IBM Watson AI Lab · Harvard</span>
+      <span>🗓 2026-08-14</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.14191">arXiv:2608.14191</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Every KV-cache quantizer picks bits to minimize the reconstruction error of the cache itself — but nobody asked how that error travels through attention. This paper proves it decomposes cleanly: under a white-noise quantization model, the attention-output distortion splits into a key term and a value term, each factoring into a token weight and a channel weight. That single formula turns out to be a map of the whole field — eviction methods attack the token factor, low-rank methods the channel factor. AATC then does the channel half properly: whiten the key/value features with a Cholesky-based transform, then reverse water-fill the bit budget across every (layer, channel) pair. Result: 5.82× compression that is statistically indistinguishable from FP16 across all 18 benchmark cells. The catch is that the attention-aware weights — the paper's actual novelty — barely matter at that operating point.</p>
+    <p class="t-ko">모든 KV 캐시 양자화 기법은 캐시 자체의 복원 오차를 줄이도록 비트를 배분한다. 그런데 그 오차가 어텐션을 통과하며 어떻게 전파되는지는 아무도 묻지 않았다. 이 논문은 그것이 깔끔하게 분해됨을 증명한다. 백색잡음 양자화 모델 아래에서 어텐션 출력 왜곡은 키 항과 값 항으로 나뉘고, 각각이 다시 토큰 가중치와 채널 가중치의 곱으로 인수분해된다. 이 하나의 수식이 사실상 이 분야 전체의 지도가 된다. 축출(eviction) 기법은 토큰 인수를, 저랭크 기법은 채널 인수를 공략하고 있었던 것이다. AATC는 그중 채널 쪽 절반을 제대로 한다. 콜레스키 기반 변환으로 키/값 특징을 백색화한 뒤, 모든 (레이어, 채널) 쌍에 역 워터필링으로 비트 예산을 배분한다. 결과는 18개 벤치마크 칸 전부에서 FP16과 통계적으로 구분되지 않는 5.82× 압축이다. 다만 논문의 진짜 새로움인 어텐션 인식 가중치가 정작 그 지점에서는 거의 기여하지 않는다는 게 함정이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">At long context the KV cache, not the weights, sets the memory bill — and the field has been optimizing the wrong loss the whole time.</p>
+    <p class="lead t-ko">긴 컨텍스트에서 메모리 비용을 결정하는 것은 가중치가 아니라 KV 캐시다. 그런데 이 분야는 내내 틀린 손실 함수를 최적화하고 있었다.</p>
+    <p class="t-en">KV cache compression has fractured into families that barely talk to each other: scalar quantization (KIVI, KVQuant), vector quantization, low-rank projection (PALU, xKV, Eigen Attention), transform coding (KVTC), and token eviction (H2O, SnapKV, StreamingLLM). Each family defends itself with its own intuition about what matters — attention mass, channel energy, outliers, effective rank. What has been missing is a single objective that says which of those intuitions are actually the same intuition. This paper supplies one, and it is not a heuristic: it is a derivation from the attention mechanism itself. The payoff is that eviction and low-rank projection stop being rival philosophies and become two factors of one product. That reframing is worth more than the method it motivates.</p>
+    <p class="t-ko">KV 캐시 압축은 서로 대화하지 않는 계파들로 쪼개져 있다. 스칼라 양자화(KIVI, KVQuant), 벡터 양자화, 저랭크 투영(PALU, xKV, Eigen Attention), 변환 부호화(KVTC), 그리고 토큰 축출(H2O, SnapKV, StreamingLLM). 각 계파는 무엇이 중요한지에 대한 저마다의 직관 — 어텐션 질량, 채널 에너지, 이상치, 유효 랭크 — 으로 스스로를 방어한다. 빠져 있던 것은 그 직관들 중 어떤 것이 사실은 같은 직관인지를 말해주는 하나의 목적함수였다. 이 논문이 그것을 제공하며, 휴리스틱이 아니라 어텐션 기제 자체로부터의 유도다. 그 결과 축출과 저랭크 투영은 경쟁하는 철학이기를 그치고 하나의 곱을 이루는 두 인수가 된다. 이 재구성은 그것이 낳은 방법보다 값어치가 크다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">5.82×</div><div class="l"><span class="t-en">Compression where all 18 benchmark cells stay within 2σ of FP16</span><span class="t-ko">18개 벤치마크 칸 전부가 FP16의 2σ 안에 머무는 압축률</span></div></div>
+      <div class="stat"><div class="n">184 MB</div><div class="l"><span class="t-en">Llama-3.1-8B KV cache there, down from 1.07 GB</span><span class="t-ko">그 지점에서의 Llama-3.1-8B KV 캐시. 1.07 GB에서 줄어든 값</span></div></div>
+      <div class="stat"><div class="n">+16.8</div><div class="l"><span class="t-en">Points over the strongest baseline on Qwen MMLU-Pro math</span><span class="t-ko">Qwen MMLU-Pro math에서 최강 베이스라인 대비 점수 차</span></div></div>
+      <div class="stat"><div class="n">8.6 pts</div><div class="l"><span class="t-en">What per-(layer, channel) allocation is worth vs. one global allocation</span><span class="t-ko">(레이어, 채널)별 배분이 단일 전역 배분 대비 갖는 가치</span></div></div>
+      <div class="stat"><div class="n">3.8 pts</div><div class="l"><span class="t-en">What the query-aware q<sub>c</sub><sup>2</sup> term is worth</span><span class="t-ko">쿼리 인식 q<sub>c</sub><sup>2</sup> 항이 갖는 가치</span></div></div>
+      <div class="stat"><div class="n">0.8 pts</div><div class="l"><span class="t-en">What the output-projection W<sub>O</sub> term is worth</span><span class="t-ko">출력 투영 W<sub>O</sub> 항이 갖는 가치</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The main result</span><span class="t-ko">핵심 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table II (excerpt).</b> Comp. is compression relative to FP16. LongBench avg. is the mean over seven English subsets. A method is "statistically indistinguishable from FP16" when its score is within 2σ. The Llama block is where every method already does well; the Qwen block is where the ranking is actually decided.</caption>
+        <caption class="t-ko"><b>표 II (발췌).</b> Comp.는 FP16 대비 압축률. LongBench avg.는 영어 7개 서브셋 평균. 점수가 2σ 안에 들면 "FP16과 통계적으로 구분 불가"로 본다. Llama 블록은 모든 방법이 이미 잘하는 구간이고, 순위가 실제로 갈리는 곳은 Qwen 블록이다.</caption>
+        <thead><tr><th>Method</th><th>Comp.</th><th>LongBench avg.</th><th>RULER-32k</th><th>MMLU-Pro math</th><th>MATH-500</th></tr></thead>
+        <tbody>
+          <tr><td colspan="6"><b>Llama-3.1-8B-Instruct</b></td></tr>
+          <tr><td>Baseline (FP16)</td><td>1.00</td><td>0.570</td><td>0.775</td><td>0.438</td><td>0.454</td></tr>
+          <tr><td>KIVI</td><td>5.00</td><td>0.564</td><td>0.763</td><td>0.390</td><td>0.452</td></tr>
+          <tr><td>PALU</td><td>5.39</td><td>0.550</td><td>0.769</td><td>0.274</td><td>0.314</td></tr>
+          <tr><td>KVQuant</td><td>5.91</td><td>0.549</td><td>0.654</td><td>0.376</td><td>0.392</td></tr>
+          <tr><td>AATC var-only</td><td>5.82</td><td class="up">0.566</td><td>0.774</td><td>0.402</td><td class="up">0.490</td></tr>
+          <tr><td>AATC (ours)</td><td>5.82</td><td>0.558</td><td class="up">0.778</td><td class="up">0.416</td><td>0.488</td></tr>
+          <tr><td colspan="6"><b>Qwen-2.5-7B-Instruct</b></td></tr>
+          <tr><td>Baseline (FP16)</td><td>1.00</td><td>0.574</td><td>0.720</td><td>0.708</td><td>0.680</td></tr>
+          <tr><td>KIVI</td><td>5.00</td><td>0.351</td><td>0.233</td><td>0.166</td><td>0.680</td></tr>
+          <tr><td>PALU</td><td>5.39</td><td>0.483</td><td>0.625</td><td>0.542</td><td>0.492</td></tr>
+          <tr><td>KVQuant</td><td>5.91</td><td>0.558</td><td>0.643</td><td>0.478</td><td>0.680</td></tr>
+          <tr><td>AATC var-only</td><td>5.82</td><td>0.558</td><td>0.690</td><td>0.674</td><td>0.668</td></tr>
+          <tr><td>AATC (ours)</td><td>5.82</td><td class="up">0.567</td><td class="up">0.715</td><td class="up">0.710</td><td class="up">0.680</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">Read the two blocks against each other. On Llama every compressed method is roughly fine, and the full method is not the best cell anywhere except RULER-32k and MMLU-m — it even sits <i>below</i> its own ablated variant on LongBench (0.558 vs 0.566). On Qwen, which collapses under naive quantization (KIVI drops to 0.351 LongBench and 0.233 on RULER-32k), the attention-aware weights earn their keep: +2.5 on RULER-32k and +3.6 on MMLU-m over var-only, and the full method recovers FP16 almost exactly.</p>
+    <p class="t-ko">두 블록을 서로 견주어 읽어야 한다. Llama에서는 모든 압축 기법이 대체로 멀쩡하고, 전체 방법(full)이 최고 칸을 차지하는 곳은 RULER-32k와 MMLU-m뿐이다. LongBench에서는 오히려 자기 자신의 제거 변형보다 <i>낮다</i>(0.558 대 0.566). 반면 소박한 양자화에 무너지는 Qwen(KIVI는 LongBench 0.351, RULER-32k 0.233까지 떨어진다)에서는 어텐션 인식 가중치가 값을 한다. var-only 대비 RULER-32k +2.5, MMLU-m +3.6이고, 전체 방법은 FP16을 거의 정확히 회복한다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 640 264" width="100%" role="img" aria-label="Ablation ladder: LongBench average at 2-bit on Llama when each ingredient of AATC is removed">
+        <text x="0" y="14" font-family="var(--sans)" font-size="12.5" fill="var(--muted)">LongBench avg. · 2-bit · Llama-3.1-8B-Instruct — what each ingredient is actually worth (Table VI)</text>
+        <line x1="196" y1="30" x2="196" y2="238" stroke="var(--line)" stroke-width="1"/>
+        <line x1="576" y1="30" x2="576" y2="238" stroke="var(--faint)" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="576" y="254" text-anchor="end" font-family="var(--sans)" font-size="11" fill="var(--faint)">0.570 = FP16 baseline</text>
+
+        <text x="188" y="52" text-anchor="end" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">AATC (standard)</text>
+        <rect x="196" y="40" width="378.7" height="18" rx="3" fill="var(--clay-deep)"/>
+        <text x="582" y="53" font-family="var(--sans)" font-size="12" fill="var(--clay-deep)" font-weight="700">0.568</text>
+
+        <text x="188" y="88" text-anchor="end" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">− W<tspan baseline-shift="sub" font-size="9">O</tspan> term</text>
+        <rect x="196" y="76" width="373.3" height="18" rx="3" fill="var(--clay)" opacity="0.85"/>
+        <text x="582" y="89" font-family="var(--sans)" font-size="12" fill="var(--muted)">0.560</text>
+
+        <text x="188" y="124" text-anchor="end" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">per-layer, not per-channel</text>
+        <rect x="196" y="112" width="368.7" height="18" rx="3" fill="var(--clay)" opacity="0.7"/>
+        <text x="582" y="125" font-family="var(--sans)" font-size="12" fill="var(--muted)">0.553</text>
+
+        <text x="188" y="160" text-anchor="end" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">− q<tspan baseline-shift="sub" font-size="9">c</tspan>² term</text>
+        <rect x="196" y="148" width="354.0" height="18" rx="3" fill="var(--clay)" opacity="0.55"/>
+        <text x="582" y="161" font-family="var(--sans)" font-size="12" fill="var(--muted)">0.531</text>
+
+        <text x="188" y="196" text-anchor="end" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">one global allocation</text>
+        <rect x="196" y="184" width="322.0" height="18" rx="3" fill="var(--faint)" opacity="0.75"/>
+        <text x="526" y="197" font-family="var(--sans)" font-size="12" fill="var(--ink)" font-weight="700">0.483</text>
+        <text x="196" y="211" font-family="var(--sans)" font-size="11" fill="var(--muted)">↑ the real load-bearing wall — 8.6 points, more than both theory terms combined</text>
+
+        <text x="188" y="228" text-anchor="end" font-family="var(--sans)" font-size="12.5" fill="var(--muted)">KIVI 1-bit (for scale)</text>
+        <rect x="196" y="216" width="134.7" height="18" rx="3" fill="var(--faint)" opacity="0.45"/>
+        <text x="338" y="229" font-family="var(--sans)" font-size="12" fill="var(--faint)">0.202</text>
+      </svg>
+      <div class="cap t-en">Built from the paper's own ablation (Table VI). The theory's two attention-aware weights cost 0.8 and 3.8 points when removed; the plain engineering choice of allocating adaptively over every (layer, channel) pair rather than once globally costs 8.6. The distortion theorem is the paper's contribution, but water-filling granularity is what carries the score.</div>
+      <div class="cap t-ko">논문 자신의 제거 실험(표 VI)에서 만든 그림이다. 이론이 내세우는 두 어텐션 인식 가중치는 제거 시 각각 0.8점과 3.8점을 잃는다. 반면 모든 (레이어, 채널) 쌍에 대해 한 번에 전역 배분하지 않고 적응적으로 배분한다는 평범한 엔지니어링 선택은 8.6점을 잃는다. 왜곡 정리가 논문의 기여지만, 점수를 떠받치는 것은 워터필링의 세분도다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas</span><span class="t-ko">두 개의 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">THEOREM 1</span>
+        <h3>Distortion that factorizes</h3>
+        <p class="t-en">Assume quantization noise is zero-mean, symmetric, and independent across tokens and channels. Then the expected error in the attention output splits additively into a key part and a value part with no cross-term — keys and values can be quantized independently. Better still, each part is a product of a token sum and a channel sum: D<sub>K</sub> = (Σ<sub>i</sub> a<sub>i</sub><sup>2</sup>‖v<sub>i</sub>W<sub>O</sub> − o‖<sup>2</sup>) · (Σ<sub>c</sub> q<sub>c</sub><sup>2</sup> E[(δk<sub>ic</sub>)<sup>2</sup>]). Token importance is attention mass times how much switching to that token would move the output; channel importance is how hard the query actually reads that channel.</p>
+        <p class="t-ko">양자화 잡음이 평균 0이고 대칭이며 토큰과 채널에 걸쳐 독립이라고 가정하자. 그러면 어텐션 출력의 기대 오차는 교차항 없이 키 부분과 값 부분으로 가산 분해된다. 즉 키와 값을 독립적으로 양자화해도 된다. 더 좋은 것은 각 부분이 토큰 합과 채널 합의 곱이라는 점이다. D<sub>K</sub> = (Σ<sub>i</sub> a<sub>i</sub><sup>2</sup>‖v<sub>i</sub>W<sub>O</sub> − o‖<sup>2</sup>) · (Σ<sub>c</sub> q<sub>c</sub><sup>2</sup> E[(δk<sub>ic</sub>)<sup>2</sup>]). 토큰 중요도는 어텐션 질량 곱하기 그 토큰으로 옮겨갔을 때 출력이 얼마나 움직이는가이고, 채널 중요도는 쿼리가 실제로 그 채널을 얼마나 세게 읽는가다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">A MAP OF THE FIELD</span>
+        <h3>Four factors, four literatures</h3>
+        <p class="t-en">Table I in the paper is the quiet highlight. Each factor of the decomposition turns out to be the thing one existing family was already optimizing by intuition: a<sub>i</sub><sup>2</sup> is what H2O, SnapKV and StreamingLLM evict on; ‖v<sub>i</sub>W<sub>O</sub> − o‖<sup>2</sup> is CAOTE's output-relevance; q<sub>c</sub><sup>2</sup> is what A<sup>2</sup>ATS, SQuat and OSCAR chase with query-aware precision; W<sub>O<sub>c</sub></sub> is implicit in KVQuant; per-channel sensitivity is KIVI, PALU and KVTC. Nobody had combined them because nobody had seen they were factors of one product.</p>
+        <p class="t-ko">논문의 표 I이 조용한 하이라이트다. 분해의 각 인수가, 기존 어느 계파가 이미 직관으로 최적화하고 있던 바로 그것으로 드러난다. a<sub>i</sub><sup>2</sup>는 H2O·SnapKV·StreamingLLM이 축출 기준으로 삼는 값이고, ‖v<sub>i</sub>W<sub>O</sub> − o‖<sup>2</sup>는 CAOTE의 출력 관련성이며, q<sub>c</sub><sup>2</sup>는 A<sup>2</sup>ATS·SQuat·OSCAR가 쿼리 인식 정밀도로 좇던 것이고, W<sub>O<sub>c</sub></sub>는 KVQuant에 암묵적으로 들어 있으며, 채널별 민감도는 KIVI·PALU·KVTC다. 아무도 이들을 결합하지 않은 이유는, 이들이 하나의 곱을 이루는 인수들임을 아무도 보지 못했기 때문이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Whiten the projections, offline, once per model. </span><span class="t-ko">모델당 한 번, 오프라인으로 투영을 백색화한다. </span></b><span class="t-en">Take calibration activations X, form Σ<sub>X</sub> = X<sup>⊤</sup>X/T, Cholesky-factor it as LL<sup>⊤</sup>, and absorb the input statistics into the weight: W̃ = L<sup>⊤</sup>W. An SVD of W̃ then refactors the original projection as W = L<sup>−⊤</sup>USP<sup>⊤</sup> = AB. The cache stores the whitened latent h = xA; B reconstructs on read. This is <i>not</i> a plain SVD of W — the appendix shows the two differ exactly by the input covariance, and that difference is the point.</span><span class="t-ko">캘리브레이션 활성값 X로 Σ<sub>X</sub> = X<sup>⊤</sup>X/T를 만들고 LL<sup>⊤</sup>로 콜레스키 분해한 뒤, 입력 통계를 가중치에 흡수시킨다. W̃ = L<sup>⊤</sup>W. W̃의 SVD로 원래 투영을 W = L<sup>−⊤</sup>USP<sup>⊤</sup> = AB로 재인수분해한다. 캐시는 백색화된 잠재값 h = xA를 저장하고, 읽을 때 B로 복원한다. 이것은 W의 평범한 SVD가 <i>아니다</i>. 부록은 둘이 정확히 입력 공분산만큼 다름을 보이며, 그 차이가 바로 핵심이다.</span></li>
+      <li><b><span class="t-en">Measure what each channel is worth. </span><span class="t-ko">각 채널의 값어치를 잰다. </span></b><span class="t-en">A forward pass over 256 calibration sequences of 2,048 tokens — half FineWeb web text, half OpenR1-Math-220k reasoning traces — records the latent variance σ<sub>ℓ,c</sub><sup>2</sup> of every channel and the attention-aware weight w<sub>ℓ,c</sub>, which for keys is the mean squared query projection onto that channel and for values is ‖(B<sup>V</sup>W<sub>O</sub>)<sub>ℓ,c</sub>‖<sub>F</sub><sup>2</sup>.</span><span class="t-ko">2,048 토큰짜리 캘리브레이션 시퀀스 256개 — 절반은 FineWeb 웹 텍스트, 절반은 OpenR1-Math-220k 추론 트레이스 — 로 순전파를 돌려, 모든 채널의 잠재 분산 σ<sub>ℓ,c</sub><sup>2</sup>와 어텐션 인식 가중치 w<sub>ℓ,c</sub>를 기록한다. 키의 경우 그 채널로의 쿼리 투영 제곱 평균이고, 값의 경우 ‖(B<sup>V</sup>W<sub>O</sub>)<sub>ℓ,c</sub>‖<sub>F</sub><sup>2</sup>이다.</span></li>
+      <li><b><span class="t-en">Reverse water-fill the bit budget globally. </span><span class="t-ko">비트 예산을 전역으로 역 워터필링한다. </span></b><span class="t-en">Minimize Σ<sub>ℓ,c</sub> w<sub>ℓ,c</sub> σ<sub>ℓ,c</sub><sup>2</sup> 2<sup>−2b<sub>ℓ,c</sub></sup> subject to a total budget. The relaxation has the classical closed form: a channel gets b* = ½log<sub>2</sub>(w σ<sup>2</sup>/λ) bits if w σ<sup>2</sup> exceeds the water level λ, and zero otherwise. Channels that fall below the line get deleted — which is exactly what low-rank projection does, arrived at from the other direction.</span><span class="t-ko">총 예산 제약 아래 Σ<sub>ℓ,c</sub> w<sub>ℓ,c</sub> σ<sub>ℓ,c</sub><sup>2</sup> 2<sup>−2b<sub>ℓ,c</sub></sup>를 최소화한다. 연속 완화는 고전적 닫힌 해를 갖는다. w σ<sup>2</sup>가 수위 λ를 넘으면 그 채널은 b* = ½log<sub>2</sub>(w σ<sup>2</sup>/λ) 비트를 받고, 아니면 0비트를 받는다. 수위 아래로 떨어진 채널은 삭제되는데, 이는 저랭크 투영이 하는 일과 정확히 같다. 반대 방향에서 도달했을 뿐이다.</span></li>
+      <li><b><span class="t-en">At decode, project → quantize → reconstruct. </span><span class="t-ko">디코딩 시에는 투영 → 양자화 → 복원. </span></b><span class="t-en">Each new token's key and value are projected through A, quantized with the precomputed per-channel bit counts, and appended. Reads reconstruct through B. The first 4 tokens and a 128-token recent window stay in FP16, flushed 16 at a time — the same sink-plus-window convention every baseline here uses.</span><span class="t-ko">새 토큰의 키와 값을 A로 투영하고, 미리 계산된 채널별 비트 수로 양자화해 덧붙인다. 읽을 때는 B로 복원한다. 첫 4개 토큰과 최근 128 토큰 윈도우는 FP16으로 남기고 16개씩 비운다. 여기 등장하는 모든 베이스라인이 쓰는 그 싱크+윈도우 관례 그대로다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The objective was wrong, and fixing it is cheap. Every calibration cost here is offline and paid once per model; at inference AATC is an ordinary transform-plus-quantize pipeline. If you already run a KVTC- or PALU-style transform, adding attention-aware weights to the allocation is a few lines of calibration code, not a new system.</p><p class="t-ko">목적함수가 틀렸고, 그것을 고치는 비용은 싸다. 여기의 모든 캘리브레이션 비용은 오프라인이고 모델당 한 번만 낸다. 추론 시 AATC는 평범한 변환+양자화 파이프라인이다. 이미 KVTC나 PALU 스타일 변환을 돌리고 있다면, 배분에 어텐션 인식 가중치를 더하는 것은 새 시스템이 아니라 캘리브레이션 코드 몇 줄이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Take the taxonomy, not the method. Theorem 1 gives eviction, low-rank projection and quantization a shared coordinate system, and it immediately says where the free lunch is: AATC only works the channel half. Nobody has yet built the allocator that jointly optimizes the token factor (a<sub>i</sub><sup>2</sup>, output-relevance) and the channel factor in one pass. The paper says so out loud — that is the obvious next paper.</p><p class="t-ko">방법이 아니라 분류 체계를 가져가라. 정리 1은 축출·저랭크 투영·양자화에 공통 좌표계를 주고, 공짜 점심이 어디 있는지도 곧바로 알려준다. AATC는 채널 쪽 절반만 다룬다. 토큰 인수(a<sub>i</sub><sup>2</sup>, 출력 관련성)와 채널 인수를 한 번에 함께 최적화하는 배분기는 아직 아무도 만들지 않았다. 논문도 이를 명시한다. 명백한 다음 논문이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Compressibility is a property of the model, not of the method. Llama-3.1-8B survives naive 5× KIVI quantization almost intact; Qwen-2.5-7B falls to 0.166 on MMLU-Pro math under the same treatment. Any KV-compression result reported on one backbone tells you very little. Evaluate on the hard one.</p><p class="t-ko">압축 가능성은 방법의 속성이 아니라 모델의 속성이다. Llama-3.1-8B는 소박한 5× KIVI 양자화를 거의 멀쩡히 견디는데, Qwen-2.5-7B는 같은 처치에서 MMLU-Pro math가 0.166까지 떨어진다. 하나의 백본에서 보고된 KV 압축 결과는 알려주는 바가 매우 적다. 어려운 쪽에서 평가하라.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the paper's novelty and the paper's headline are not the same thing. Strip out the attention-aware weights and you get "AATC var-only," which the authors themselves say is a per-layer analog of KVTC — and at the headline 5.82× operating point on Llama, var-only <i>beats</i> the full method on LongBench (0.566 vs 0.558) and ties it everywhere else. The attention-awareness only pays off on Qwen and at 2-bit. Meanwhile KVTC, named as the closest prior work, is never actually run as a baseline; it is only approximated by the authors' own ablation. Add to that no CUDA kernel and not a single wall-clock or throughput number anywhere in the paper — the reconstruction matmul through B is simply assumed free — and the honest claim is narrower than the abstract's: <i>a distortion theorem worth having, plus a compression result largely carried by transform coding that was already published.</i></span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이 논문의 새로움과 이 논문의 헤드라인은 같은 것이 아니다. 어텐션 인식 가중치를 걷어내면 "AATC var-only"가 되는데, 저자들 스스로 이것이 KVTC의 레이어별 대응물이라고 말한다. 그리고 헤드라인인 Llama 5.82× 지점에서 var-only는 LongBench에서 전체 방법을 <i>이기고</i>(0.566 대 0.558) 나머지에서는 비긴다. 어텐션 인식이 값을 하는 곳은 Qwen과 2비트뿐이다. 한편 가장 가까운 선행 연구로 지목된 KVTC는 정작 베이스라인으로 한 번도 돌려지지 않았고, 저자 자신의 제거 변형으로 근사될 뿐이다. 여기에 CUDA 커널도 없고 논문 어디에도 실측 시간이나 처리량 수치가 단 하나도 없다는 점 — B를 통한 복원 행렬곱은 그냥 공짜로 가정된다 — 을 더하면, 정직한 주장은 초록보다 좁다. <i>가질 만한 왜곡 정리 하나, 그리고 이미 발표된 변환 부호화가 대부분을 떠받치는 압축 결과.</i></span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.14191">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.14191">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.14191">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.14191">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is exhausted, so this came from the fallback search on the Model Compression / Low-rank Decomposition axis, and it is the newest thing there (2026-08-14). It also closes a loop the archive has been circling: STAR-KV (2606.08382), JoLT (2607.12550), UniRank (2606.21847), DynaCalKV (2607.24331) and AnchorKV (2608.02901) each argued for a different allocation heuristic — this one derives the objective those heuristics were approximating, and puts them all in a single table</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-20.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 소진되어, 모델 압축 / 저랭크 분해 축의 폴백 검색에서 골랐고 그중 가장 최신(2026-08-14)이다. 아카이브가 계속 맴돌던 고리를 닫는 논문이기도 하다. STAR-KV(2606.08382), JoLT(2607.12550), UniRank(2606.21847), DynaCalKV(2607.24331), AnchorKV(2608.02901)는 저마다 다른 배분 휴리스틱을 주장했는데, 이 논문은 그 휴리스틱들이 근사하고 있던 목적함수를 유도하고 그것들을 하나의 표에 담는다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-20.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
