@@ -52,7 +52,7 @@ def meta(path):
     venue = ""
     for region in (re.search(r"<footer.*?</footer>", txt, re.S), re.search(r'<div class="meta">.*?</div>', txt, re.S)):
         if region:
-            v = re.search(r"(ICLR|ICML|NeurIPS|AAAI|ACL|EMNLP|COLM|SIGCOMM)\s*20(\d\d)", region.group(0))
+            v = re.search(r"(ICLR|ICML|NeurIPS|AAAI|ACL|EMNLP|COLM|KDD|SIGCOMM)\s*20(\d\d)", region.group(0))
             if v:
                 venue = f"{v.group(1)}'{v.group(2)}"
                 break

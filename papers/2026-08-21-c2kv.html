@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · C²KV: Compressed and Composable KV Cache Reuse</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache Reuse</span><span class="t-ko">모델 압축 · KV 캐시 재사용</span></span>
+      <span>2026.08.21</span>
+    </div>
+    <h1>C²KV: Compressed and Composable KV Cache Reuse<br>
+      <span class="glow t-en">— Don't compress a cache and then hope it still concatenates. Train it to be concatenated.</span>
+      <span class="glow t-ko">— 캐시를 압축해 놓고 이어 붙기를 기대하지 마라. 이어 붙도록 학습시켜라.</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Chuheng Du</b> <span class="t-en">· Junyi Chen · Chaoyue Niu · <b>Shengzhong Liu</b> (corresponding) · Hanlin Tang · Kan Liu · Tao Lan · Lin Qu · Guihai Chen · Fan Wu</span><span class="t-ko">· Junyi Chen · Chaoyue Niu · <b>Shengzhong Liu</b> (교신저자) · Hanlin Tang · Kan Liu · Tao Lan · Lin Qu · Guihai Chen · Fan Wu</span></span>
+      <span>🏛 Shanghai Jiao Tong University · Alibaba Group</span>
+      <span>🏆 ACM SIGKDD 2026</span>
+      <span>🗓 2026-07-20</span>
+      <span>📄 <a href="https://arxiv.org/abs/2607.17715">arXiv:2607.17715</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">RAG and agent systems keep re-prefilling the same documents, so the field built KV-cache reuse: precompute each document's cache offline, then splice the pieces together at request time. Two things break. First, the spliced caches were computed without seeing each other, so they need expensive "blending" recomputation to paper over the mismatch. Second — and this is the paper's real finding — you cannot fix the memory bill by simply bolting a KV compressor on top: SnapKV at 4× turns naive reuse on HotpotQA from 0.3973 F1 into 0.0547, near-total collapse. C²KV's answer is to make compression and composition the same training problem. A small sidecar attached to a frozen LLM learns m = ⌈n/k⌉ "C²Tokens" that absorb each block of k document tokens through a strictly one-way attention mask, and the only loss is applied <i>after</i> the compressed pieces are concatenated. Reuse then becomes load-and-concat with no recompute at all — up to 17× speedup, with decode latency nearly flat from 16k to 128k. The catch is which benchmarks it wins on.</p>
+    <p class="t-ko">RAG와 에이전트 시스템은 같은 문서를 계속 다시 프리필한다. 그래서 등장한 것이 KV 캐시 재사용이다. 문서별 캐시를 오프라인에서 미리 계산해 두고, 요청 시점에 조각들을 이어 붙인다. 여기서 두 가지가 깨진다. 첫째, 이어 붙는 캐시들은 서로를 보지 못한 채 계산되었기에, 그 불일치를 메우려면 비싼 "블렌딩" 재계산이 필요하다. 둘째 — 그리고 이것이 이 논문의 진짜 발견인데 — 메모리 비용은 KV 압축기를 그 위에 얹는 것으로 해결되지 않는다. SnapKV 4×를 나이브 재사용에 붙이면 HotpotQA F1이 0.3973에서 0.0547로, 사실상 붕괴한다. C²KV의 답은 압축과 합성을 하나의 학습 문제로 만드는 것이다. 얼어붙은 LLM에 붙은 작은 사이드카가 m = ⌈n/k⌉개의 "C²토큰"을 학습하는데, 이들은 엄격히 단방향인 어텐션 마스크를 통해 k개 문서 토큰 블록을 흡수하고, 손실은 오직 압축 조각들이 <i>이어 붙은 뒤에</i> 걸린다. 그러면 재사용은 재계산이 전혀 없는 로드-앤-접합이 된다. 최대 17× 가속에, 디코드 지연은 16k에서 128k까지 거의 평평하다. 함정은 이것이 어떤 벤치마크에서 이기는가에 있다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Everyone treats KV reuse as a prefill-compute problem. At real context lengths it has quietly become a memory-bandwidth problem, and the two fixes are incompatible unless you design them together.</p>
+    <p class="lead t-ko">모두가 KV 재사용을 프리필 연산 문제로 다룬다. 그러나 실제 컨텍스트 길이에서 그것은 조용히 메모리 대역폭 문제가 되었고, 두 해법은 함께 설계하지 않으면 서로 호환되지 않는다.</p>
+    <p class="t-en">The existing families each solve half of it. Prefix-based reuse is exact but only fires when requests share a literal prefix — useless for multi-document RAG where the same passage shows up at position 3 today and position 1 tomorrow. Training-free non-prefix methods (CacheBlend, EPIC) concatenate independently computed caches and then recompute a selected fraction to suppress the resulting KV deviation, trading latency for accuracy on a heuristic. Training-based methods (Block-Attention, KVLink) fine-tune the base model itself, which the authors note costs up to 10.4% on LongBench and has to be redone for every new open-source checkpoint. None of them shrink the cache, so as context grows the DRAM→HBM transfer of uncompressed KV becomes the dominant latency term. The obvious patch — add a compressor — is exactly what the paper shows does not work, because standard compressors produce representations entangled with the context they were computed in.</p>
+    <p class="t-ko">기존 계파들은 각각 절반씩만 푼다. 프리픽스 기반 재사용은 정확하지만 요청들이 문자 그대로의 접두사를 공유할 때만 작동한다 — 같은 문단이 오늘은 3번, 내일은 1번 위치에 나타나는 다문서 RAG에서는 쓸모가 없다. 학습 없는 비프리픽스 기법(CacheBlend, EPIC)은 독립적으로 계산된 캐시들을 이어 붙인 뒤 그로 인한 KV 편차를 억제하려 일부를 재계산하며, 휴리스틱 위에서 지연과 정확도를 맞바꾼다. 학습 기반 기법(Block-Attention, KVLink)은 베이스 모델 자체를 미세조정하는데, 저자들의 지적대로 LongBench에서 최대 10.4%의 손실을 치르고 새 오픈소스 체크포인트마다 다시 해야 한다. 이들 중 무엇도 캐시를 줄이지 않으므로, 컨텍스트가 길어질수록 압축되지 않은 KV의 DRAM→HBM 전송이 지배적인 지연 항이 된다. 뻔한 처방 — 압축기를 붙이기 — 이 바로 이 논문이 작동하지 않음을 보이는 것이다. 표준 압축기는 자신이 계산된 컨텍스트와 얽힌 표현을 만들어내기 때문이다.</p>
+    <figure class="fig">
+      <img src="fig/2607.17715/3.1.Pipeline.png" alt="C2KV pipeline: offline extraction of compressed C2 KV per document, then load-and-concatenate reuse at request time">
+      <figcaption class="t-en"><b>Figure 4.</b> The two stages. Offline, each document passes once through the frozen LLM with the C²Extractor attached; only the C²Token KV survives and is stored. Online, the needed documents' compressed caches are loaded, re-rotated to their new positions, and concatenated directly — no blending, no partial recompute.</figcaption>
+      <figcaption class="t-ko"><b>그림 4.</b> 두 단계. 오프라인에서 각 문서는 C²Extractor가 붙은 얼어붙은 LLM을 한 번 통과하고, C²토큰의 KV만 살아남아 저장된다. 온라인에서는 필요한 문서들의 압축 캐시를 불러와 새 위치로 다시 회전시킨 뒤 곧바로 이어 붙인다. 블렌딩도, 부분 재계산도 없다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2607.17715</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">17×</div><div class="l"><span class="t-en">Peak claimed inference speedup under long context</span><span class="t-ko">긴 컨텍스트에서 주장하는 최대 추론 가속</span></div></div>
+      <div class="stat"><div class="n">0.3973 → 0.0547</div><div class="l"><span class="t-en">HotpotQA F1 when SnapKV 4× is bolted onto naive reuse — the motivating collapse</span><span class="t-ko">SnapKV 4×를 나이브 재사용에 얹었을 때의 HotpotQA F1 — 이 연구를 촉발한 붕괴</span></div></div>
+      <div class="stat"><div class="n">0.4477</div><div class="l"><span class="t-en">2WikiMQA F1 at 4× compression on Llama3.1-8B, above full-context prefill's 0.4018</span><span class="t-ko">Llama3.1-8B·4× 압축에서의 2WikiMQA F1. 전체 프리필의 0.4018보다 높다</span></div></div>
+      <div class="stat"><div class="n">16k → 128k</div><div class="l"><span class="t-en">Context range over which per-token decode latency stays nearly flat</span><span class="t-ko">토큰당 디코드 지연이 거의 평평하게 유지되는 컨텍스트 구간</span></div></div>
+      <div class="stat"><div class="n">120k / 1 epoch</div><div class="l"><span class="t-en">SFT samples to train the extractor; base LLM stays frozen throughout</span><span class="t-ko">추출기 학습에 쓴 SFT 샘플 수. 베이스 LLM은 내내 얼어 있다</span></div></div>
+      <div class="stat"><div class="n">0.1885 vs 0.2452</div><div class="l"><span class="t-en">QMSum ROUGE-L at 4× vs full prefill — the out-of-domain side of the ledger</span><span class="t-ko">4× 대 전체 프리필의 QMSum ROUGE-L. 장부의 도메인 밖 쪽</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The headline table</span><span class="t-ko">핵심 표</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Llama3.1-8B, LongBench. Reuse baselines run at 1× (no compression); C²KV rows are compressed. <i>Dyn</i> = one model trained on sampled ratios {4×, 8×, 16×} then tested at the stated ratio, including 10× which it never saw. QA columns are F1, summarization columns ROUGE-L.</caption>
+        <caption class="t-ko"><b>표 1.</b> Llama3.1-8B, LongBench. 재사용 베이스라인은 1×(무압축)이고 C²KV 행은 압축된 상태다. <i>Dyn</i>은 {4×, 8×, 16×}를 섞어 학습한 하나의 모델을 표기된 비율에서 평가한 것으로, 한 번도 본 적 없는 10×도 포함한다. QA 열은 F1, 요약 열은 ROUGE-L.</caption>
+        <thead><tr><th>Method</th><th>MuSiQue</th><th>2WikiMQA</th><th>SAMSum</th><th>MultiNews</th></tr></thead>
+        <tbody>
+          <tr><td>Full recompute (1×)</td><td>0.3198</td><td>0.4018</td><td>0.3652</td><td>0.2685</td></tr>
+          <tr><td>Naïve reuse (1×)</td><td>0.1970</td><td>0.2681</td><td>0.3172</td><td>0.2674</td></tr>
+          <tr><td>EPIC (1×)</td><td>0.2498</td><td>0.2821</td><td>0.4217</td><td>0.2630</td></tr>
+          <tr><td>CacheBlend (1×)</td><td>0.2720</td><td>0.1334</td><td>0.3379</td><td>0.2126</td></tr>
+          <tr><td><b>C²KV-4×</b></td><td class="up">0.3587</td><td class="up">0.4477</td><td>0.3904</td><td>0.2532</td></tr>
+          <tr><td>C²KV-8×</td><td>0.3225</td><td>0.4462</td><td>0.2572</td><td>0.2351</td></tr>
+          <tr><td>C²KV-16×</td><td>0.2746</td><td>0.3973</td><td>0.3556</td><td>0.2234</td></tr>
+          <tr><td>C²KV-Dyn @4×</td><td>0.3457</td><td class="up">0.4680</td><td>0.3779</td><td>0.2503</td></tr>
+          <tr><td>C²KV-Dyn @10× <i>(unseen)</i></td><td>0.3198</td><td>0.4310</td><td>0.3570</td><td>0.2357</td></tr>
+          <tr><td>C²KV-Dyn @16×</td><td>0.2831</td><td>0.4298</td><td>0.3525</td><td>0.2343</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three ideas</span><span class="t-ko">세 개의 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">SIDECAR</span>
+        <h3>C²Tokens as learned memory slots</h3>
+        <p class="t-en">For a k:1 ratio, a document of n tokens gets m = ⌈n/k⌉ auxiliary C²Tokens — learnable embeddings with no lexical meaning, each logically owning one block of k document tokens. They pass through the same Transformer stack but use their own trainable QKV projection matrices per layer; the base model's projections stay frozen and apply only to real tokens. After the forward pass, only the C²Tokens' KV is kept. The C²Token embeddings plus those per-layer QKV heads are the <i>entire</i> trainable parameter set, which is why the base LLM cannot forget anything and can be swapped for a newer checkpoint without redoing the base model.</p>
+        <p class="t-ko">k:1 비율에서 n개 토큰의 문서는 m = ⌈n/k⌉개의 보조 C²토큰을 받는다. 어휘적 의미가 없는 학습 가능한 임베딩이며, 각각이 k개 문서 토큰 블록 하나를 논리적으로 담당한다. 이들은 같은 트랜스포머 스택을 통과하지만 레이어마다 자기만의 학습 가능한 QKV 투영 행렬을 쓴다. 베이스 모델의 투영은 얼어 있고 실제 토큰에만 적용된다. 순전파가 끝나면 C²토큰의 KV만 남긴다. C²토큰 임베딩과 그 레이어별 QKV 헤드가 학습 파라미터의 <i>전부</i>이며, 그래서 베이스 LLM은 아무것도 잊을 수 없고 베이스를 다시 손대지 않은 채 새 체크포인트로 교체할 수 있다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">MASK</span>
+        <h3>Structured Information Flow — strictly one-way</h3>
+        <p class="t-en">The attention mask enforces three rules, and each one buys a specific property. (1) <b>Original-token invariance</b>: real tokens may never attend to any C²Token, so their hidden states and KV are bit-identical to the frozen base model's — the extractor is provably non-invasive. (2) <b>Block-local extraction</b>: C²Token c_j attends only to its own block B(j) plus a sink block B(0), which forces genuine k:1 aggregation instead of letting it peek globally. (3) <b>Causal accumulation</b>: C²Tokens attend to earlier C²Tokens, so document-level context still accrues. The contrast the paper draws is with anchor tokens, which attend bidirectionally with real tokens and therefore both perturb the base representations and entangle the compressed state with its original context — the exact thing that makes a compressed cache non-composable.</p>
+        <p class="t-ko">어텐션 마스크가 세 규칙을 강제하며, 각각이 특정 성질을 사들인다. (1) <b>원본 토큰 불변성</b>: 실제 토큰은 어떤 C²토큰에도 어텐션할 수 없으므로, 그 은닉 상태와 KV는 얼어붙은 베이스 모델의 것과 비트 단위로 동일하다 — 추출기가 비침습적임이 증명적으로 보장된다. (2) <b>블록 국소 추출</b>: C²토큰 c_j는 자기 블록 B(j)와 싱크 블록 B(0)에만 어텐션하며, 전역을 엿보는 대신 진짜 k:1 집약을 하도록 강제된다. (3) <b>인과적 누적</b>: C²토큰들은 앞선 C²토큰들에 어텐션하므로 문서 수준 맥락은 여전히 쌓인다. 논문이 대비시키는 것은 앵커 토큰이다. 앵커는 실제 토큰과 양방향으로 어텐션하므로 베이스 표현을 교란하는 동시에 압축된 상태를 원래 컨텍스트와 얽어버린다 — 압축 캐시를 합성 불가능하게 만드는 바로 그 원인이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">TRAINING</span>
+        <h3>Supervision applied only after concatenation</h3>
+        <p class="t-en">There is no reconstruction loss and no alignment loss — just the ordinary autoregressive SFT loss on the answer. The trick is <i>where</i> it is applied. Documents are extracted independently, but the loss only sees the concatenated result, and the number and order of documents varies across training samples. A representation that compresses well but breaks when spliced will therefore be penalized, as will one that only works in a fixed global arrangement. Composability is not asserted by the architecture; it is the only way to reduce the loss. Sampling the ratio during training extends this to the compression axis too — one model then serves 4×, 8×, 16×, and interpolates to a 10× budget it never trained on.</p>
+        <p class="t-ko">복원 손실도 정렬 손실도 없다. 답변에 대한 평범한 자기회귀 SFT 손실 하나뿐이다. 요령은 그것을 <i>어디에</i> 거는가다. 문서는 독립적으로 추출되지만 손실은 이어 붙인 결과만 본다. 그리고 문서의 개수와 순서는 학습 샘플마다 달라진다. 따라서 압축은 잘 되지만 접합에서 깨지는 표현은 벌을 받고, 고정된 전역 배치에서만 작동하는 표현도 마찬가지다. 합성 가능성은 구조가 선언하는 것이 아니라, 손실을 줄이는 유일한 길이다. 학습 중 비율을 샘플링하면 이것이 압축 축으로도 확장된다. 모델 하나가 4×, 8×, 16×를 담당하고, 학습한 적 없는 10× 예산으로도 보간된다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Offline, once per document. </span><span class="t-ko">오프라인, 문서당 한 번. </span></b><span class="t-en">Split the document into blocks of k, append m = ⌈n/k⌉ C²Tokens, run one forward pass through the frozen LLM under the SIF mask. Each C²Token takes the position index of the last token in its block; RoPE is deliberately <i>not</i> applied yet. Discard everything except the C²Token KV and store it in host memory.</span><span class="t-ko">문서를 크기 k의 블록으로 나누고 m = ⌈n/k⌉개의 C²토큰을 덧붙인 뒤, SIF 마스크 아래에서 얼어붙은 LLM으로 한 번 순전파한다. 각 C²토큰은 자기 블록 마지막 토큰의 위치 인덱스를 가지며, RoPE는 의도적으로 아직 <i>적용하지 않는다</i>. C²토큰 KV를 제외한 모든 것을 버리고 호스트 메모리에 저장한다.</span></li>
+      <li><b><span class="t-en">At request time, re-rotate. </span><span class="t-ko">요청 시점, 다시 회전. </span></b><span class="t-en">Load the compressed caches for whichever documents the prompt needs and apply RoPE now, at their actual positions in the assembled sequence. Offsets accumulate as if each compressed segment still occupied the full span of its original uncompressed tokens — this is what keeps a k:1 segment positionally honest. The ablation that freezes positions instead loses accuracy on every task.</span><span class="t-ko">프롬프트가 필요로 하는 문서들의 압축 캐시를 불러와, 조립된 시퀀스에서의 실제 위치에 지금 RoPE를 적용한다. 오프셋은 각 압축 구간이 여전히 원래 비압축 토큰들의 전체 스팬을 차지하는 것처럼 누적된다. 이것이 k:1 구간의 위치를 정직하게 유지시킨다. 위치를 고정시킨 어블레이션은 모든 태스크에서 정확도를 잃는다.</span></li>
+      <li><b><span class="t-en">Concatenate — and stop. </span><span class="t-ko">이어 붙이고 — 끝. </span></b><span class="t-en">The re-rotated segments are concatenated directly. No blending, no selective recompute, no reintroduction of original tokens. TTFT collapses to a load-only operation, which is where the speedup comes from: CacheBlend and EPIC still pay a recomputation tax on top of the same load.</span><span class="t-ko">다시 회전된 구간들을 곧바로 이어 붙인다. 블렌딩도, 선택적 재계산도, 원본 토큰의 재투입도 없다. TTFT가 로드만 하는 연산으로 축소되고, 가속은 바로 여기서 나온다. CacheBlend와 EPIC은 같은 로드 위에 재계산 세금을 여전히 낸다.</span></li>
+      <li><b><span class="t-en">Decode against a k× smaller cache. </span><span class="t-ko">k배 작은 캐시로 디코드. </span></b><span class="t-en">The saving does not stop at the first token. Because attention now reads a k×-smaller KV every step, per-token decode latency rises only mildly from 16k to 128k, where full-length caches scale near-linearly under memory-bandwidth pressure.</span><span class="t-ko">절약은 첫 토큰에서 끝나지 않는다. 이제 어텐션이 매 스텝 k배 작은 KV를 읽으므로, 토큰당 디코드 지연은 16k에서 128k까지 완만하게만 오른다. 전체 길이 캐시는 같은 구간에서 메모리 대역폭 압력에 눌려 거의 선형으로 증가한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The negative result is the most portable thing here. Table 3 puts SnapKV 4× on top of five different reuse strategies and every one of them falls apart — HotpotQA drops to 0.0547 under naive reuse, 0.0743 under Block-Attention, 0.0897 under EPIC. If you are running a reuse-based serving stack and thinking of adding a compressor, that table is your warning label: context-entangled compression and non-prefix reuse do not compose.</p><p class="t-ko">가장 널리 쓸 수 있는 것은 이 논문의 부정적 결과다. 표 3은 SnapKV 4×를 다섯 가지 재사용 전략 위에 얹는데, 전부 무너진다. HotpotQA는 나이브 재사용에서 0.0547, Block-Attention에서 0.0743, EPIC에서 0.0897로 떨어진다. 재사용 기반 서빙 스택을 돌리면서 압축기를 추가할 생각이라면, 그 표가 경고 라벨이다. 컨텍스트와 얽힌 압축과 비프리픽스 재사용은 합성되지 않는다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">"Freeze the base, train a sidecar" is becoming the default shape for KV work, and the mask here is a clean instance of why: because information flows only from real tokens to C²Tokens and never back, the base model's own states are provably untouched. That is a much stronger guarantee than "we fine-tuned gently," and it is what lets the compressed caches be context-independent in the first place.</p><p class="t-ko">"베이스는 얼리고 사이드카를 학습시킨다"는 KV 연구의 기본 형태가 되어가고 있으며, 여기의 마스크는 그 이유를 깔끔하게 보여준다. 정보가 실제 토큰에서 C²토큰으로만 흐르고 되돌아오지 않기 때문에, 베이스 모델의 상태는 증명적으로 손대지 않은 채로 남는다. 이는 "살살 미세조정했다"보다 훨씬 강한 보장이며, 애초에 압축 캐시가 컨텍스트 독립적일 수 있게 하는 것이 바로 이것이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Composability is trainable — that is the transferable design lesson. Nothing in the architecture forces the pieces to fit; the loss is simply never shown an unconcatenated example. The same trick should apply anywhere you need independently-produced artifacts to compose later: latent messages between agents, per-tool memory blocks, retrieved episode states.</p><p class="t-ko">합성 가능성은 학습될 수 있다 — 이것이 옮겨 쓸 수 있는 설계 교훈이다. 구조상 조각들이 맞물리도록 강제하는 것은 아무것도 없다. 손실이 이어 붙지 않은 예시를 결코 보지 않을 뿐이다. 독립적으로 생산된 산출물이 나중에 합성되어야 하는 곳이라면 어디든 같은 요령이 적용될 것이다. 에이전트 간 잠재 메시지, 툴별 메모리 블록, 검색된 에피소드 상태.</p></div>
+      <div class="t"><span class="ic">⚖️</span><p class="t-en">Read the win column carefully. C²KV-4× beats full-context prefill on the multi-hop QA tasks (MuSiQue 0.3587 vs 0.3198, 2WikiMQA 0.4477 vs 0.4018) but loses on Qasper (0.3755 vs 0.4417), QMSum (0.1885 vs 0.2452), GovReport (0.2967 vs 0.3274) and GSM8K (0.6175 vs 0.6914). That is not the signature of lossless compression; it is the signature of task adaptation.</p><p class="t-ko">이기는 칸을 주의 깊게 읽어라. C²KV-4×는 멀티홉 QA에서 전체 프리필을 이긴다(MuSiQue 0.3587 대 0.3198, 2WikiMQA 0.4477 대 0.4018). 그러나 Qasper(0.3755 대 0.4417), QMSum(0.1885 대 0.2452), GovReport(0.2967 대 0.3274), GSM8K(0.6175 대 0.6914)에서는 진다. 이것은 무손실 압축의 서명이 아니라 태스크 적응의 서명이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> a compressor that <i>beats</i> the uncompressed model is a red flag, not a result — compression cannot add information. The explanation is in Appendix B: the extractor is SFT-trained on 120k samples drawn from HotpotQA, 2WikiMultiHopQA and LongMagpie, i.e. two of the evaluation sets are in-domain, and the third gain (MuSiQue) is the same multi-hop QA distribution. Full Recompute, EPIC, CacheBlend and naive reuse are all zero-shot on those tasks; C²KV is the only fine-tuned entry in the table. The pattern falls out exactly as you would predict — it wins where it trained and loses on out-of-domain summarization and math. The missing control is an equally SFT'd full-prefill baseline, which would separate "our compressed cache is composable" from "we did a round of multi-hop QA fine-tuning and the baselines did not." Until that ablation exists, the efficiency claims (17×, flat decode scaling) stand on their own, but the accuracy claims are not measuring what the table implies.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 비압축 모델을 <i>이기는</i> 압축기는 결과가 아니라 위험 신호다. 압축은 정보를 더할 수 없다. 설명은 부록 B에 있다. 추출기는 HotpotQA, 2WikiMultiHopQA, LongMagpie에서 뽑은 120k 샘플로 SFT되었다. 즉 평가 세트 중 둘이 도메인 안에 있고, 세 번째 이득(MuSiQue)도 같은 멀티홉 QA 분포다. Full Recompute, EPIC, CacheBlend, 나이브 재사용은 그 태스크들에서 모두 제로샷인데, 표에서 미세조정된 항목은 C²KV뿐이다. 패턴은 예측 그대로 떨어진다. 학습한 곳에서 이기고, 도메인 밖 요약과 수학에서 진다. 빠진 통제군은 똑같이 SFT된 전체 프리필 베이스라인이며, 그것이 "우리 압축 캐시는 합성 가능하다"와 "우리는 멀티홉 QA 미세조정을 한 번 돌렸고 베이스라인은 안 했다"를 갈라줄 것이다. 그 어블레이션이 없는 한, 효율 주장(17×, 평평한 디코드 스케일링)은 홀로 서지만 정확도 주장은 표가 암시하는 것을 측정하고 있지 않다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2607.17715">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2607.17715">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2607.17715">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2607.17715">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>venue: KDD 2026. The 2026-08 wishlist queue is fully drained, so this came from the fallback search, and among the unprocessed candidates it was the only one with a confirmed conference acceptance. It also turns the archive's KV-compression thread outward: STAR-KV (2606.08382), JoLT (2607.12550), DynaCalKV (2607.24331), AnchorKV (2608.02901) and AATC (2608.14191) all compress a cache in place, while this one asks the question none of them do — what happens when the compressed pieces have to be spliced together, and the answer is that most of them break</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-21.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>venue: KDD 2026. 2026-08 위시리스트 큐가 완전히 소진되어 폴백 검색에서 골랐고, 미처리 후보 중 학회 accept가 확인된 유일한 논문이다. 아카이브의 KV 압축 실을 바깥으로 돌리기도 한다. STAR-KV(2606.08382), JoLT(2607.12550), DynaCalKV(2607.24331), AnchorKV(2608.02901), AATC(2608.14191)는 모두 캐시를 제자리에서 압축하는데, 이 논문은 그들 중 누구도 묻지 않은 질문을 던진다. 압축된 조각들을 이어 붙여야 할 때 무슨 일이 일어나는가 — 그리고 답은 대부분이 깨진다는 것이다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-21.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
