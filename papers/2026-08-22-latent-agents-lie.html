@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · When Latent Agents Lie</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent Latent Communication · Integrity</span><span class="t-ko">Multi-Agent Latent Communication · 무결성</span></span>
+      <span>2026 · 08 · 22</span>
+    </div>
+    <h1>When Latent Agents Lie<br>
+      <span class="glow t-en">— what a text audit cannot see inside a shipped KV cache</span>
+      <span class="glow t-ko">— 전송된 KV 캐시 속을 텍스트 감사로는 볼 수 없다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Luís Brito</b><span class="t-en">, Carlos Baquero</span><span class="t-ko">, Carlos Baquero</span></span>
+      <span>🏛 IPVC · Univ. Porto (Portugal)</span>
+      <span>🗓 2026-06-27</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.28958">arXiv:2606.28958</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Agents that ship each other full KV caches instead of text really do reason better — EM/F1 0.338/0.486 vs 0.231/0.369 for the same protocol run over text. But the paper then shows the hidden channel is an unguarded one: a compromised specialist can send a perfectly plausible visible sentence while its latent KV has been randomized or scaled by 8, and the coordinator's accuracy falls to <b>zero</b>. Text-level verification never sees it. A magnitude filter catches the crude attacks 65/65 — and catches the gradient-optimized one 0/65. The only defense that fully holds is not detection at all but an HMAC-SHA256 manifest on the transport, which is a different threat model from the one that did the damage.</p>
+    <p class="t-ko">에이전트가 텍스트 대신 KV 캐시 전체를 주고받으면 실제로 추론이 좋아진다 — 같은 프로토콜을 텍스트로 돌렸을 때 0.231/0.369인 EM/F1이 0.338/0.486이 된다. 그러나 이 논문은 그 숨은 채널이 무방비임을 보인다. 오염된 스페셜리스트는 겉으로 보이는 문장은 그럴듯하게 내보내면서 잠재 KV만 난수로 바꾸거나 8배로 키울 수 있고, 그러면 코디네이터 정확도가 <b>0</b>으로 떨어진다. 텍스트 검증은 이를 전혀 보지 못한다. 크기 기반 필터는 조잡한 공격을 65/65로 잡지만, 그래디언트로 최적화된 공격은 0/65로 잡는다. 끝까지 버티는 유일한 방어는 탐지가 아니라 전송 계층의 HMAC-SHA256 매니페스트인데, 이는 정작 피해를 입힌 위협과는 다른 위협 모델이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">This archive has spent two months on papers that make the KV cache smaller. This one asks a question none of them do: once the cache becomes a thing you <i>send</i>, who is allowed to write it?</p>
+    <p class="lead t-ko">이 아카이브는 두 달 동안 KV 캐시를 작게 만드는 논문들을 다뤘다. 이 논문은 그들 중 누구도 묻지 않은 질문을 던진다. 캐시가 <i>전송하는 물건</i>이 된 순간, 누가 그것을 쓸 권한을 갖는가?</p>
+    <p class="t-en">Two trends have been converging in this archive without meeting. Latent multi-agent work — LatentMAS (2511.20639), Latent Cache Flow (2605.22863), StateBridge (2608.13317) — keeps showing that agents lose information when they squeeze thoughts through text, so they should pass hidden state instead. Serving work — C²KV (2607.17715), prefix-cache reuse, disaggregated inference — keeps making the KV cache a first-class object you can store, move and splice. Put the two together and you get a system where one model writes a tensor and another model consumes it as if it were its own memory. That is a remote code path with no type checking. The visible message is auditable; the tensor riding alongside it is not, because there is no such thing as reading a KV cache for plausibility.</p>
+    <p class="t-ko">이 아카이브에서 두 흐름이 서로 만나지 않은 채 수렴해 왔다. 잠재 멀티에이전트 연구 — LatentMAS(2511.20639), Latent Cache Flow(2605.22863), StateBridge(2608.13317) — 는 에이전트가 생각을 텍스트로 짜낼 때 정보를 잃는다는 것, 그러니 은닉 상태를 그대로 넘겨야 한다는 것을 계속 보여 왔다. 서빙 연구 — C²KV(2607.17715), 프리픽스 캐시 재사용, 분리형 추론 — 는 KV 캐시를 저장·이동·접합할 수 있는 일급 객체로 만들어 왔다. 둘을 합치면 한 모델이 텐서를 쓰고 다른 모델이 그것을 자기 기억처럼 소비하는 시스템이 된다. 타입 검사 없는 원격 코드 경로다. 눈에 보이는 메시지는 감사할 수 있지만 그 옆에 실려 오는 텐서는 그럴 수 없다. KV 캐시를 읽어 "말이 되는지" 판단하는 방법 자체가 없기 때문이다.</p>
+    <p class="t-en">The authors build exactly that protocol, then compromise it. The result is worth reading precisely because the utility half is honest: latent collaboration wins, repeatedly, on two models and two benchmarks, and an influence-map diagnostic shows the win is causal — remove one specialist's hidden state and 10 of 21 correct answers flip to wrong. The value is real, which is what makes the fragility a problem rather than a curiosity.</p>
+    <p class="t-ko">저자들은 정확히 그런 프로토콜을 만든 다음, 그것을 오염시킨다. 이 결과가 읽을 가치가 있는 이유는 유용성 쪽이 정직하기 때문이다. 잠재 협업은 두 모델·두 벤치마크에서 반복적으로 이기고, 영향력 지도(influence map) 진단은 그 승리가 인과적임을 보인다. 스페셜리스트 하나의 은닉 상태를 제거하면 맞았던 답 21개 중 10개가 틀린 답으로 뒤집힌다. 가치가 진짜이기 때문에, 그 취약성은 호기심거리가 아니라 문제가 된다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.486</div><div class="l"><span class="t-en">latent F1 on HiddenBench vs <b>0.369</b> for matched text (Qwen3-4B)</span><span class="t-ko">HiddenBench 잠재 F1, 동일 조건 텍스트는 <b>0.369</b> (Qwen3-4B)</span></div></div>
+      <div class="stat"><div class="n">279 MB</div><div class="l"><span class="t-en">KV cache shipped per example — the text branch ships none</span><span class="t-ko">예제당 전송되는 KV 캐시 — 텍스트 분기는 0 MB</span></div></div>
+      <div class="stat"><div class="n">0.000</div><div class="l"><span class="t-en">latent EM after a scale-8 attack, from 0.323 clean</span><span class="t-ko">scale-8 공격 후 잠재 EM. 정상은 0.323</span></div></div>
+      <div class="stat"><div class="n">0 / 65</div><div class="l"><span class="t-en">white-box norm-matched attacks caught by the magnitude quarantine</span><span class="t-ko">크기 기반 격리가 잡아낸 화이트박스 노름 정합 공격 수</span></div></div>
+      <div class="stat"><div class="n">295 / 295</div><div class="l"><span class="t-en">tampered payloads rejected by the HMAC transport gate (774/774 honest accepted)</span><span class="t-ko">HMAC 전송 게이트가 거부한 변조 페이로드 (정상은 774/774 통과)</span></div></div>
+      <div class="stat"><div class="n">10 / 21</div><div class="l"><span class="t-en">correct latent answers that flip when one specialist's hidden state is removed</span><span class="t-ko">스페셜리스트 하나의 은닉 상태를 빼면 뒤집히는 정답 수</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What the attacks actually do</span><span class="t-ko">공격은 실제로 무엇을 하는가</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> All 65 HiddenBench records, Qwen3-4B, one compromised specialist per record. The clean latent branch in this same run scores 0.323/0.471. "Matched text" is the visible-channel analogue at the same attack budget — note that it barely moves, which is the whole point: the damage lives in a channel text auditing does not reach.</caption>
+        <caption class="t-ko"><b>표 3.</b> HiddenBench 65개 레코드 전체, Qwen3-4B, 레코드당 오염된 스페셜리스트 1개. 같은 실행의 정상 잠재 분기는 0.323/0.471이다. "Matched text"는 동일 공격 예산의 가시 채널 대응물인데, 거의 움직이지 않는다는 점이 핵심이다. 피해는 텍스트 감사가 닿지 않는 채널에서 일어난다.</caption>
+        <thead><tr><th>Attack family</th><th>Latent attacked EM/F1</th><th>Latent Δ EM/F1</th><th>Clean-correct flips</th><th>Matched text EM/F1</th></tr></thead>
+        <tbody>
+          <tr><td>Targeted false specialist <span class="t-en">(Tier A)</span><span class="t-ko">(Tier A)</span></td><td>0.231 / 0.386</td><td>−0.092 / −0.085</td><td>9 / 21</td><td>0.323 / 0.456</td></tr>
+          <tr><td>Random latent-thought corruption <span class="t-en">(Tier B)</span><span class="t-ko">(Tier B)</span></td><td>0.000 / 0.006</td><td>−0.323 / −0.465</td><td>21 / 21</td><td>0.292 / 0.436</td></tr>
+          <tr><td>Scale-8 latent-thought multiplication <span class="t-en">(Tier B)</span><span class="t-ko">(Tier B)</span></td><td>0.000 / 0.000</td><td>−0.323 / −0.471</td><td>21 / 21</td><td>0.308 / 0.451</td></tr>
+          <tr><td>Sign-flip direction reversal <span class="t-en">(Tier B)</span><span class="t-ko">(Tier B)</span></td><td class="up">0.354 / 0.476</td><td class="up">+0.031 / +0.005</td><td>2 / 21</td><td>0.277 / 0.420</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">The sign-flip row is the most informative one in the table. Multiplying the latent thoughts by −1 is a violent perturbation and it does essentially nothing — the branch even edges up to 0.354. So the collapse under random replacement and scale-8 is not "any perturbation destroys a KV cache." It is attack-specific, which means the hidden channel has a shape, and an adversary who learns that shape can aim.</p>
+    <p class="t-ko">표에서 가장 많은 것을 알려주는 행은 부호 반전이다. 잠재 사고를 −1배 하는 것은 난폭한 교란인데도 사실상 아무 일도 일어나지 않는다. 오히려 0.354로 소폭 오른다. 따라서 난수 대체와 scale-8에서의 붕괴는 "어떤 교란이든 KV 캐시를 파괴한다"는 뜻이 아니다. 공격마다 다르다는 뜻이고, 이는 은닉 채널에 형태가 있다는 뜻이며, 그 형태를 학습한 공격자는 조준할 수 있다는 뜻이다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 640 330" width="100%" role="img" aria-label="Exact match under four attack families, showing clean, attacked, and post-quarantine values; the magnitude quarantine restores the two naive attacks but not the gradient-optimized one">
+        <text x="0" y="13" font-family="var(--sans)" font-size="12.5" fill="var(--muted)">Exact match · 65 HiddenBench records · Qwen3-4B · one compromised specialist (Figure 2)</text>
+
+        <line x1="200" y1="26" x2="200" y2="292" stroke="var(--line)" stroke-width="1"/>
+        <line x1="523" y1="26" x2="523" y2="292" stroke="var(--faint)" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="523" y="308" text-anchor="middle" font-family="var(--sans)" font-size="11" fill="var(--faint)">0.323 = clean latent branch</text>
+
+        <!-- legend -->
+        <rect x="200" y="34" width="10" height="10" rx="2" fill="var(--faint)" opacity="0.45"/>
+        <text x="215" y="43" font-family="var(--sans)" font-size="11" fill="var(--muted)">clean</text>
+        <rect x="258" y="34" width="10" height="10" rx="2" fill="var(--clay-deep)"/>
+        <text x="273" y="43" font-family="var(--sans)" font-size="11" fill="var(--muted)">attacked</text>
+        <rect x="332" y="34" width="10" height="10" rx="2" fill="var(--clay)" opacity="0.55"/>
+        <text x="347" y="43" font-family="var(--sans)" font-size="11" fill="var(--muted)">after magnitude quarantine</text>
+
+        <!-- group 1: targeted false -->
+        <text x="192" y="76" text-anchor="end" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">targeted false</text>
+        <text x="192" y="90" text-anchor="end" font-family="var(--sans)" font-size="10.5" fill="var(--faint)">Tier A · quarantine n/a</text>
+        <rect x="200" y="58" width="323" height="12" rx="2" fill="var(--faint)" opacity="0.45"/>
+        <text x="529" y="68" font-family="var(--sans)" font-size="11" fill="var(--faint)">0.323</text>
+        <rect x="200" y="74" width="231" height="12" rx="2" fill="var(--clay-deep)"/>
+        <text x="437" y="84" font-family="var(--sans)" font-size="11" fill="var(--clay-deep)" font-weight="700">0.231</text>
+
+        <!-- group 2: random corruption -->
+        <text x="192" y="128" text-anchor="end" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">random corruption</text>
+        <text x="192" y="142" text-anchor="end" font-family="var(--sans)" font-size="10.5" fill="var(--faint)">Tier B · rejected 65/65</text>
+        <rect x="200" y="104" width="323" height="12" rx="2" fill="var(--faint)" opacity="0.45"/>
+        <text x="529" y="114" font-family="var(--sans)" font-size="11" fill="var(--faint)">0.323</text>
+        <rect x="200" y="120" width="2" height="12" rx="1" fill="var(--clay-deep)"/>
+        <text x="208" y="130" font-family="var(--sans)" font-size="11" fill="var(--clay-deep)" font-weight="700">0.000</text>
+        <rect x="200" y="136" width="338" height="12" rx="2" fill="var(--clay)" opacity="0.55"/>
+        <text x="544" y="146" font-family="var(--sans)" font-size="11" fill="var(--muted)">0.338</text>
+
+        <!-- group 3: scale-8 -->
+        <text x="192" y="180" text-anchor="end" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">scale-8</text>
+        <text x="192" y="194" text-anchor="end" font-family="var(--sans)" font-size="10.5" fill="var(--faint)">Tier B · rejected 65/65</text>
+        <rect x="200" y="156" width="323" height="12" rx="2" fill="var(--faint)" opacity="0.45"/>
+        <text x="529" y="166" font-family="var(--sans)" font-size="11" fill="var(--faint)">0.323</text>
+        <rect x="200" y="172" width="2" height="12" rx="1" fill="var(--clay-deep)"/>
+        <text x="208" y="182" font-family="var(--sans)" font-size="11" fill="var(--clay-deep)" font-weight="700">0.000</text>
+        <rect x="200" y="188" width="385" height="12" rx="2" fill="var(--clay)" opacity="0.55"/>
+        <text x="591" y="198" font-family="var(--sans)" font-size="11" fill="var(--muted)">0.385</text>
+
+        <!-- group 4: gradient norm-matched -->
+        <text x="192" y="232" text-anchor="end" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">grad. norm-matched</text>
+        <text x="192" y="246" text-anchor="end" font-family="var(--sans)" font-size="10.5" fill="var(--clay-deep)" font-weight="700">Tier C · rejected 0/65</text>
+        <rect x="200" y="208" width="323" height="12" rx="2" fill="var(--faint)" opacity="0.45"/>
+        <text x="529" y="218" font-family="var(--sans)" font-size="11" fill="var(--faint)">0.323</text>
+        <rect x="200" y="224" width="77" height="12" rx="2" fill="var(--clay-deep)"/>
+        <text x="283" y="234" font-family="var(--sans)" font-size="11" fill="var(--clay-deep)" font-weight="700">0.077</text>
+        <rect x="200" y="240" width="77" height="12" rx="2" fill="var(--clay)" opacity="0.55"/>
+        <text x="283" y="250" font-family="var(--sans)" font-size="11" fill="var(--muted)">0.077</text>
+
+        <line x1="200" y1="266" x2="600" y2="266" stroke="var(--line-soft)" stroke-width="1"/>
+        <text x="200" y="284" font-family="var(--sans)" font-size="11.5" fill="var(--ink)">↑ the defense is a no-op exactly where the attacker is competent</text>
+      </svg>
+      <div class="cap t-en">Read the bottom group against the two above it. The magnitude quarantine — reject at most one specialist whose post-key magnitude peer ratio exceeds 1.25 — is a complete success against the naive attacks: 65/65 rejections, no honest false positives, utility restored to 0.338 and 0.385, both at or above clean. Against the gradient-optimized attack that preserves honest magnitude, the identical filter fires zero times and the attacked and defended bars are the same bar. A defense that is perfect against the attacks you thought of and blind to the one you did not is not a defense; it is a measurement of your imagination.</div>
+      <div class="cap t-ko">맨 아래 그룹을 위 두 그룹과 대조해 읽자. 크기 기반 격리 — 키 크기의 동료 대비 비율이 1.25를 넘는 스페셜리스트를 최대 한 명 거부 — 는 조잡한 공격에 대해 완승이다. 65/65 거부, 정상 오탐 0, 유용성은 0.338과 0.385로 복구되어 둘 다 정상 수준 이상이다. 정상적인 크기를 유지하도록 최적화된 그래디언트 공격 앞에서는 같은 필터가 한 번도 발동하지 않고, 공격 막대와 방어 막대가 같은 막대가 된다. 내가 떠올린 공격에는 완벽하고 떠올리지 못한 공격에는 눈먼 방어는 방어가 아니라 내 상상력의 측정치다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three ideas</span><span class="t-ko">세 가지 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">TWO CHANNELS</span>
+        <h3>A protocol that says one thing and sends another</h3>
+        <p class="t-en">A planner splits the query, each specialist gets a private evidence partition, and each emits <i>two</i> things: a short natural-language commitment, and its full KV cache — prompt-token KV plus generated latent-thought KV. A verifier may read the commitments and reject a specialist outright. A coordinator consumes whatever survives. The asymmetry is the whole paper: the verifier can only score the sentence, while the coordinator's answer is driven by the tensor. Nothing in the protocol makes the two agree.</p>
+        <p class="t-ko">플래너가 질의를 쪼개고, 각 스페셜리스트가 사적인 증거 조각을 받아 <i>두 가지</i>를 내보낸다. 짧은 자연어 커밋먼트, 그리고 전체 KV 캐시(프롬프트 토큰 KV + 생성된 잠재 사고 KV)다. 검증자는 커밋먼트를 읽고 스페셜리스트를 통째로 거부할 수 있다. 코디네이터는 살아남은 것을 소비한다. 논문 전체가 이 비대칭에 걸려 있다. 검증자는 문장만 채점할 수 있는데 코디네이터의 답은 텐서가 좌우한다. 둘이 일치하도록 강제하는 장치가 프로토콜 안에 없다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">THREE TIERS</span>
+        <h3>Attacker capability, laddered</h3>
+        <p class="t-en">Tier A owns the text only — it lies in the commitment, which is the attack every existing multi-agent safety paper studies. Tier B can write the latent-thought KV but has no gradients: random replacement, scale-8, sign flip, norm-matched substitution. Tier C is Tier B plus differentiation through the victim coordinator, optimizing a perturbation against the gold-answer likelihood while holding the honest norm. The ladder matters because the defenses sort along it: text filtering only touches A, magnitude quarantine only touches naive B, and nothing in the paper touches C.</p>
+        <p class="t-ko">Tier A는 텍스트만 통제한다. 커밋먼트에서 거짓말하는 것으로, 기존 멀티에이전트 안전 논문들이 다루는 바로 그 공격이다. Tier B는 잠재 사고 KV를 쓸 수 있지만 그래디언트는 없다. 난수 대체, scale-8, 부호 반전, 노름 정합 대체가 여기 속한다. Tier C는 Tier B에 더해 피해자 코디네이터를 통한 미분이 가능해, 정상적인 노름을 유지한 채 정답 우도에 대해 교란을 최적화한다. 이 사다리가 중요한 이유는 방어가 사다리를 따라 정렬되기 때문이다. 텍스트 필터링은 A만, 크기 격리는 조잡한 B만 건드리고, 논문 안의 어떤 것도 C에 닿지 못한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">TRANSPORT</span>
+        <h3>Give up on detection, sign the payload</h3>
+        <p class="t-en">Having shown that anomaly detection loses to an adaptive adversary — a calibrated learned sanitizer fails to beat a matched random-budget dropping control under detector-aware optimization — the authors stop trying to inspect the tensor and instead authenticate it. An HMAC-SHA256 manifest binds specialist identity, session, model, a hash of the visible commitment, tensor metadata and a payload digest. It accepts 774/774 honest replays and rejects 295/295 tampered ones. Perfect, and narrower than it sounds: see the critical note.</p>
+        <p class="t-ko">이상 탐지가 적응형 공격자에게 진다는 것을 보인 뒤 — 보정된 학습형 세니타이저는 탐지기를 인지한 최적화 앞에서 동일 예산의 무작위 드롭 대조군조차 이기지 못한다 — 저자들은 텐서를 들여다보기를 포기하고 대신 인증한다. HMAC-SHA256 매니페스트가 스페셜리스트 신원, 세션, 모델, 가시 커밋먼트의 해시, 텐서 메타데이터, 페이로드 다이제스트를 묶는다. 정상 재생 774/774를 통과시키고 변조본 295/295를 거부한다. 완벽하지만 들리는 것보다 좁다. 비판 노트를 보라.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Build a task where no one agent can win alone. </span><span class="t-ko">혼자서는 못 푸는 과제를 만든다. </span></b><span class="t-en">65 HiddenBench records are transformed into split-evidence form, so the answer exists only in the union of the partitions. HotPotQA (7,405 records) serves as the large secondary. Qwen3-4B is primary, Qwen3-8B replicates; greedy decoding, fp16, 32 new tokens.</span><span class="t-ko">HiddenBench 65개 레코드를 증거 분할 형태로 변환해, 정답이 각 조각의 합집합에만 존재하도록 만든다. HotPotQA(7,405개)가 대규모 보조 벤치마크다. Qwen3-4B가 주 모델, Qwen3-8B가 재현용이며 그리디 디코딩, fp16, 새 토큰 32개다.</span></li>
+      <li><b><span class="t-en">Establish that latent actually beats text. </span><span class="t-ko">잠재가 정말 텍스트를 이기는지부터 확인한다. </span></b><span class="t-en">0.338/0.486 vs 0.231/0.369 on HiddenBench, and it also beats the full-evidence oracle (0.277/0.403) and independent majority vote (0.185/0.336). Qwen3-8B: 0.415/0.544 vs 0.262/0.392, McNemar p=0.0309. HotPotQA at 7,405 records: 0.450/0.625 vs 0.244/0.397. Latency is lower too (2.379 s vs 3.009 s estimated parallel critical path) — paid for with 279 MB of KV per example.</span><span class="t-ko">HiddenBench에서 0.338/0.486 대 0.231/0.369이고, 전체 증거 오라클(0.277/0.403)과 독립 다수결(0.185/0.336)도 이긴다. Qwen3-8B는 0.415/0.544 대 0.262/0.392, McNemar p=0.0309. HotPotQA 7,405개에서는 0.450/0.625 대 0.244/0.397. 지연도 더 낮다(추정 병렬 임계경로 2.379초 대 3.009초). 그 대가가 예제당 279 MB의 KV다.</span></li>
+      <li><b><span class="t-en">Compromise one specialist per record and measure. </span><span class="t-ko">레코드당 스페셜리스트 하나를 오염시키고 측정한다. </span></b><span class="t-en">The lying-in-text attack costs 0.092 EM. The two crude hidden-state attacks cost everything: 21 of 21 clean-correct answers flip, EM hits 0.000. Prompt-token KV is left intact throughout — only the generated latent thoughts are touched, which is the part a serving system would treat as the agent's own contribution.</span><span class="t-ko">텍스트로 거짓말하는 공격은 EM 0.092를 깎는다. 조잡한 은닉 상태 공격 둘은 전부를 가져간다. 맞았던 답 21개가 21개 모두 뒤집히고 EM은 0.000이 된다. 프롬프트 토큰 KV는 내내 손대지 않는다. 오직 생성된 잠재 사고만 건드리는데, 서빙 시스템이 그 에이전트 고유의 기여로 취급할 바로 그 부분이다.</span></li>
+      <li><b><span class="t-en">Try to catch it, three ways. </span><span class="t-ko">세 가지 방식으로 잡아 보려 한다. </span></b><span class="t-en">Visible verifier filtering: fails — plausible commitments mask corrupted KV, and it rejects honest specialists besides. Magnitude quarantine: 65/65 on naive attacks with zero honest false positives, 0/65 on the white-box attack. Learned sanitizer with cross-fitted anomaly scores: loses to a random-drop control once the attacker optimizes against the detector.</span><span class="t-ko">가시 검증자 필터링은 실패한다. 그럴듯한 커밋먼트가 오염된 KV를 가리는 데다, 정상 스페셜리스트까지 거부한다. 크기 기반 격리는 조잡한 공격에 65/65, 정상 오탐 0이지만 화이트박스 공격에는 0/65다. 교차 적합 이상 점수를 쓰는 학습형 세니타이저는, 공격자가 탐지기를 겨냥해 최적화하는 순간 무작위 드롭 대조군에게 진다.</span></li>
+      <li><b><span class="t-en">Move the problem to the wire. </span><span class="t-ko">문제를 전송 계층으로 옮긴다. </span></b><span class="t-en">Sign the payload with an HMAC manifest, and on a verification failure fail closed — either drop that specialist's KV (HiddenBench recovers to 0.338/0.476) or downgrade it to its visible text (HotPotQA slice: 0.460/0.597 vs 0.450/0.592 for drop). Detection of tampering becomes exact because it is a cryptographic question, not a statistical one.</span><span class="t-ko">HMAC 매니페스트로 페이로드에 서명하고, 검증 실패 시 fail-closed로 간다. 해당 스페셜리스트의 KV를 버리거나(HiddenBench 0.338/0.476로 회복) 그 가시 텍스트로 격하한다(HotPotQA 슬라이스: 격하 0.460/0.597, 드롭 0.450/0.592). 변조 탐지가 정확해지는 이유는 그것이 통계 문제가 아니라 암호학 문제가 되기 때문이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">If you are building latent inter-agent communication, you are building an unauthenticated RPC that writes directly into another model's attention state. Every latent-communication paper in this archive — LatentMAS, Latent Cache Flow, StateBridge, the unified framework (2606.05711) — assumes cooperative senders. This paper is the first here to price what happens when that assumption is false, and the price is the entire task.</p><p class="t-ko">잠재 에이전트 간 통신을 만들고 있다면, 당신은 다른 모델의 어텐션 상태에 직접 쓰는 인증 없는 RPC를 만들고 있는 것이다. 이 아카이브의 모든 잠재 통신 논문 — LatentMAS, Latent Cache Flow, StateBridge, 통합 프레임워크(2606.05711) — 은 협조적인 송신자를 가정한다. 이 논문은 그 가정이 거짓일 때의 대가를 처음으로 계산하며, 그 대가는 과제 전체다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Auditing the wrong channel is worse than not auditing. The verifier reads sentences, so it rejects honest specialists on the basis of awkward phrasing while waving through a specialist whose tensor has been randomized. Turning it on made the targeted-false branch worse, dropped clean utility from 0.338/0.486 to 0.308/0.442, and nearly doubled the critical path to 4.470 s — all while catching none of the hidden-state attacks. A safety layer aimed at the visible channel buys confidence, not safety.</p><p class="t-ko">엉뚱한 채널을 감사하는 것은 감사하지 않는 것보다 나쁘다. 검증자는 문장을 읽으므로, 어색한 표현을 근거로 정직한 스페셜리스트를 거부하면서 텐서가 난수화된 스페셜리스트는 통과시킨다. 실제로 검증자 필터링은 targeted-false 분기를 더 나쁘게 만들었고, 대역폭 절감 133 MB를 아무 대가 없이 써버렸다. 가시 채널을 겨눈 안전 계층은 안전이 아니라 안심을 산다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">The honest finding is negative and it is the useful one: latent anomaly detection lost to every adaptive attacker they tried, and the authors say so instead of tuning the threshold until a table looked good. The constructive answer they land on — authenticate the object, do not inspect it — is the standard answer from distributed systems, and it arrives here because the ML defenses were tested properly enough to fail.</p><p class="t-ko">정직한 발견은 부정적인 쪽이고, 쓸모 있는 쪽도 그쪽이다. 잠재 이상 탐지는 시도한 모든 적응형 공격자에게 졌고, 저자들은 표가 예뻐 보일 때까지 임계값을 조정하는 대신 그렇다고 적었다. 이들이 도달한 건설적 답 — 객체를 들여다보지 말고 인증하라 — 은 분산 시스템의 표준 답이며, ML 방어가 실패할 만큼 제대로 시험됐기 때문에 여기에 도달했다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the headline defense does not defend against the paper's own headline attack. The HMAC manifest authenticates a payload <i>after</i> an honest specialist produced it — it stops an on-path tamperer, and the authors are explicit that it assumes an uncompromised endpoint. But every attack that reduced EM to 0.000 came from a compromised specialist signing its own malicious KV, which a valid manifest would happily certify. The fail-closed recoveries (0.338/0.476) are measured against <i>recorded tampered payloads</i>, not against the endpoint adversary the threat model opens with. So the paper's real result is a gap, not a fix: crude endpoint attacks are catchable by a magnitude heuristic, adaptive endpoint attacks are catchable by nothing here, and cryptography answers a different question. Add the scale — 65 records, 4B/8B models, 32 generated tokens, one compromised specialist per record, and a two-specialist slice that already fails to degrade monotonically (target selected on only 5/16) — and this is a well-argued alarm, not a characterized threat surface.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 방어가 이 논문 자신의 대표 공격을 막지 못한다. HMAC 매니페스트는 정직한 스페셜리스트가 만들어낸 <i>이후</i>의 페이로드를 인증한다. 경로상 변조자는 막지만, 저자들도 엔드포인트가 오염되지 않았다고 가정한다고 명시한다. 그런데 EM을 0.000으로 떨어뜨린 공격은 모두 오염된 스페셜리스트가 자기 악성 KV에 스스로 서명한 경우이고, 유효한 매니페스트는 그것을 기꺼이 보증한다. fail-closed 복구치(0.338/0.476) 역시 위협 모델이 서두에 내세운 엔드포인트 공격자가 아니라 <i>기록된 변조 페이로드</i>를 기준으로 측정됐다. 그래서 이 논문의 실제 결과는 해법이 아니라 공백이다. 조잡한 엔드포인트 공격은 크기 휴리스틱으로 잡히고, 적응형 엔드포인트 공격은 여기 있는 무엇으로도 잡히지 않으며, 암호학은 다른 질문에 답한다. 규모까지 더하면 — 65개 레코드, 4B/8B 모델, 생성 토큰 32개, 레코드당 오염 스페셜리스트 1개, 그리고 이미 단조 열화에 실패하는 2인 오염 슬라이스(타깃 선택 16개 중 5개) — 이것은 잘 논증된 경보이지, 규명된 위협 표면은 아니다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.28958">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.28958">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.28958">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.28958">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is fully drained, so this came from the fallback search; no conference acceptance is claimed on the preprint. Picked over four higher-voted KV-compression candidates because the archive has run five straight cache-compression papers, and this one attacks the same object from the opposite side: not how small the KV cache can get, but whether you can trust one that arrived over a network. It is also the adversarial counterweight to the latent-communication thread — LatentMAS, Latent Cache Flow, StateBridge and 2606.05711 all assume the sender is honest</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 완전히 소진되어 폴백 검색에서 골랐다. 프리프린트이며 학회 accept는 주장되지 않는다. 득표가 더 높은 KV 압축 후보 네 편을 제치고 고른 이유는, 아카이브가 캐시 압축 논문을 내리 다섯 편 다뤘고 이 논문은 같은 대상을 반대편에서 공격하기 때문이다. KV 캐시를 얼마나 작게 만들 수 있는가가 아니라, 네트워크를 타고 도착한 캐시를 믿어도 되는가를 묻는다. 잠재 통신 흐름에 대한 적대적 균형추이기도 하다. LatentMAS, Latent Cache Flow, StateBridge, 2606.05711은 모두 송신자가 정직하다고 가정한다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
