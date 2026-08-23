@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · VarRate</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache</span><span class="t-ko">Model Compression · KV 캐시</span></span>
+      <span>2026 · 08 · 23</span>
+    </div>
+    <h1>VarRate<br>
+      <span class="glow t-en">— don't delete the token, just blur it</span>
+      <span class="glow t-ko">— 토큰을 지우지 말고, 흐리게 만들어라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Shahrzad Esmat</b> <span class="t-en">, Dhawal Shah, Ali Jannesari</span><span class="t-ko">, Dhawal Shah, Ali Jannesari</span></span>
+      <span>🏛 Iowa State University</span>
+      <span>🗓 2026-07-16</span>
+      <span>📄 <a href="https://arxiv.org/abs/2607.15498">arXiv:2607.15498</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Every training-free KV cache compressor makes one bet: which tokens matter. VarRate's point is that the bet is sometimes wrong, and what matters is what happens when it is. Token-selection methods answer by <b>deleting</b> — and a deleted token cannot come back, so a stale importance signal costs 12–18 points. Uniform low-rank coding keeps every token but spends the same rank on all of them. VarRate takes the third option: keep every token, but give each one a <b>rank proportional to its salience</b>, via water-filling over a fixed memory budget. A misjudged token is then merely coarsened, never lost. At a 20% KV budget it lands within 0.3 (Llama) / 0.8 (Qwen) points of the uncompressed model, and when the compressed context is reused for a different question it loses 3.7–6.4 points where SnapKV loses 14–17.</p>
+    <p class="t-ko">학습 없는 KV 캐시 압축기는 모두 하나의 <b>베팅</b>을 한다. 어떤 토큰이 중요한가. VarRate의 논점은 그 베팅이 가끔 틀린다는 것, 그리고 정말 중요한 건 <b>틀렸을 때 무슨 일이 벌어지는가</b>라는 것이다. 토큰 선택 계열은 <b>삭제</b>로 답한다 — 지워진 토큰은 돌아오지 않으므로, 중요도 신호가 낡으면 12~18점을 잃는다. 균일 저랭크 코딩은 모든 토큰을 남기지만 전부에게 똑같은 랭크를 쓴다. VarRate는 세 번째 선택지를 잡는다. 모든 토큰을 남기되, 각각에게 <b>중요도에 비례하는 랭크</b>를 물 채우기(water-filling)로 고정 메모리 예산 안에서 배분한다. 잘못 판단된 토큰은 사라지는 게 아니라 그저 거칠어질 뿐이다. KV 예산 20%에서 무압축 대비 0.3점(Llama)·0.8점(Qwen) 차이에 안착하고, 압축된 문맥을 다른 질문에 재사용할 때 SnapKV가 14~17점을 잃는 자리에서 3.7~6.4점만 잃는다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The KV cache, not the weights, is what actually sets the memory ceiling at long context — and the standard way to shrink it quietly assumes you know the question in advance.</p>
+    <p class="lead t-ko">긴 문맥에서 메모리 상한을 실제로 정하는 것은 가중치가 아니라 KV 캐시다. 그리고 그것을 줄이는 표준적 방법은, 질문을 미리 안다고 조용히 가정한다.</p>
+    <p class="t-en">Token-selection compressors (SnapKV, Ada-KV, PyramidKV, H2O) score each token by the attention it draws from a recent observation window — which is to say, from the current query — and evict the losers. That works beautifully when the query is sitting right there in the context. It stops working the moment you do the thing production systems actually do: compress a long document <i>once</i> and serve many different questions off the same cache. The importance signal was fitted to a question that is no longer being asked, and because eviction is irreversible, there is no recovering from a bad call. This paper's framing is that both dominant training-free families are making the same mistake in opposite directions — one is rigidly discrete (keep or delete), the other rigidly uniform (same rank for everyone) — and that the fix is to make rank a <i>continuous, allocatable</i> resource.</p>
+    <p class="t-ko">토큰 선택 계열(SnapKV, Ada-KV, PyramidKV, H2O)은 각 토큰이 최근 관찰 윈도우 — 즉 현재 질의 — 로부터 받는 어텐션으로 점수를 매기고 낮은 것을 퇴출시킨다. 질의가 문맥 안에 함께 있을 때는 훌륭하게 작동한다. 그러나 실제 프로덕션이 하는 일, 즉 긴 문서를 <i>한 번</i> 압축해 여러 다른 질문에 같은 캐시로 응답하는 순간 무너진다. 중요도 신호는 더 이상 묻지 않는 질문에 맞춰져 있었고, 퇴출은 되돌릴 수 없으므로 잘못된 판단에서 회복할 길이 없다. 이 논문의 프레이밍은 이렇다. 지배적인 두 학습-없는 계열은 <i>반대 방향으로 같은 실수</i>를 하고 있다. 하나는 경직되게 이산적이고(남기거나 지우거나), 다른 하나는 경직되게 균일하다(모두에게 같은 랭크). 해법은 랭크를 <i>연속적이고 배분 가능한</i> 자원으로 만드는 것이다.</p>
+    <figure class="fig">
+      <img src="fig/2607.15498/fig1.svg" alt="Four schematic bar charts where each bar is a token and its height is the allocated rank. (a) Token selection: some bars are full height, the rest are deleted to zero. (b) Uniform low-rank coding: every bar has the same middling height. (c) Uncompressed: every bar at full height. (d) VarRate: bar heights vary continuously with token salience, and no bar falls below a nonzero floor.">
+      <figcaption class="t-en"><b>Figure 1.</b> Each bar is one token; its height is the rank that token gets. Panels (a), (b) and (d) all spend the <i>same</i> memory budget — only (c) is uncompressed. (a) Token selection keeps a few at full rank and deletes the rest to zero; the deleted KV is gone permanently, so a mistake cannot be undone. (b) Uniform low-rank coding keeps everyone but gives everyone the same middling rank — wasted on the easy tokens, starved on the critical ones. (d) VarRate lets the height vary continuously with salience while holding every token above a nonzero floor (r<sub>min</sub> = 16). The whole argument of the paper is visible in the shape of (d) versus (a): the same budget, but the failure mode is a shorter bar instead of a missing one.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> 막대 하나가 토큰 하나이고, 높이는 그 토큰이 받은 랭크다. (a)·(b)·(d)는 모두 <i>같은</i> 메모리 예산을 쓴다. (c)만 무압축이다. (a) 토큰 선택은 소수를 풀랭크로 남기고 나머지를 0으로 지운다. 지워진 KV는 영구히 사라지므로 실수를 되돌릴 수 없다. (b) 균일 저랭크 코딩은 전부를 남기지만 전부에게 똑같은 어중간한 랭크를 준다. 쉬운 토큰에는 낭비고, 결정적인 토큰에는 굶김이다. (d) VarRate는 높이가 중요도에 따라 연속적으로 변하되, 모든 토큰을 0이 아닌 바닥(r<sub>min</sub> = 16) 위에 붙들어 둔다. 논문의 주장 전체가 (d)와 (a)의 모양 차이에 들어 있다. 예산은 같지만, 실패의 모습이 '사라진 막대'가 아니라 '짧아진 막대'다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2607.15498</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">20%</div><div class="l"><span class="t-en">KV budget (5× compression) used for the headline comparison</span><span class="t-ko">주요 비교에 쓴 KV 예산 (5× 압축)</span></div></div>
+      <div class="stat"><div class="n">0.32</div><div class="l"><span class="t-en">points below the uncompressed ceiling on Llama, 16-task LongBench average</span><span class="t-ko">Llama·LongBench 16개 태스크 평균에서 무압축 상한과의 격차</span></div></div>
+      <div class="stat"><div class="n">+17.50</div><div class="l"><span class="t-en">points over its own uniform-rank ablation on Qwen (48.00 vs 30.50)</span><span class="t-ko">Qwen에서 자체 균일-랭크 어블레이션 대비 향상 (48.00 vs 30.50)</span></div></div>
+      <div class="stat"><div class="n">−3.70 / −6.42</div><div class="l"><span class="t-en">drop under query-agnostic reuse (Llama / Qwen), vs SnapKV's −14.16 / −16.86</span><span class="t-ko">질의-비의존 재사용 시 하락폭 (Llama / Qwen). SnapKV는 −14.16 / −16.86</span></div></div>
+      <div class="stat"><div class="n">+44.0%</div><div class="l"><span class="t-en">prefill overhead — against KVzip's +372.2% for comparable robustness</span><span class="t-ko">프리필 오버헤드. 비슷한 강건성을 내는 KVzip은 +372.2%</span></div></div>
+      <div class="stat"><div class="n">92%</div><div class="l"><span class="t-en">worst-case needle-in-a-haystack accuracy to 128K, where SnapKV bottoms at 48%</span><span class="t-ko">128K까지 needle-in-a-haystack 최악값. SnapKV의 최저는 48%</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The headline table</span><span class="t-ko">핵심 표</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> LongBench (16 tasks) at a matched 20% KV budget. Read the AVG-16 column with the memory column: KIVI-4 stores 31% of the cache — 1.55× everyone else — so it is not a matched-memory competitor. Among the compressors that actually spend 20%, VarRate has the best two-model mean (46.85), but note it is <i>third</i> on Llama alone. Its margin lives in Qwen and in the reuse setting of Table 2, not in the query-aware Llama average.</caption>
+        <caption class="t-ko"><b>표 1.</b> LongBench 16개 태스크, KV 예산 20% 동일 조건. AVG-16 열은 반드시 메모리 열과 함께 읽을 것. KIVI-4는 캐시의 31%를 저장한다 — 나머지의 1.55배 — 이므로 동일 메모리 경쟁자가 아니다. 실제로 20%를 쓰는 압축기들 중에서는 VarRate의 두 모델 평균(46.85)이 가장 높지만, Llama 단독으로는 <i>3위</i>라는 점을 놓치지 말 것. 우위는 질의-인지 Llama 평균이 아니라 Qwen과 표 2의 재사용 설정에 있다.</caption>
+        <thead><tr><th>method</th><th>mem</th><th>AVG-16 (Llama)</th><th>AVG-16 (Qwen)</th><th>two-model mean</th></tr></thead>
+        <tbody>
+          <tr><td>Full (ceiling)</td><td>100%</td><td>46.01</td><td>48.79</td><td>47.40</td></tr>
+          <tr><td>KIVI-4 †</td><td>31%</td><td>45.94</td><td>48.98</td><td>47.46</td></tr>
+          <tr><td><b>VarRate (ours)</b></td><td>20%</td><td>45.69</td><td><b>48.00</b></td><td class="up"><b>46.85</b></td></tr>
+          <tr><td>SnapKV</td><td>20%</td><td>45.79</td><td>46.25</td><td>46.02</td></tr>
+          <tr><td>PyramidKV</td><td>20%</td><td><b>46.02</b></td><td>44.90</td><td>45.46</td></tr>
+          <tr><td>Ada-KV</td><td>20%</td><td>45.33</td><td>46.49</td><td>45.91</td></tr>
+          <tr><td>KIVI-2</td><td>19%</td><td>44.82</td><td>46.82</td><td>45.82</td></tr>
+          <tr><td>flat (uniform rank)</td><td>20%</td><td>43.47</td><td>30.50</td><td>36.99</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas</span><span class="t-ko">두 개의 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">allocate, don't evict</span>
+        <h3>Water-filling over salience</h3>
+        <p class="t-en">Each coded token gets rank r<sub>t</sub> = clip(r<sub>min</sub> + λ·ŝ<sub>t</sub>, r<sub>min</sub>, R), where ŝ<sub>t</sub> is its normalized SnapKV salience and λ is tuned so the ranks sum exactly to the budget. This is a classic water-filling solution, and it is what turns compression from a discrete keep/drop decision into a continuous allocation. The floor r<sub>min</sub> guarantees no token ever reaches zero — though the ablation is candid that the floor is <i>slack</i>: 0.0% of coded tokens sit on it, so it is a safety margin against a pathological signal rather than an active mechanism at this operating point.</p>
+        <p class="t-ko">각 코딩 토큰은 r<sub>t</sub> = clip(r<sub>min</sub> + λ·ŝ<sub>t</sub>, r<sub>min</sub>, R)의 랭크를 받는다. ŝ<sub>t</sub>는 정규화된 SnapKV 중요도이고, λ는 랭크 합이 예산과 정확히 일치하도록 조정된다. 전형적인 물 채우기 해법이며, 압축을 '남길까 지울까'라는 이산적 결정에서 연속적 배분으로 바꾸는 장치다. 바닥값 r<sub>min</sub>은 어떤 토큰도 0에 닿지 않도록 보장한다 — 다만 어블레이션은 이 바닥이 <i>느슨하다</i>고 솔직히 밝힌다. 코딩 토큰의 0.0%만이 바닥에 걸리므로, 현재 작동점에서는 능동적 장치라기보다 병리적 신호에 대한 안전 마진이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">what gets coded</span>
+        <h3>Pre-RoPE residuals on a shared basis</h3>
+        <p class="t-en">Keys are un-rotated back to their pre-RoPE form and stacked with the values of every GQA head into one per-token vector, so a <i>single</i> basis serves the whole layer. A strided set of anchor tokens plus the recent window are stored exactly; everything else is coded as a residual against the mean of its nearest anchors. The basis itself is the top-R right singular vectors from an offline SVD over a handful of unlabeled calibration contexts — no gradients, no fine-tuning, and its storage is model-side rather than charged to the per-sequence budget.</p>
+        <p class="t-ko">키를 RoPE 이전 형태로 되돌린 뒤 모든 GQA 헤드의 값과 함께 하나의 토큰별 벡터로 쌓는다. 그래서 <i>하나의</i> 기저가 레이어 전체를 감당한다. 일정 간격의 앵커 토큰과 최근 윈도우는 정확히 저장하고, 나머지는 가장 가까운 앵커들의 평균에 대한 잔차로 코딩한다. 기저 자체는 소량의 레이블 없는 캘리브레이션 문맥에 대해 오프라인 SVD로 얻은 상위 R개 우특이벡터다. 그래디언트도 파인튜닝도 없으며, 저장 비용은 시퀀스별 예산이 아니라 모델 쪽에 귀속된다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Build the basis, once and offline. </span><span class="t-ko">기저를 한 번, 오프라인으로 만든다. </span></b><span class="t-en">Run a handful of unlabeled contexts through the model, collect per-layer residuals, take the top-R right singular vectors by SVD. The paper shows the spread across three independently built bases is ≤ 1.8 points — the method is not sensitive to which calibration texts you happened to pick.</span><span class="t-ko">레이블 없는 문맥 몇 개를 모델에 통과시켜 레이어별 잔차를 모으고, SVD로 상위 R개 우특이벡터를 취한다. 독립적으로 만든 세 기저 간 편차가 1.8점 이하임을 보인다. 어떤 캘리브레이션 텍스트를 골랐는지에 민감하지 않다는 뜻이다.</span></li>
+      <li><b><span class="t-en">Split the sequence into exact and coded. </span><span class="t-ko">시퀀스를 정확 집합과 코딩 집합으로 나눈다. </span></b><span class="t-en">Strided anchors and the recent window go into the cache at full fidelity. Every other token is expressed as a residual against the mean of its c nearest anchors in Euclidean distance.</span><span class="t-ko">일정 간격 앵커와 최근 윈도우는 full fidelity로 캐시에 들어간다. 나머지 토큰은 유클리드 거리 기준 가장 가까운 앵커 c개의 평균에 대한 잔차로 표현된다.</span></li>
+      <li><b><span class="t-en">Score salience, then water-fill. </span><span class="t-ko">중요도를 점수화한 뒤 물을 채운다. </span></b><span class="t-en">Take SnapKV's observation-window attention as the raw score, smooth it with a length-5 moving average, min-max normalize, then solve for the λ that makes the allocated ranks sum to the remaining budget.</span><span class="t-ko">SnapKV의 관찰 윈도우 어텐션을 원점수로 삼아 길이 5 이동평균으로 평활화하고 min-max 정규화한 뒤, 배분된 랭크 합이 잔여 예산과 같아지는 λ를 푼다.</span></li>
+      <li><b><span class="t-en">Project once at full rank, then mask. </span><span class="t-ko">풀랭크로 한 번 사영하고, 마스킹한다. </span></b><span class="t-en">The projection V·e<sub>t</sub> is computed at rank R for every token and simply truncated to the leading r<sub>t</sub> coefficients — which is why variable rate costs almost nothing in arithmetic over a fixed-rank codec. The coefficients are themselves quantizable: 3-bit is within noise of fp16 at less than half the memory.</span><span class="t-ko">사영 V·e<sub>t</sub>는 모든 토큰에 대해 랭크 R로 계산한 뒤 선행 r<sub>t</sub>개 계수만 남기고 자른다. 가변 레이트가 고정 랭크 코덱 대비 연산상 거의 공짜인 이유다. 계수 자체도 양자화 가능하다. 3비트에서 메모리는 절반 이하이면서 정확도는 fp16과 노이즈 범위 내다.</span></li>
+      <li><b><span class="t-en">Reconstruct a full-length cache at decode. </span><span class="t-ko">디코드 시 원래 길이의 캐시를 복원한다. </span></b><span class="t-en">Add the reconstructed residual back to the anchor mean, split into key and value, re-apply RoPE to the key. Decode runs at 37.4 tok/s against the uncompressed 37.5 — unchanged, because the attention still sees every position.</span><span class="t-ko">복원된 잔차를 앵커 평균에 더하고 키와 값으로 나눈 뒤 키에 RoPE를 다시 적용한다. 디코드는 무압축 37.5 tok/s 대비 37.4 tok/s로 사실상 동일하다. 어텐션이 여전히 모든 위치를 보기 때문이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The real contribution is a <b>failure mode</b>, not a benchmark number. At matched memory and a query-aware setting, VarRate merely ties the selection family. Its argument only pays off when the importance signal is stale — which is exactly the prefix-caching and multi-turn regime that production serving lives in.</p><p class="t-ko">진짜 기여는 벤치마크 숫자가 아니라 <b>실패 양상</b>이다. 동일 메모리·질의 인지 설정에서 VarRate는 토큰 선택 계열과 그저 비긴다. 이 논문의 논지는 중요도 신호가 낡았을 때 비로소 값을 한다 — 그리고 그것이 바로 프로덕션 서빙이 살아가는 프리픽스 캐싱·멀티턴 영역이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The <b>flat ablation is the most informative row in the paper</b>: uniform rank collapses to 30.50 on Qwen while VarRate reaches 48.00. Qwen has fewer KV heads, so it is far less forgiving of spending rank uniformly. Low-rank KV coding fails or succeeds on the <i>allocation policy</i>, not on the basis.</p><p class="t-ko">논문에서 가장 많은 것을 말해주는 줄은 <b>flat 어블레이션</b>이다. Qwen에서 균일 랭크는 30.50으로 붕괴하는데 VarRate는 48.00에 이른다. Qwen은 KV 헤드가 적어 랭크를 균일하게 쓰는 것을 훨씬 덜 용서한다. 저랭크 KV 코딩의 성패는 기저가 아니라 <i>배분 정책</i>에서 갈린다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Compression axes are <b>composable</b>. VarRate sits on the rank axis, quantization on the precision axis, and the paper shows 4-bit coefficients take the footprint from 20.2% to 11.0% for +1.9% more prefill. If you are building a serving stack, these stack rather than compete.</p><p class="t-ko">압축 축은 <b>조합 가능하다</b>. VarRate는 랭크 축에, 양자화는 정밀도 축에 있으며, 4비트 계수가 저장량을 20.2%에서 11.0%로 낮추는 대가가 프리필 +1.9%에 불과함을 보인다. 서빙 스택을 짜고 있다면 이들은 경쟁이 아니라 누적된다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the efficiency story does not close. VarRate pays <b>+44.0% prefill</b> and returns <b>zero decode speedup</b> (37.4 vs 37.5 tok/s) because it reconstructs a full-length cache — so today it buys memory, not latency, and the authors concede a fused kernel would be needed for runtime savings. Meanwhile the headline accuracy win is thinner than the framing suggests: on Llama's query-aware 16-task average VarRate (45.69) actually sits <i>behind</i> PyramidKV (46.02) and SnapKV (45.79), and the two-model lead is carried almost entirely by Qwen. The honest claim is narrower than "best compressor" — it is "same accuracy, much better worst case, at one-eighth of KVzip's cost."</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 효율 이야기가 닫히지 않는다. VarRate는 <b>프리필 +44.0%</b>를 지불하고 <b>디코드 가속은 0</b>이다(37.4 vs 37.5 tok/s). 원래 길이의 캐시를 복원하기 때문이다. 즉 지금으로선 메모리를 살 뿐 지연시간을 사지 못하며, 저자들도 런타임 절감에는 융합 커널이 필요하다고 인정한다. 한편 정확도 우위는 프레이밍이 암시하는 것보다 얇다. Llama의 질의-인지 16태스크 평균에서 VarRate(45.69)는 실은 PyramidKV(46.02)와 SnapKV(45.79)에 <i>뒤진다</i>. 두 모델 평균의 우위는 거의 전적으로 Qwen이 떠받친다. 정직한 주장은 "최고의 압축기"보다 좁다. "정확도는 동급, 최악의 경우는 훨씬 낫고, 비용은 KVzip의 8분의 1"이다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2607.15498">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2607.15498">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2607.15498">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2607.15498">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is fully drained, so this came from the fallback search; no conference acceptance is claimed on the preprint. It was the highest-voted unprocessed candidate and the most thoroughly evidenced (24 tables, paired bootstraps with confidence intervals, negative controls). It also completes a thread the archive has been building: AATC compressed the KV cache by transform coding and C2KV made it reusable, and VarRate is the paper that asks what happens when the importance signal those methods depend on turns out to be wrong</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-23.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 완전히 소진되어 폴백 검색에서 선정. 프리프린트에 학회 accept 표기 없음. 미처리 후보 중 득표가 가장 높았고 근거가 가장 두텁다(표 24개, 신뢰구간을 동반한 페어 부트스트랩, 네거티브 컨트롤). 또한 아카이브가 쌓아온 흐름을 완성한다. AATC가 변환 부호화로 KV 캐시를 압축했고 C2KV가 그것을 재사용 가능하게 만들었다면, VarRate는 그 방법들이 의존하는 중요도 신호가 틀렸을 때 무슨 일이 벌어지는지를 묻는 논문이다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-23.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
