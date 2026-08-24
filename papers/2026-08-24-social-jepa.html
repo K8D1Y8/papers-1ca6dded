@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Social-JEPA</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Shared World Models · Multi-Agent</span><span class="t-ko">Shared World Models · 멀티에이전트</span></span>
+      <span>2026 · 08 · 24</span>
+    </div>
+    <h1>Social-JEPA<br>
+      <span class="glow t-en">— two models that never met, agreeing up to a matrix</span>
+      <span class="glow t-ko">— 서로 만난 적 없는 두 모델이, 행렬 하나 차이로 같아진다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Haoran Zhang</b> <span class="t-en">… Xiao Zhou (corresponding)</span><span class="t-ko">… Xiao Zhou (교신저자)</span></span>
+      <span>🏛 Renmin University of China <span class="t-en">(+ Macau, Fudan, CSU, BIT)</span><span class="t-ko">(+ Macau, Fudan, CSU, BIT)</span></span>
+      <span>🗓 2026-02-28</span>
+      <span>📄 <a href="https://arxiv.org/abs/2603.02263">arXiv:2603.02263</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Train two JEPA encoders on <b>different cameras looking at the same world</b>, with zero communication, zero shared parameters, zero cross-view loss term. The claim of this paper is that they nonetheless land in <b>the same latent space up to one invertible matrix</b> — fit a 384×384 ridge regression on ~1000 paired observations and you get R² = 0.891, distance-structure correlation 0.872, on a 0°-vs-160° viewpoint gap where the two images share almost no pixels. The theoretical hook is that the JEPA loss is invariant under GL(d) at zero prediction error, so nothing in the objective can pin down the basis — only the geometry. The payoff is a <b>0.6 MB collaboration interface</b>: ship W instead of raw sensor data, and a linear probe trained on agent 1 transfers to agent 2 analytically via W<sup>−T</sup> with no gradient steps, while a student guided by W reaches 85% probe accuracy in 35 epochs instead of 150 (0.28× FLOPs).</p>
+    <p class="t-ko">같은 세계를 보는 <b>서로 다른 카메라</b>로 JEPA 인코더 두 개를 각각 학습시킨다. 통신도, 파라미터 공유도, 교차 뷰 손실항도 없다. 그럼에도 두 모델이 <b>가역 행렬 하나 차이로 같은 잠재 공간</b>에 도달한다는 것이 이 논문의 주장이다. 쌍으로 맞춰진 관측 약 1000개에 384×384 릿지 회귀를 적합시키면 R² = 0.891, 거리구조 상관 0.872가 나온다. 두 이미지가 픽셀을 거의 공유하지 않는 0° 대 160° 시점 격차에서다. 이론적 고리는 JEPA 손실이 예측 오차 0에서 GL(d)에 대해 불변이라는 점이다. 목적함수가 기저(basis)를 특정할 수 없고, 기하만을 특정한다는 뜻이다. 결과물은 <b>0.6 MB짜리 협업 인터페이스</b>다. 원시 센서 데이터 대신 W를 보내면, 에이전트 1에서 학습한 선형 프로브가 W<sup>−T</sup>로 에이전트 2에 그래디언트 한 번 없이 해석적으로 이식되고, W의 안내를 받은 학생 모델은 프로브 정확도 85%에 150 에폭이 아니라 35 에폭(0.28× FLOPs)만에 도달한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Every multi-agent system pays a coordination tax somewhere. This paper argues that for predictive world models, most of that tax was never necessary — the agreement is already there, and you only need to <i>read</i> it.</p>
+    <p class="lead t-ko">모든 멀티에이전트 시스템은 어딘가에서 조율 비용을 지불한다. 이 논문은 예측적 world model에 관한 한 그 비용의 대부분이 애초에 불필요했다고 주장한다. 합의는 이미 존재하며, 우리는 그것을 <i>읽어내기만</i> 하면 된다는 것이다.</p>
+    <p class="t-en">The standing assumption in multi-view and multi-agent learning is that compatibility must be <b>engineered in</b>: paired training signals, cross-view contrastive terms, federated parameter averaging, a shared codebook. All of these require coupling at training time, which is exactly what a fleet of robots or a sensor network cannot afford — bandwidth, privacy, and independent deployment schedules all forbid it. This paper inverts the question. It trains models in a <b>strictly decentralized</b> setting and then asks, after the fact, how far apart they actually ended up. The answer it reports is: one matrix apart. If that holds, the interoperability problem stops being an architecture problem and becomes a <i>measurement</i> problem, and the interface between two agents collapses from "share your model" to "share 0.6 MB."</p>
+    <p class="t-ko">멀티뷰·멀티에이전트 학습의 통념은 호환성을 <b>설계로 집어넣어야</b> 한다는 것이다. 쌍을 이룬 학습 신호, 교차 뷰 대조 항, 연합 파라미터 평균, 공유 코드북. 이 모두는 학습 시점의 결합을 요구하는데, 로봇 편대나 센서 네트워크가 감당할 수 없는 것이 바로 그것이다. 대역폭도, 프라이버시도, 각자 다른 배포 일정도 그것을 금지한다. 이 논문은 질문을 뒤집는다. <b>엄격히 분산된</b> 조건에서 모델들을 학습시킨 뒤, 사후에 묻는다. 이들이 실제로 얼마나 멀어졌는가. 논문이 내놓는 답은 "행렬 하나만큼"이다. 이것이 성립한다면 상호운용성 문제는 아키텍처 문제이길 그만두고 <i>측정</i> 문제가 되며, 두 에이전트 사이의 인터페이스는 "네 모델을 공유하라"에서 "0.6 MB를 공유하라"로 축소된다.</p>
+    <figure class="fig">
+      <img src="fig/2603.02263/fig3-overview.png" alt="Three-stage schematic. Stage 1: two vision-language agents observe the same physical world through view1 and view2, each feeding its own JEPA encoder, producing a blue point cloud and a red point cloud labelled with the same object names, joined by an arrow marked Linear Isomorphism. Stage 2: two stacks of 384-dimensional latents joined by a 384x384 alignment matrix, with before/after scatter plots showing two separated blobs merging into one. Stage 3: three collaboration primitives — zero-cost knowledge transfer via P_student = P_teacher · W-inverse, teacher-student migration, and mutual teaching with a cross-model loss.">
+      <figcaption class="t-en"><b>Figure 3.</b> The whole paper in one diagram. <b>Stage 1</b> is the setup that makes the claim non-trivial: two agents see the <i>same</i> shared semantic state through different observation functions, and each trains its own encoder under its own JEPA loss — the two towers never touch. The blue and red point clouds carry the same labels (robot, car, horse, obstacle) in different coordinate frames. <b>Stage 2</b> is the measurement: a single 384×384 matrix, fit post hoc, and the before/after scatter that the metrics R², DSC and NOS@k are quantifying — two separated blobs becoming one. <b>Stage 3</b> is what the matrix buys: a probe transferred by W<sup>−1</sup> with no training, a student steered toward the teacher's geometry, and a symmetric variant where both models pull on each other through ‖z<sup>(1)</sup> − W z<sup>(2)</sup>‖².</figcaption>
+      <figcaption class="t-ko"><b>그림 3.</b> 논문 전체가 담긴 한 장. <b>Stage 1</b>은 주장을 자명하지 않게 만드는 설정이다. 두 에이전트가 <i>같은</i> 공유 의미 상태를 서로 다른 관측 함수로 보고, 각자의 JEPA 손실로 각자의 인코더를 학습한다. 두 타워는 결코 닿지 않는다. 파란 점구름과 빨간 점구름은 같은 라벨(robot, car, horse, obstacle)을 서로 다른 좌표계에 담고 있다. <b>Stage 2</b>는 측정이다. 사후에 적합시킨 384×384 행렬 하나, 그리고 R²·DSC·NOS@k가 수치화하고 있는 정렬 전/후 산점도 — 떨어져 있던 두 덩어리가 하나가 된다. <b>Stage 3</b>은 그 행렬이 사주는 것이다. 학습 없이 W<sup>−1</sup>로 이식되는 프로브, 교사의 기하로 유도되는 학생, 그리고 ‖z<sup>(1)</sup> − W z<sup>(2)</sup>‖²로 서로를 끌어당기는 대칭 변형.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure (Figure 3)</span><span class="t-ko">출처: 논문 원본 그림 (Figure 3)</span> · arXiv:2603.02263</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.891</div><div class="l"><span class="t-en">R² of a single linear map across a 0° vs 160° viewpoint gap (smallNORB)</span><span class="t-ko">0° 대 160° 시점 격차에서 선형 사상 하나의 R² (smallNORB)</span></div></div>
+      <div class="stat"><div class="n">384×384</div><div class="l"><span class="t-en">size of the entire inter-agent interface — about 0.6 MB in fp32</span><span class="t-ko">에이전트 간 인터페이스 전체의 크기. fp32로 약 0.6 MB</span></div></div>
+      <div class="stat"><div class="n">0.28×</div><div class="l"><span class="t-en">FLOPs for a student to reach 85% probe accuracy — 35 epochs, not 150</span><span class="t-ko">학생이 프로브 정확도 85%에 도달하는 FLOPs. 150 에폭이 아니라 35 에폭</span></div></div>
+      <div class="stat"><div class="n">0.872 → 0.280</div><div class="l"><span class="t-en">DSC collapse when spatial structure is destroyed by pixel shuffling</span><span class="t-ko">픽셀 셔플로 공간 구조를 파괴했을 때 DSC 붕괴</span></div></div>
+      <div class="stat"><div class="n">0.489</div><div class="l"><span class="t-en">R² on ImageNet-1k — the same phenomenon, but far weaker than on smallNORB</span><span class="t-ko">ImageNet-1k에서의 R². 같은 현상이지만 smallNORB보다 훨씬 약하다</span></div></div>
+      <div class="stat"><div class="n">~500–1000</div><div class="l"><span class="t-en">paired observations needed before W stabilizes (κ(W) diagnostic)</span><span class="t-ko">W가 안정되기까지 필요한 쌍 관측 수 (κ(W) 진단)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The headline table</span><span class="t-ko">핵심 표</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2.</b> Cross-model alignability by SSL paradigm, same backbone and same alignment protocol. Read the two panels against each other, because they do not say the same thing. On <b>ImageNet-1k</b> Social-JEPA wins the scale-invariant metrics outright. On <b>smallNORB</b> it does not: MoCo v3 reaches R² = 0.987 and DSC = 0.994 against JEPA's 0.891 / 0.872, and DINO and iBOT beat it on NOS@10. The paper's defence is that raw MSE is not comparable across paradigms with different representation norms (MoCo v3's ImageNet MSE is 54.343) and that JEPA has the best <i>balance</i> — a fair point, but a narrower claim than "JEPA aligns best."</caption>
+        <caption class="t-ko"><b>표 2.</b> SSL 패러다임별 교차 모델 정렬 가능성. 백본과 정렬 프로토콜 동일. 두 패널은 같은 말을 하지 않으므로 반드시 서로 대조해 읽을 것. <b>ImageNet-1k</b>에서 Social-JEPA는 스케일 불변 지표를 완승한다. <b>smallNORB</b>에서는 그렇지 않다. MoCo v3가 R² = 0.987, DSC = 0.994에 도달해 JEPA의 0.891 / 0.872를 앞서고, NOS@10에서는 DINO와 iBOT이 앞선다. 논문의 방어 논리는 표현 노름이 다른 패러다임 간에 raw MSE는 비교 불가라는 것(MoCo v3의 ImageNet MSE는 54.343)과 JEPA가 가장 좋은 <i>균형</i>을 갖는다는 것이다. 타당한 지적이지만, "JEPA가 가장 잘 정렬된다"보다는 좁은 주장이다.</caption>
+        <thead><tr><th>benchmark</th><th>method</th><th>MSE ↓</th><th>R² ↑</th><th>DSC ↑</th><th>NOS@10 ↓</th></tr></thead>
+        <tbody>
+          <tr><td>ImageNet-1k</td><td><b>Social-JEPA (ours)</b></td><td class="up"><b>0.091</b></td><td class="up"><b>0.489</b></td><td class="up"><b>0.584</b></td><td>0.033</td></tr>
+          <tr><td>ImageNet-1k</td><td>SimCLR</td><td>13.474</td><td>0.437</td><td>0.558</td><td>0.072</td></tr>
+          <tr><td>ImageNet-1k</td><td>MAE</td><td>10.023</td><td>0.409</td><td>0.450</td><td><b>0.028</b></td></tr>
+          <tr><td>ImageNet-1k</td><td>MoCo v3</td><td>54.343</td><td>0.358</td><td>0.521</td><td>0.086</td></tr>
+          <tr><td>ImageNet-1k</td><td>DINO</td><td>0.662</td><td>0.283</td><td>0.391</td><td>0.102</td></tr>
+          <tr><td>ImageNet-1k</td><td>iBOT</td><td>0.662</td><td>0.283</td><td>0.391</td><td>0.102</td></tr>
+          <tr><td>smallNORB</td><td><b>Social-JEPA (ours)</b></td><td><b>0.036</b></td><td>0.8908</td><td>0.872</td><td>0.27</td></tr>
+          <tr><td>smallNORB</td><td>MoCo v3</td><td>0.478</td><td><b>0.987</b></td><td><b>0.994</b></td><td>0.125</td></tr>
+          <tr><td>smallNORB</td><td>iBOT</td><td>24.433</td><td>0.851</td><td>0.916</td><td>0.130</td></tr>
+          <tr><td>smallNORB</td><td>DINO</td><td>93.641</td><td>0.811</td><td>0.913</td><td><b>0.046</b></td></tr>
+          <tr><td>smallNORB</td><td>MAE</td><td>0.041</td><td>0.8823</td><td>0.845</td><td>0.31</td></tr>
+          <tr><td>smallNORB</td><td>SimCLR</td><td>0.112</td><td>0.6778</td><td>0.641</td><td>0.52</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas</span><span class="t-ko">두 개의 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">why linear, and not something else</span>
+        <h3>GL(d) invariance as a licence</h3>
+        <p class="t-en">The JEPA loss is ‖p<sub>φ</sub>(z<sub>c</sub>) − sg(z<sub>t</sub>)‖². At zero prediction error this is invariant under the whole general linear group: replace the encoder f by Af and the predictor p(z) by A·p(A<sup>−1</sup>z), and the loss is bit-for-bit identical. So the objective <b>cannot</b> identify a basis — it can only identify a geometry, up to GL(d). That is usually filed under "non-identifiability" and treated as a nuisance. This paper reads it as a licence: if two optimal solutions on the same predictive structure can only differ by an element of GL(d), then a single invertible matrix is not a lucky empirical fit but the <i>exactly right</i> hypothesis class. The linear-latent-state model makes it concrete — if z<sup>(1)</sup> = A₁u(s) and z<sup>(2)</sup> = A₂u(s) + ε, the optimal map is simply A₂A₁<sup>−1</sup>.</p>
+        <p class="t-ko">JEPA 손실은 ‖p<sub>φ</sub>(z<sub>c</sub>) − sg(z<sub>t</sub>)‖²이다. 예측 오차가 0일 때 이 손실은 일반선형군 전체에 대해 불변이다. 인코더 f를 Af로, 예측기 p(z)를 A·p(A<sup>−1</sup>z)로 바꿔도 손실은 비트 단위로 동일하다. 즉 목적함수는 기저를 <b>특정할 수 없고</b>, 오직 GL(d)를 상수배로 하는 기하만을 특정한다. 보통 이것은 "비식별성"으로 분류되어 골칫거리 취급을 받는다. 이 논문은 이를 면허로 읽는다. 같은 예측 구조 위의 두 최적해가 GL(d)의 원소만큼만 다를 수 있다면, 가역 행렬 하나는 운 좋게 맞아떨어진 경험적 적합이 아니라 <i>정확히 옳은</i> 가설 공간이다. 선형 잠재상태 모델이 이를 구체화한다. z<sup>(1)</sup> = A₁u(s), z<sup>(2)</sup> = A₂u(s) + ε이면 최적 사상은 그냥 A₂A₁<sup>−1</sup>이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">how you check it honestly</span>
+        <h3>Four metrics, because one lies</h3>
+        <p class="t-en">A single alignment number is easy to game, so isomorphism is treated as an <b>operational, testable</b> property: fit W on a training split of paired states, report on a disjoint test split, and report four things at once. R² and MSE measure global linear fit. Linear CKA and DSC (Spearman correlation of pairwise distances) measure whether the <i>relational</i> structure survives. NOS@k — one minus k-NN overlap — measures whether local neighbourhoods survive, which is the part that actually matters for retrieval and transfer. The paper is explicit that raw MSE is misleading across paradigms because representation norms differ wildly, and the numbers bear that out: MoCo v3's ImageNet MSE of 54.343 sits next to a perfectly respectable DSC of 0.521. κ(W), the condition number, is carried as a fifth diagnostic for whether W is trustworthy at all.</p>
+        <p class="t-ko">정렬 수치 하나는 조작하기 쉽다. 그래서 동형성을 <b>조작적이고 검증 가능한</b> 성질로 다룬다. 쌍으로 맞춘 상태의 학습 분할에서 W를 적합시키고, 분리된 테스트 분할에서 보고하되, 네 가지를 한꺼번에 본다. R²와 MSE는 전역 선형 적합을, 선형 CKA와 DSC(쌍별 거리의 스피어만 상관)는 <i>관계</i> 구조가 살아남는지를 측정한다. NOS@k — k-NN 중첩의 1 빼기 값 — 는 국소 이웃이 보존되는지를 보는데, 검색과 전이에서 실제로 중요한 부분이 이것이다. 논문은 표현 노름이 크게 다르므로 패러다임 간 raw MSE가 오도적이라고 명시하며, 숫자가 이를 뒷받침한다. MoCo v3의 ImageNet MSE 54.343 옆에 꽤 준수한 DSC 0.521이 놓여 있다. 조건수 κ(W)는 W를 애초에 신뢰할 수 있는지에 대한 다섯 번째 진단으로 함께 실린다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Train two encoders that never meet. </span><span class="t-ko">서로 만나지 않는 인코더 두 개를 학습한다. </span></b><span class="t-en">ViT-S/16 backbones, I-JEPA-style objective, one per observation channel: smallNORB at 0° and 160°, nuScenes front vs rear and front vs side cameras, ImageNet-1k under two different augmentation pipelines. No parameter sharing, no cross-view loss term, no communication of any kind during pretraining.</span><span class="t-ko">ViT-S/16 백본, I-JEPA 계열 목적함수, 관측 채널마다 하나씩. smallNORB의 0°와 160°, nuScenes의 전방 대 후방·전방 대 측방 카메라, 그리고 두 가지 다른 증강 파이프라인을 쓴 ImageNet-1k. 사전학습 동안 파라미터 공유도, 교차 뷰 손실항도, 어떤 형태의 통신도 없다.</span></li>
+      <li><b><span class="t-en">Collect paired observations of the same states. </span><span class="t-ko">같은 상태에 대한 쌍 관측을 모은다. </span></b><span class="t-en">Pairs are constructed by matching object instances (smallNORB), timestamps (nuScenes), or image IDs (ImageNet). This is the one place the method needs coordination, and the pair-budget study puts the requirement at roughly 500–1000 pairs before W and its condition number settle.</span><span class="t-ko">쌍은 객체 인스턴스(smallNORB), 타임스탬프(nuScenes), 이미지 ID(ImageNet)를 맞춰 구성한다. 이 방법이 조율을 필요로 하는 유일한 지점이며, 쌍 예산 연구는 W와 그 조건수가 안정되는 데 대략 500~1000쌍이 필요하다고 말한다.</span></li>
+      <li><b><span class="t-en">Fit one matrix by ridge regression. </span><span class="t-ko">릿지 회귀로 행렬 하나를 적합시킨다. </span></b><span class="t-en">W* = argmin<sub>W</sub> Σ‖z<sup>(2)</sup><sub>n</sub> − W z<sup>(1)</sup><sub>n</sub>‖², solved with ridge regularization for numerical stability. For metrics that need a common frame, model 2's latents are pulled back with W<sup>−1</sup>, or the Moore–Penrose pseudoinverse when W is ill-conditioned. That is the entire alignment procedure — no gradients through either encoder.</span><span class="t-ko">W* = argmin<sub>W</sub> Σ‖z<sup>(2)</sup><sub>n</sub> − W z<sup>(1)</sup><sub>n</sub>‖²를 수치 안정성을 위해 릿지 정규화로 푼다. 공통 좌표계가 필요한 지표에서는 모델 2의 잠재를 W<sup>−1</sup>로, W의 조건이 나쁘면 무어–펜로즈 유사역행렬로 되끌어온다. 정렬 절차는 이것이 전부다. 어느 인코더로도 그래디언트가 흐르지 않는다.</span></li>
+      <li><b><span class="t-en">Verify it is structure, not coincidence. </span><span class="t-ko">우연이 아니라 구조임을 검증한다. </span></b><span class="t-en">The negative control is the load-bearing experiment: destroy spatial structure by shuffling patches, and DSC falls 0.872 → 0.540; shuffle pixels outright and it falls to 0.280 with NOS@10 rising to 0.86. Layerwise CKA localizes the effect to the deeper layers, which is where the abstract, view-invariant content lives.</span><span class="t-ko">네거티브 컨트롤이 하중을 지탱하는 실험이다. 패치를 섞어 공간 구조를 파괴하면 DSC가 0.872 → 0.540으로 떨어지고, 픽셀을 통째로 섞으면 0.280까지 내려가며 NOS@10은 0.86으로 오른다. 레이어별 CKA는 이 효과를 깊은 층에 국소화하는데, 추상적이고 시점 불변적인 내용이 사는 곳이 거기다.</span></li>
+      <li><b><span class="t-en">Spend the matrix three ways. </span><span class="t-ko">그 행렬을 세 가지로 쓴다. </span></b><span class="t-en">(a) Probe sharing: a linear head a trained on model 1 becomes a<sup>(2)</sup> = W<sup>−T</sup>a on model 2, zero gradient steps, 0 FLOPs. (b) Teacher–student migration: add β‖z<sup>(T)</sup> − W<sub>t</sub>z<sup>(S)</sup>‖² to the student's own JEPA loss and it reaches the 85% threshold in 35 epochs versus 150 from scratch. (c) Mutual teaching: an online γ‖z<sup>(2)</sup> − W z<sup>(1)</sup>‖² term updates both models at once — 55 epochs versus 120, but at 1.12× FLOPs and requiring synchronized paired samples.</span><span class="t-ko">(a) 프로브 공유: 모델 1에서 학습한 선형 헤드 a는 모델 2에서 a<sup>(2)</sup> = W<sup>−T</sup>a가 된다. 그래디언트 0회, 0 FLOPs. (b) 교사–학생 이전: 학생의 JEPA 손실에 β‖z<sup>(T)</sup> − W<sub>t</sub>z<sup>(S)</sup>‖²를 더하면 85% 임계에 스크래치 150 에폭 대신 35 에폭에 도달한다. (c) 상호 교습: 온라인 γ‖z<sup>(2)</sup> − W z<sup>(1)</sup>‖² 항으로 두 모델을 동시에 갱신한다. 120 에폭 대신 55 에폭이지만 1.12× FLOPs이고 동기화된 쌍 샘플이 필요하다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The <b>negative control is what makes this a result</b> rather than an observation. Two networks trained on related data being linearly relatable is not surprising on its own — the surprise would be if it survived nothing. Patch shuffle takes DSC to 0.540 and pixel shuffle to 0.280, which says the alignment is riding on stable environmental structure and not on shared architecture, shared initialization, or shared data statistics.</p><p class="t-ko">이것을 단순한 관찰이 아니라 <b>결과</b>로 만드는 것은 네거티브 컨트롤이다. 관련된 데이터로 학습한 두 네트워크가 선형으로 연결된다는 것 자체는 놀랍지 않다. 놀라운 일은 그것이 아무것에도 견디지 못하는 경우일 것이다. 패치 셔플은 DSC를 0.540으로, 픽셀 셔플은 0.280으로 떨어뜨린다. 정렬이 공유된 아키텍처나 초기화, 데이터 통계가 아니라 안정적인 환경 구조 위에 올라타 있다는 뜻이다.</p></div>
+      <div class="t"><span class="ic">🔗</span><p class="t-en">If you build multi-agent systems, the actionable object here is <b>W as a protocol</b>. 0.6 MB is smaller than a single camera frame, it never exposes raw observations, and it is estimated post hoc — so agents can be trained, deployed, and versioned independently and negotiate compatibility afterwards. That is a genuinely different system architecture from federated averaging or a shared encoder.</p><p class="t-ko">멀티에이전트 시스템을 만든다면 여기서 실행 가능한 대상은 <b>프로토콜로서의 W</b>다. 0.6 MB는 카메라 프레임 하나보다 작고, 원시 관측을 결코 노출하지 않으며, 사후에 추정된다. 따라서 에이전트를 독립적으로 학습·배포·버전 관리하고 호환성은 나중에 협상할 수 있다. 연합 평균이나 공유 인코더와는 진짜로 다른 시스템 아키텍처다.</p></div>
+      <div class="t"><span class="ic">📉</span><p class="t-en">Read the ImageNet number, not the smallNORB number, as the realistic one. R² drops from 0.891 to <b>0.489</b> when the environment stops being a turntable of toy objects. The phenomenon is real in both, but its <i>strength</i> is a function of how tightly the shared latent state constrains the observations — and most interesting environments look more like ImageNet than like smallNORB.</p><p class="t-ko">현실적인 수치로 읽어야 할 것은 smallNORB가 아니라 ImageNet 쪽이다. 환경이 장난감 객체의 턴테이블이기를 그만두는 순간 R²는 0.891에서 <b>0.489</b>로 떨어진다. 현상 자체는 양쪽 모두에서 진짜지만, 그 <i>강도</i>는 공유 잠재 상태가 관측을 얼마나 빡빡하게 구속하는지의 함수다. 그리고 흥미로운 환경 대부분은 smallNORB보다 ImageNet을 닮았다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the framing and the method pull in opposite directions. The motivation is that agents <i>cannot</i> exchange raw observations — bandwidth, privacy, independent pipelines — yet estimating W requires <b>500–1000 paired observations of the same states</b>, matched by instance, timestamp or image ID. Establishing that correspondence is precisely the cross-agent coordination the paper says is infeasible, and the pair-noise test shows it is not a formality: at only 10% mismatched pairs R² falls 0.891 → 0.814 and κ(W) explodes from 1.68 to 14.38. Two further things weaken the "JEPA aligns best" headline. On smallNORB <b>MoCo v3 beats it decisively</b> (R² 0.987 vs 0.891, DSC 0.994 vs 0.872), so the claim rests on the ImageNet panel plus a metric-balance argument. And DINO and iBOT report <b>byte-identical rows</b> on ImageNet-1k (0.662 / 0.283 / 0.391 / 0.102), which is either a transcription error or one run reported twice — in a paper whose appendix still labels Table 6 an "example template," that is worth checking before anyone builds on these baselines. Finally, "zero-cost probe sharing" lands at <b>51.70%</b> absolute, only +2.11 over simply reusing the source probe, so the headline efficiency story is really the teacher–student result, not the probe transfer.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 프레이밍과 방법이 서로 반대 방향으로 당긴다. 동기는 에이전트가 원시 관측을 <i>교환할 수 없다</i>는 것 — 대역폭, 프라이버시, 독립적 파이프라인 — 인데, 정작 W를 추정하려면 인스턴스·타임스탬프·이미지 ID로 맞춘 <b>같은 상태의 쌍 관측 500~1000개</b>가 필요하다. 그 대응 관계를 확립하는 일이야말로 논문이 불가능하다고 말한 바로 그 에이전트 간 조율이다. 그리고 쌍 노이즈 실험은 이것이 형식적 문제가 아님을 보인다. 쌍의 10%만 어긋나도 R²는 0.891 → 0.814로 떨어지고 κ(W)는 1.68에서 14.38로 폭발한다. "JEPA가 가장 잘 정렬된다"는 헤드라인을 약화시키는 것이 둘 더 있다. smallNORB에서는 <b>MoCo v3가 결정적으로 앞선다</b>(R² 0.987 대 0.891, DSC 0.994 대 0.872). 따라서 주장은 ImageNet 패널과 지표 균형 논변에 기대고 있다. 또한 DINO와 iBOT은 ImageNet-1k에서 <b>바이트 단위로 동일한 행</b>(0.662 / 0.283 / 0.391 / 0.102)을 보고한다. 전사 오류이거나 한 번의 실행을 두 번 적은 것이다. 부록의 표 6을 아직 "example template"이라 표기해 둔 논문에서라면, 이 베이스라인 위에 무언가를 쌓기 전에 확인해 볼 값어치가 있다. 마지막으로 "제로 코스트 프로브 공유"는 절대값 <b>51.70%</b>에 안착하며, 소스 프로브를 그냥 재사용하는 것보다 +2.11점일 뿐이다. 즉 효율 이야기의 실체는 프로브 이식이 아니라 교사–학생 결과다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2603.02263">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2603.02263">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2603.02263">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2603.02263">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the last unprocessed entry in the 2026-08 wishlist queue, and the one that closes the queue's Shared-World-Models axis. It is also the natural counterpart to the multi-agent latent-communication papers already in the archive: where those engineer a channel between agents, this one argues the channel is already there and only needs to be measured. No conference acceptance is claimed on the preprint (cs.CV, 28 Feb 2026)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-24.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐의 마지막 미처리 항목이자, 큐의 Shared World Models 축을 마무리하는 논문. 아카이브에 이미 쌓인 멀티에이전트 잠재통신 논문들의 자연스러운 짝이기도 하다. 그쪽이 에이전트 사이의 채널을 설계해 넣는다면, 이 논문은 채널이 이미 거기 있으며 측정하기만 하면 된다고 주장한다. 프리프린트에 학회 accept 표기 없음(cs.CV, 2026-02-28)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-24.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
