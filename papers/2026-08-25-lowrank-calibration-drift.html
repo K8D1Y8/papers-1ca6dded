@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Understanding Calibration and Truncation Error Propagation in Training-Free Low-Rank Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank Decomposition</span><span class="t-ko">Model Compression · 저랭크 분해</span></span>
+      <span>2026 · 08 · 25</span>
+    </div>
+    <h1>Understanding Calibration and Truncation Error Propagation in Training-Free Low-Rank Compression for LLMs<br>
+      <span class="glow t-en">— the compressor is calibrating against a model that no longer exists</span>
+      <span class="glow t-ko">— 압축기가 보고 있는 모델은 이미 사라진 모델이다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Mohanad Odema</b> <span class="t-en">(first &amp; corresponding), Gabrielle De Micheli, Dayin Gou, Nilesh Malpeddi, Prathamesh Vaste, Jacob Song</span><span class="t-ko">(1저자 겸 교신), Gabrielle De Micheli, Dayin Gou, Nilesh Malpeddi, Prathamesh Vaste, Jacob Song</span></span>
+      <span>🏛 LG Electronics, North America</span>
+      <span>🏆 COLM 2026</span>
+      <span>🗓 2026-08-09</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.08506">arXiv:2608.08506</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Training-free low-rank compressors decide <i>how</i> to truncate each layer by looking at the <b>original</b> model — its calibration activations and its layer-importance scores. But every layer you compress changes both. This paper measures that drift (up to <b>0.27</b> NMSE in calibration activations by the final layer, <b>0.17</b> in Block-Influence scores) and fixes it with two changes that need no training: feed the calibration data through the <i>already-compressed</i> layers, and recompute rank allocations over a few compression rounds. On top of UniQL, this cuts the average gap from the best method from 1.22 pp to <b>0.50 pp</b> across 8 models — while running 2.5–5× faster than MoDeGPT.</p>
+    <p class="t-ko">학습 없는(training-free) 저랭크 압축기는 각 레이어를 <i>어떻게</i> 자를지를 <b>원본</b> 모델을 보고 결정한다. 캘리브레이션 활성값도, 레이어 중요도 점수도 전부 원본 기준이다. 그런데 한 레이어를 압축할 때마다 그 둘이 같이 변한다. 이 논문은 그 어긋남을 실측하고(마지막 레이어 캘리브레이션 활성값 NMSE 최대 <b>0.27</b>, Block Influence 점수 <b>0.17</b> 드리프트), 학습 없이 두 가지로 고친다. 캘리브레이션 데이터를 <i>이미 압축된</i> 레이어로 통과시키는 것, 그리고 랭크 배분을 몇 라운드에 걸쳐 다시 계산하는 것. UniQL 위에 얹으면 8개 모델 전체에서 "최고 성능 대비 평균 격차"가 1.22 pp → <b>0.50 pp</b>로 줄고, MoDeGPT보다 2.5–5× 빠르다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Every activation-aware SVD method quietly assumes the model it is calibrating against is the model it is producing. It isn't — and the gap compounds with depth.</p>
+    <p class="lead t-ko">활성값 기반 SVD 기법은 하나같이 "캘리브레이션 대상 모델 = 내가 만들고 있는 모델"이라고 조용히 가정한다. 사실이 아니고, 그 간극은 깊이를 따라 누적된다.</p>
+    <p class="t-en">The recipe that made training-free low-rank compression competitive with fine-tuning-based methods — MoDeGPT, UniQL — has two pre-processing steps. First, push ~128 calibration samples through the model and record input covariance statistics at every weight or module, so the truncation minimizes <i>output</i> error rather than weight error. Second, score every layer's importance once (typically a Block Influence score) and hand out non-uniform rank budgets accordingly. Both steps run <b>before</b> compression, against the untouched model. The authors' point is that this makes the whole pipeline open-loop: by the time you reach layer 20, the activations arriving there in the deployed model look nothing like the activations you calibrated with, and the layer you decided was unimportant may have become the load-bearing one.</p>
+    <p class="t-ko">학습 없는 저랭크 압축을 파인튜닝 기반 기법과 겨룰 수 있게 만든 레시피(MoDeGPT, UniQL)에는 두 개의 전처리 단계가 있다. 첫째, 캘리브레이션 샘플 약 128개를 모델에 흘려 각 가중치·모듈 입력에서 공분산 통계를 수집한다. 가중치 오차가 아니라 <i>출력</i> 오차를 최소화하는 절단을 하기 위해서다. 둘째, 각 레이어 중요도를 한 번 매기고(보통 Block Influence 점수) 그에 따라 랭크 예산을 불균등 배분한다. 두 단계 모두 손대지 않은 원본 모델을 상대로, 압축 <b>이전에</b> 실행된다. 저자들의 지적은 이 때문에 파이프라인 전체가 개루프(open-loop)가 된다는 것이다. 레이어 20에 도달할 즈음이면 실제 배포 모델에서 그곳에 들어오는 활성값은 캘리브레이션에 쓴 활성값과 전혀 다르고, 중요하지 않다고 판정했던 레이어가 정작 하중을 받는 레이어가 되어 있을 수 있다.</p>
+    <figure class="fig">
+      <img src="fig/2608.08506/fig1_right_per_layer.svg" alt="Log-scale line chart. X axis: layer index 0 to 30. Y axis: NMSE from 1e-4 to above 1e-1. Four rising curves, one per Llama model (3.2-1B, 3.2-3B, 2-7B, 3.1-8B), all starting near 1e-4 at layer 0 and climbing monotonically with depth. Final-layer values are annotated 0.21, 0.27, 0.23 and 0.29.">
+      <figcaption class="t-en"><b>Figure 1 (right).</b> The core evidence, and it is refreshingly simple: run the calibration set through the original model and through the UniQL-compressed model at 25% compression, and plot the normalized MSE between the two sets of activations at every layer. The y-axis is logarithmic, and every curve climbs monotonically — the error at layer 0 is around 10<sup>−4</sup>, but by the final layer all four Llama models sit between 0.21 and 0.29 (the paper singles out Llama-3.2-3B reaching ≈10<sup>−2</sup> already at layer 5, and 0.27 at the end). The deeper half of the model is therefore being calibrated against a signal that is off by tens of percent. Note this is only the 25% setting; the companion panel shows the final-layer NMSE growing past 0.6 as the compression rate rises toward 50%.</figcaption>
+      <figcaption class="t-ko"><b>그림 1 (오른쪽).</b> 핵심 근거이고, 놀랄 만큼 단순하다. 캘리브레이션 세트를 원본 모델과 25% 압축된 UniQL 모델에 각각 통과시킨 뒤, 각 레이어에서 두 활성값 사이의 정규화 MSE를 찍은 것이다. y축은 로그 스케일이고 네 곡선 모두 단조 증가한다. 레이어 0에서는 오차가 10<sup>−4</sup> 근처지만, 마지막 레이어에서는 네 Llama 모델이 모두 0.21–0.29 사이에 놓인다(논문은 Llama-3.2-3B가 이미 레이어 5에서 ≈10<sup>−2</sup>, 끝에서 0.27에 이른다고 짚는다). 즉 모델의 뒤쪽 절반은 수십 퍼센트씩 어긋난 신호를 기준으로 캘리브레이션되고 있다. 이건 25% 설정일 뿐이라는 점도 중요하다. 옆 패널을 보면 압축률이 50%로 갈수록 마지막 레이어 NMSE는 0.6을 넘어간다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure (Figure 1, right panel)</span><span class="t-ko">출처: 논문 원본 그림 (Figure 1 오른쪽 패널)</span> · arXiv:2608.08506</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.27</div><div class="l"><span class="t-en">final-layer calibration NMSE (Llama-3.2-3B, 25% compression)</span><span class="t-ko">마지막 레이어 캘리브레이션 NMSE (Llama-3.2-3B, 25% 압축)</span></div></div>
+      <div class="stat"><div class="n">0.17</div><div class="l"><span class="t-en">drift in Block-Influence layer importance, pre vs post compression</span><span class="t-ko">압축 전후 Block Influence 레이어 중요도 드리프트</span></div></div>
+      <div class="stat"><div class="n">0.50 pp</div><div class="l"><span class="t-en">avg. gap from best method — vs 1.22 (UniQL) and 1.71 (MoDeGPT)</span><span class="t-ko">최고 성능 대비 평균 격차 — UniQL 1.22, MoDeGPT 1.71 대비</span></div></div>
+      <div class="stat"><div class="n">18 / 3 / 3</div><div class="l"><span class="t-en">win / tie / loss vs UniQL over 24 model×rate configs</span><span class="t-ko">24개 모델×압축률 설정에서 UniQL 대비 승/무/패</span></div></div>
+      <div class="stat"><div class="n">2.5–5×</div><div class="l"><span class="t-en">faster than MoDeGPT (35 min vs 3 h 1 m on Llama-3.1-8B)</span><span class="t-ko">MoDeGPT 대비 압축 속도 (Llama-3.1-8B 35분 vs 3시간 1분)</span></div></div>
+      <div class="stat"><div class="n">8 × 3 × 5</div><div class="l"><span class="t-en">models × compression rates × zero-shot benchmarks</span><span class="t-ko">모델 × 압축률 × 제로샷 벤치마크</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The headline table</span><span class="t-ko">핵심 표</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (40% compression slice).</b> Average accuracy over five LM-Eval zero-shot tasks (PiQA, Winogrande, ARC-Easy, ARC-Challenge, HellaSwag). This is the most aggressive setting, and the one where both corrections win across every Llama model. (C) = calibration correction, (R) = rank allocation correction.</caption>
+        <caption class="t-ko"><b>표 1 (40% 압축 구간).</b> LM-Eval 제로샷 5개 과제(PiQA, Winogrande, ARC-Easy, ARC-Challenge, HellaSwag) 평균 정확도. 가장 공격적인 설정이며, 두 보정이 모든 Llama 모델에서 이기는 구간이다. (C) = 캘리브레이션 보정, (R) = 랭크 배분 보정.</caption>
+        <thead><tr><th>Method</th><th>Llama-3.2-1B</th><th>Llama-3.2-3B</th><th>Llama-3.1-8B</th><th>Llama-2-7B</th></tr></thead>
+        <tbody>
+          <tr><td>Original (uncompressed)</td><td>60.69</td><td>68.12</td><td>73.98</td><td>68.86</td></tr>
+          <tr><td>SVD-LLM</td><td>36.30</td><td>36.64</td><td>39.27</td><td>43.34</td></tr>
+          <tr><td>MoDeGPT</td><td>41.33</td><td>46.25</td><td>50.94</td><td>53.44</td></tr>
+          <tr><td>UniQL (base)</td><td>41.27</td><td>48.93</td><td>56.06</td><td>56.42</td></tr>
+          <tr><td>Ours (C)</td><td>42.25</td><td>50.40</td><td>56.02</td><td>56.26</td></tr>
+          <tr><td><b>Ours (C+R)</b></td><td class="up">42.54</td><td class="up">50.62</td><td class="up">56.28</td><td class="up">56.63</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Open-loop versus closed-loop compression pipeline">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#8b93a7"/>
+          </marker>
+          <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#59d3a0"/>
+          </marker>
+        </defs>
+
+        <text x="20" y="26" font-size="15" font-weight="700" fill="#e8ecf5">Standard pipeline — open loop</text>
+        <rect x="20" y="42" width="140" height="46" rx="8" fill="#1d2231" stroke="#3a4257"/>
+        <text x="90" y="63" font-size="12" fill="#c9d1e2" text-anchor="middle">calibration set</text>
+        <text x="90" y="79" font-size="12" fill="#c9d1e2" text-anchor="middle">→ ORIGINAL model</text>
+        <line x1="160" y1="65" x2="215" y2="65" stroke="#8b93a7" stroke-width="2" marker-end="url(#ah)"/>
+        <rect x="218" y="42" width="132" height="46" rx="8" fill="#1d2231" stroke="#3a4257"/>
+        <text x="284" y="63" font-size="12" fill="#c9d1e2" text-anchor="middle">covariance stats</text>
+        <text x="284" y="79" font-size="12" fill="#c9d1e2" text-anchor="middle">+ BI scores (once)</text>
+        <line x1="350" y1="65" x2="405" y2="65" stroke="#8b93a7" stroke-width="2" marker-end="url(#ah)"/>
+        <rect x="408" y="42" width="452" height="46" rx="8" fill="#1d2231" stroke="#3a4257"/>
+        <text x="634" y="70" font-size="12" fill="#c9d1e2" text-anchor="middle">compress layer 1 → 2 → 3 → … → L   (statistics never updated)</text>
+        <text x="634" y="108" font-size="12" fill="#ff8a8a" text-anchor="middle">✕ error in calibration activations accumulates: 10⁻⁴ → 0.27 · BI drifts by 0.17</text>
+
+        <line x1="20" y1="140" x2="880" y2="140" stroke="#2b3244" stroke-width="1"/>
+
+        <text x="20" y="176" font-size="15" font-weight="700" fill="#e8ecf5">This paper — two closed loops, still training-free</text>
+
+        <rect x="20" y="196" width="140" height="46" rx="8" fill="#16281f" stroke="#2e6b4f"/>
+        <text x="90" y="217" font-size="12" fill="#cfe9dc" text-anchor="middle">calibration set</text>
+        <text x="90" y="233" font-size="12" fill="#cfe9dc" text-anchor="middle">→ layer 1</text>
+        <line x1="160" y1="219" x2="205" y2="219" stroke="#59d3a0" stroke-width="2" marker-end="url(#ahg)"/>
+
+        <rect x="208" y="196" width="120" height="46" rx="8" fill="#16281f" stroke="#2e6b4f"/>
+        <text x="268" y="217" font-size="12" fill="#cfe9dc" text-anchor="middle">compress</text>
+        <text x="268" y="233" font-size="12" fill="#cfe9dc" text-anchor="middle">layer ℓ at ratio φ<tspan font-size="10" baseline-shift="sub">ℓ</tspan></text>
+        <line x1="328" y1="219" x2="373" y2="219" stroke="#59d3a0" stroke-width="2" marker-end="url(#ahg)"/>
+
+        <rect x="376" y="196" width="150" height="46" rx="8" fill="#16281f" stroke="#2e6b4f"/>
+        <text x="451" y="217" font-size="12" fill="#cfe9dc" text-anchor="middle">forward pass through</text>
+        <text x="451" y="233" font-size="12" fill="#cfe9dc" text-anchor="middle">the COMPRESSED layer</text>
+
+        <path d="M451 242 L451 268 L268 268 L268 244" fill="none" stroke="#59d3a0" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ahg)"/>
+        <text x="360" y="285" font-size="11.5" fill="#59d3a0" text-anchor="middle">loop A — calibration correction (per layer, free)</text>
+
+        <line x1="526" y1="219" x2="571" y2="219" stroke="#59d3a0" stroke-width="2" marker-end="url(#ahg)"/>
+        <rect x="574" y="196" width="140" height="46" rx="8" fill="#16281f" stroke="#2e6b4f"/>
+        <text x="644" y="217" font-size="12" fill="#cfe9dc" text-anchor="middle">recompute BI on</text>
+        <text x="644" y="233" font-size="12" fill="#cfe9dc" text-anchor="middle">compressed model</text>
+        <line x1="714" y1="219" x2="759" y2="219" stroke="#59d3a0" stroke-width="2" marker-end="url(#ahg)"/>
+        <rect x="762" y="196" width="118" height="46" rx="8" fill="#16281f" stroke="#2e6b4f"/>
+        <text x="821" y="217" font-size="12" fill="#cfe9dc" text-anchor="middle">delta update</text>
+        <text x="821" y="233" font-size="12" fill="#cfe9dc" text-anchor="middle">φ̂ = φ + α·Δ</text>
+
+        <path d="M821 242 L821 318 L90 318 L90 244" fill="none" stroke="#59d3a0" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ahg)"/>
+        <text x="455" y="336" font-size="11.5" fill="#59d3a0" text-anchor="middle">loop B — rank allocation correction (N ≤ 3 rounds, exit when φ converges)</text>
+        <text x="455" y="362" font-size="12" fill="#9fe8c6" text-anchor="middle">✓ avg. gap from best: 1.22 pp → 0.50 pp, with no gradients and no fine-tuning</text>
+      </svg>
+      <div class="cap t-en">The paper in one picture. The top row is what MoDeGPT and UniQL do: measure the original model once, then compress straight through without ever looking back. The bottom row adds two feedback loops. Loop A is per-layer and essentially free — instead of collecting all activation statistics up front, it delays collection so each layer sees the activations produced by the layers already compressed before it. Loop B wraps the whole pass: after a full round, Block-Influence scores are re-measured on the compressed model and blended into the rank budget with a dampened delta rule, then the pass repeats. Neither loop computes a gradient.</div>
+      <div class="cap t-ko">논문을 한 장으로. 위쪽 줄이 MoDeGPT·UniQL이 하는 일이다. 원본 모델을 한 번 측정하고, 뒤돌아보지 않고 끝까지 압축한다. 아래쪽 줄은 여기에 피드백 루프 두 개를 더한다. 루프 A는 레이어 단위이고 사실상 공짜다. 활성값 통계를 앞에서 한꺼번에 모으는 대신 수집을 뒤로 미뤄, 각 레이어가 자기 앞에서 이미 압축된 레이어들이 만들어낸 활성값을 보게 한다. 루프 B는 전체 패스를 감싼다. 한 라운드가 끝나면 압축된 모델에서 Block Influence 점수를 다시 재고, 감쇠된 델타 규칙으로 랭크 예산에 섞어 넣은 뒤 패스를 반복한다. 두 루프 어디에도 그래디언트는 없다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two corrections</span><span class="t-ko">두 개의 보정</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">C · calibration</span>
+        <h3>Compress against what the model will actually see</h3>
+        <p class="t-en">The reconstruction objective changes from min‖WX − ŴX‖² to min‖WX − <b>WX̂</b>‖², where X̂ is the activation produced by the <i>already-compressed</i> prefix of the model. Concretely: stop collecting all covariance statistics in one pre-processing sweep, and instead interleave — compress layer ℓ, run the calibration batch through the compressed layer ℓ, hand the result to layer ℓ+1. The authors note this costs essentially nothing, since the same forward pass is being done either way, just deferred. They also point out the idea is not new in post-training quantization (QEP, GPTAQ and others debate exactly this), but had "scarcely been applied" to low-rank decomposition.</p>
+        <p class="t-ko">복원 목적식이 min‖WX − ŴX‖²에서 min‖WX − <b>ŴX̂</b>‖²로 바뀐다. 여기서 X̂는 모델의 <i>이미 압축된</i> 앞부분이 만들어낸 활성값이다. 구체적으로는 공분산 통계를 전처리 한 번에 몰아서 모으지 말고 교차 실행한다. 레이어 ℓ을 압축하고, 캘리브레이션 배치를 압축된 레이어 ℓ에 통과시키고, 그 결과를 레이어 ℓ+1에 넘긴다. 어차피 같은 순전파를 하는 것이고 시점만 미룬 것이라 비용은 사실상 0이라고 저자들은 말한다. 이 아이디어 자체는 PTQ 쪽에서는 새롭지 않지만(QEP·GPTAQ 등이 정확히 이 지점을 두고 논쟁 중이다) 저랭크 분해에는 "거의 적용된 적이 없었다"는 점도 짚는다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">R · rank allocation</span>
+        <h3>Re-measure importance after the model has moved</h3>
+        <p class="t-en">Rank budgets come from Block Influence, BI<sub>i</sub> = 1 − CosSim(X<sub>i</sub>, X<sub>i+1</sub>) — how much a layer transforms its input. Compression shifts these: on Llama-3.2-1B at r=0.85, layer 12 falls 0.13 → 0.10 while layer 15 rises 0.49 → 0.54, i.e. their relative ordering changes. So run compression for N rounds; after each, re-score BI on the compressed model and nudge the ratios with a dampened delta rule φ̂ᵢ = φᵢ + Pr(α·Δᵢ, r<sub>target</sub>), where Δᵢ is the max-normalized BI change and α ∈ {0.01, 0.05}. The dampening is deliberate — the authors argue each layer's original specialization deserves partial preservation rather than being overwritten by the new estimate. Exit early once φ converges.</p>
+        <p class="t-ko">랭크 예산은 Block Influence, 즉 BI<sub>i</sub> = 1 − CosSim(X<sub>i</sub>, X<sub>i+1</sub>)에서 나온다. 레이어가 입력을 얼마나 변형하는가를 재는 값이다. 압축은 이 값을 움직인다. Llama-3.2-1B에서 r=0.85일 때 레이어 12는 0.13 → 0.10으로 내려가고 레이어 15는 0.49 → 0.54로 올라간다. 상대 순위가 바뀐다는 뜻이다. 그래서 압축을 N 라운드 돌린다. 각 라운드가 끝나면 압축된 모델에서 BI를 다시 매기고, 감쇠된 델타 규칙 φ̂ᵢ = φᵢ + Pr(α·Δᵢ, r<sub>target</sub>)로 비율을 조금씩 민다. Δᵢ는 최대값으로 정규화한 BI 변화량이고 α ∈ {0.01, 0.05}다. 감쇠는 의도적이다. 각 레이어가 가진 고유한 특화는 새 추정치로 덮어쓸 게 아니라 어느 정도 보존되어야 한다는 것이 저자들의 논거다. φ가 수렴하면 조기 종료한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Initialize the rank budget. </span><span class="t-ko">랭크 예산 초기화. </span></b><span class="t-en">Score every layer's Block Influence on the original model and turn it into per-layer rank ratios φ via a temperature-scaled softmax, subject to the global target ratio r<sub>target</sub>. Identical to UniQL/MoDeGPT so far.</span><span class="t-ko">원본 모델에서 레이어별 Block Influence를 매기고, 온도 스케일 softmax로 레이어별 랭크 비율 φ로 변환한다. 전역 목표 비율 r<sub>target</sub> 제약을 만족해야 한다. 여기까지는 UniQL·MoDeGPT와 동일하다.</span></li>
+      <li><b><span class="t-en">Compress layer by layer, updating calibration as you go. </span><span class="t-ko">레이어 단위 압축, 캘리브레이션은 진행하면서 갱신. </span></b><span class="t-en">For each layer, apply the joint decomposition at ratio φ<sub>ℓ</sub> — then immediately forward the calibration batch through the newly compressed layer, so layer ℓ+1 calibrates on X̂ rather than X.</span><span class="t-ko">각 레이어에서 비율 φ<sub>ℓ</sub>로 joint decomposition을 적용한 뒤, 곧바로 캘리브레이션 배치를 방금 압축된 레이어에 통과시킨다. 그래야 레이어 ℓ+1이 X가 아니라 X̂로 캘리브레이션된다.</span></li>
+      <li><b><span class="t-en">Re-score and blend. </span><span class="t-ko">재측정 후 혼합. </span></b><span class="t-en">With a full compressed model in hand, recompute BI scores on <i>it</i>, take the max-normalized difference from the original scores, and apply the dampened delta update to get a refined ratio vector φ̂ that still respects the global budget.</span><span class="t-ko">압축된 모델이 통째로 나오면, <i>그 모델</i>에서 BI 점수를 다시 계산하고, 원본 점수와의 차이를 최대값 정규화한 뒤, 감쇠 델타 갱신을 적용해 정제된 비율 벡터 φ̂를 얻는다. 전역 예산 제약은 그대로 지킨다.</span></li>
+      <li><b><span class="t-en">Repeat or exit. </span><span class="t-ko">반복 또는 종료. </span></b><span class="t-en">If the divergence between φ and φ̂ is below ε, stop; otherwise set φ ← φ̂ and re-run the whole compression from the original weights. In practice N ∈ [1, 3] rounds is enough — and the best (α, N) turns out to depend on model family, size and compression rate.</span><span class="t-ko">φ와 φ̂의 발산도가 ε 미만이면 멈춘다. 아니면 φ ← φ̂로 두고 원본 가중치에서부터 전체 압축을 다시 돌린다. 실제로는 N ∈ [1, 3] 라운드면 충분하다. 다만 최적의 (α, N)은 모델 계열·크기·압축률에 따라 달라진다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Two lines of code-level change, no gradients, no fine-tuning — and it stacks on top of whatever training-free decomposition framework you already run. The calibration fix in particular is close to free: it only reorders when the forward pass happens.</p><p class="t-ko">코드 두 줄 수준의 변경, 그래디언트 없음, 파인튜닝 없음. 이미 쓰고 있는 학습-없는 분해 프레임워크 위에 그대로 얹힌다. 특히 캘리브레이션 수정은 공짜에 가깝다. 순전파를 언제 하느냐의 순서만 바꿀 뿐이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The real contribution may be the diagnosis, not the fix. "Compression changes the thing you are measuring" is a general failure mode, and the paper gives it two clean instruments: per-layer activation NMSE and BI drift. Anyone building a compression pipeline can run both in an afternoon.</p><p class="t-ko">진짜 기여는 처방이 아니라 진단일 수 있다. "압축이 측정 대상 자체를 바꾼다"는 것은 일반적인 실패 양식이고, 이 논문은 그것을 재는 깔끔한 계측기 두 개를 준다. 레이어별 활성값 NMSE와 BI 드리프트. 압축 파이프라인을 만드는 사람이라면 반나절이면 둘 다 돌려볼 수 있다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Consistency beats peak performance in their framing. The method rarely posts the single highest number; it posts the smallest <i>average distance</i> to the highest number (0.50 pp vs 1.22 and 1.71). Whether that is the right objective is a genuine question — but for shipping one compressed model to one device, it is arguably the honest one.</p><p class="t-ko">이 논문의 프레이밍에서는 최고 성능보다 일관성이 이긴다. 이 기법은 단일 최고 수치를 찍는 일이 드물다. 대신 최고 수치까지의 <i>평균 거리</i>가 가장 짧다(0.50 pp 대 1.22, 1.71). 그게 옳은 목적함수인지는 진짜로 논쟁거리다. 다만 압축 모델 하나를 기기 하나에 실어 보내는 입장에서는 정직한 기준이라고 볼 만하다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the 32B experiment quietly contradicts the headline. On Qwen2.5-32B at 40% compression, the calibration correction <i>hurts</i> — zero-shot average falls 59.84 → 57.42 and MMLU collapses 32.40 → 27.20 — so the authors drop (C) entirely for that model and report only (R), which then buys +0.3 pp. That is a scope limit stated honestly, but it means the paper's central mechanism is validated only on ≤8B models, exactly the regime where the gains are also smallest in absolute terms. Compounding this: (α, N) is admittedly model-dependent and is selected by reading the same LM-Eval scores that are reported as results, with no held-out split — and the seed study in Table 3 shows Llama-3.2-1B moving 41.78 → 41.93 with ±0.5 standard deviation, a gap well inside the noise.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 32B 실험이 헤드라인을 조용히 반박한다. Qwen2.5-32B를 40% 압축하면 캘리브레이션 보정이 오히려 <i>해가 된다</i>. 제로샷 평균이 59.84 → 57.42로 떨어지고 MMLU는 32.40 → 27.20으로 무너진다. 그래서 저자들은 그 모델에서는 (C)를 아예 빼고 (R)만 보고하며, 그때 +0.3 pp를 얻는다. 정직하게 밝힌 범위 한계이긴 하나, 논문의 중심 메커니즘이 8B 이하에서만 검증되었다는 뜻이고, 하필 그 구간이 절대적 이득도 가장 작은 구간이다. 여기에 겹치는 문제: (α, N)이 모델 의존적임을 저자들도 인정하는데, 그 선택은 결과로 보고되는 바로 그 LM-Eval 점수를 보고 이루어지며 held-out 분할이 없다. 게다가 표 3의 시드 실험에서 Llama-3.2-1B는 41.78 → 41.93으로 움직이는데 표준편차가 ±0.5다. 격차가 노이즈 안에 완전히 들어가 있다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.08506">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.08506">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.08506">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.08506">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is fully drained, so this came from the fallback search on the Model Compression / Low-rank Decomposition axis; among the new candidates it was the only one with a confirmed conference acceptance, and it attacks a failure mode that sits underneath every activation-aware SVD method already in this archive (SVD-Surgeon, DynaCalKV, AnchorKV) rather than proposing yet another decomposition. venue: COLM 2026</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-25.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 완전히 소진되어 Model Compression / 저랭크 분해 축의 폴백 검색에서 선정. 새 후보들 중 학회 accept가 확인된 유일한 논문이며, 또 하나의 분해 기법을 제안하는 대신 이 아카이브에 이미 쌓인 활성값 기반 SVD 기법들(SVD-Surgeon, DynaCalKV, AnchorKV) 전부의 밑바닥에 깔린 실패 양식을 공략한다. venue: COLM 2026</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-25.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
