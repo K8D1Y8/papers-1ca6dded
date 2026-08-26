@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Dual-Cache Latent Space Communication between Heterogeneous Language Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent · Latent Communication</span><span class="t-ko">멀티에이전트 · 잠재 통신</span></span>
+      <span>2026.08.26</span>
+    </div>
+    <h1>Dual-Cache Latent Space Communication between Heterogeneous Language Models<br>
+      <span class="glow t-en">— XKV: let the <i>receiver</i> help write the message</span>
+      <span class="glow t-ko">— XKV: 메시지를 <i>수신자</i>도 함께 쓰게 하라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Jiyao Liu</b> <span class="t-en">, Qi Zhang, Yaoyi Jia, Ziwen Kan, Song Wang</span><span class="t-ko">, Qi Zhang, Yaoyi Jia, Ziwen Kan, Song Wang</span></span>
+      <span>🏛 Independent · AWS · UCF</span>
+      <span>🗓 2026-08-20</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.20617">arXiv:2608.20617</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">When two LLM agents hold different halves of the evidence, today's latent protocols compress the <i>sharer's</i> KV cache into one summary and broadcast it to every position of the receiver. XKV instead pools <b>both</b> caches with learned queries, folds them into a joint cross-layer memory of exactly one token per receiver layer, and then lets <b>each receiver cache position query that memory itself</b> for its own gated ΔK/ΔV update. It wins on both axes at once: macro score 52.37 vs 49.76 (LCF-X) and 48.86 (text), while the translator runs in 5.8 ms instead of 59.9 ms and trains 4.55M parameters instead of 19.03M.</p>
+    <p class="t-ko">두 LLM 에이전트가 서로 다른 절반의 근거를 들고 있을 때, 지금의 잠재 통신 프로토콜은 <i>송신자</i>의 KV 캐시만 하나의 요약으로 압축해 수신자의 모든 위치에 똑같이 뿌린다. XKV는 대신 <b>양쪽</b> 캐시를 학습된 쿼리로 풀링하고, 이를 수신자 레이어당 정확히 토큰 1개짜리 공동 크로스레이어 메모리로 접은 뒤, <b>수신자 캐시의 각 위치가 스스로 그 메모리를 질의</b>해 자기 몫의 게이트된 ΔK/ΔV를 받아간다. 결과는 두 축 동시 우위다. 매크로 점수 52.37로 LCF-X 49.76·텍스트 48.86을 앞서면서, 번역기는 59.9 ms가 아니라 5.8 ms에 돌고 학습 파라미터는 19.03M이 아니라 4.55M이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Text is a terrible wire format between two models that both already think in continuous vectors.</p>
+    <p class="lead t-ko">이미 둘 다 연속 벡터로 사고하는 두 모델 사이에서, 텍스트는 형편없는 전송 포맷이다.</p>
+    <p class="t-en">Text-to-text hand-off puts autoregressive decoding on the critical path — 1139.5 ms end-to-end here — and it is structurally sender-centric: the sharer writes a message with no sight of what the receiver already knows or still needs. Latent KV protocols removed the decode step, but kept the sender-centric part. C2C still required both models to read the same input; LCF-X freed that constraint but still built the summary from the sharer alone, broadcast one summary per layer, and assumed matched depth and KV-head geometry. XKV attacks all three of those leftovers at once, and the interesting result is that the fix is <i>cheaper</i> than what it replaces rather than a quality-for-latency trade.</p>
+    <p class="t-ko">텍스트 기반 인계는 자기회귀 디코딩을 크리티컬 패스에 올려놓고(여기선 종단간 1139.5 ms), 구조적으로 송신자 중심이다. 송신자는 수신자가 이미 무엇을 알고 무엇이 더 필요한지 보지 못한 채 메시지를 쓴다. 잠재 KV 프로토콜은 디코딩 단계는 없앴지만 송신자 중심이라는 성질은 그대로 남겨뒀다. C2C는 여전히 두 모델이 같은 입력을 읽어야 했고, LCF-X는 그 제약은 풀었지만 요약을 송신자만으로 만들고, 레이어당 하나의 요약을 브로드캐스트했으며, 깊이와 KV 헤드 기하가 맞는다고 가정했다. XKV는 이 세 가지 잔여 제약을 한꺼번에 공략하는데, 흥미로운 지점은 그 해법이 품질과 지연을 맞바꾸는 것이 아니라 대체 대상보다 <i>더 싸다</i>는 것이다.</p>
+    <figure class="fig">
+      <img src="fig/2608.20617/fig_xkv_architecture.svg" alt="XKV architecture: both frozen models prefill private contexts; learned-query pooling to k slots; layer map and joint cross-layer memory; receiver positions cross-attend to produce gated ΔK/ΔV residuals.">
+      <figcaption class="t-en"><b>Figure 3.</b> Overview of XKV. Both frozen models prefill their private contexts. Stage 1 (<i>what to communicate</i>): learned-query attention pools each cache from N positions to k slots per layer and head, a learned map converts the sharer's depth axis to the receiver's, and a bottleneck plus a transformer block mixes them into a joint memory of L<sub>R</sub> tokens. Stage 2 (<i>where to write</i>): every raw receiver cache position forms its own query, cross-attends that memory, and receives a zero-initialised, sigmoid-gated ΔK/ΔV.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> XKV 개요. 얼어붙은 두 모델이 각자의 사적 컨텍스트를 프리필한다. 1단계(<i>무엇을 보낼까</i>): 학습된 쿼리 어텐션이 각 캐시를 레이어·헤드마다 N개 위치에서 k개 슬롯으로 풀링하고, 학습된 맵이 송신자의 깊이 축을 수신자 쪽으로 변환하며, 병목 MLP와 트랜스포머 블록이 이들을 L<sub>R</sub>개 토큰짜리 공동 메모리로 섞는다. 2단계(<i>어디에 쓸까</i>): 수신자 캐시의 원본 위치 각각이 자기 쿼리를 만들어 그 메모리에 크로스어텐션하고, 0으로 초기화된 시그모이드 게이트가 붙은 ΔK/ΔV를 받는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.20617</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">52.37</div><div class="l"><span class="t-en">macro score over 45 settings (LCF-X 49.76 · text 48.86)</span><span class="t-ko">45개 설정 매크로 점수 (LCF-X 49.76 · 텍스트 48.86)</span></div></div>
+      <div class="stat"><div class="n">10.3×</div><div class="l"><span class="t-en">faster translator than the LCF-X fusor (5.8 vs 59.9 ms)</span><span class="t-ko">LCF-X 퓨저 대비 번역기 속도 (5.8 vs 59.9 ms)</span></div></div>
+      <div class="stat"><div class="n">6.80×</div><div class="l"><span class="t-en">faster end-to-end than text hand-off (167.6 vs 1139.5 ms)</span><span class="t-ko">텍스트 인계 대비 종단간 속도 (167.6 vs 1139.5 ms)</span></div></div>
+      <div class="stat"><div class="n">4.55M</div><div class="l"><span class="t-en">trainable params — 76.1% fewer than LCF-X's 19.03M</span><span class="t-ko">학습 파라미터 — LCF-X의 19.03M보다 76.1% 적음</span></div></div>
+      <div class="stat"><div class="n">31/45</div><div class="l"><span class="t-en">dataset×model-pair cells where XKV is best or tied-best</span><span class="t-ko">XKV가 최고·공동최고인 데이터셋×모델쌍 셀</span></div></div>
+      <div class="stat"><div class="n">−0.83</div><div class="l"><span class="t-en">mean score lost when receiver cross-attention is removed</span><span class="t-ko">수신자 크로스어텐션 제거 시 평균 점수 하락</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The headline table</span><span class="t-ko">핵심 표</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 22–23.</b> Quality and cost aggregated over five split-evidence datasets × nine ordered sharer→receiver pairings (Qwen3-0.6B, Gemma-3-1B, Llama-3.2-3B). Native score is F1 for generative QA and accuracy for classification. Communication time is fusor-only for LCF-X and translator-only for XKV; it is undefined for text, whose cost is the message it must decode.</caption>
+        <caption class="t-ko"><b>Tables 22–23.</b> 근거가 나뉜 5개 데이터셋 × 9개 송신자→수신자 순서쌍(Qwen3-0.6B, Gemma-3-1B, Llama-3.2-3B)에 대한 품질과 비용 집계. 네이티브 점수는 생성형 QA는 F1, 분류형은 정확도. 통신 시간은 LCF-X는 퓨저만, XKV는 번역기만 잰 값이며, 텍스트는 디코딩해야 하는 메시지 자체가 비용이라 정의되지 않는다.</caption>
+        <thead><tr><th>Method</th><th>Macro score</th><th>Best/tied cells</th><th>Avg. rank</th><th>Comm. (ms)</th><th>E2E (ms)</th><th>Trainable params</th></tr></thead>
+        <tbody>
+          <tr><td>T2T (text)</td><td>48.86</td><td>11/45</td><td>2.34</td><td>–</td><td>1139.5</td><td>0</td></tr>
+          <tr><td>LCF-X</td><td>49.76</td><td>4/45</td><td>2.29</td><td>59.9</td><td>227.9</td><td>19.03M</td></tr>
+          <tr><td><b>XKV</b></td><td class="up"><b>52.37</b></td><td class="up"><b>31/45</b></td><td class="up"><b>1.37</b></td><td class="up"><b>5.8</b></td><td class="up"><b>167.6</b></td><td class="up"><b>4.55M</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas that do the work</span><span class="t-ko">핵심을 만드는 두 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">what to send</span>
+        <h3>Symmetric dual-cache pooling</h3>
+        <p class="t-en">Learned query vectors attend over the raw cache positions of <i>both</i> models and pool keys and values with the same weights, collapsing N positions to k slots in one vectorised pass per layer and head. Because the receiver's own state is pooled alongside the sharer's, the decision of what is worth communicating is made jointly rather than authored blind by the sender. A learned affine map along the layer axis then converts the sharer's L<sub>S</sub> layers into the receiver's L<sub>R</sub>, so mismatched depth and KV-head geometry stop being a precondition.</p>
+        <p class="t-ko">학습된 쿼리 벡터가 <i>양쪽</i> 모델의 원본 캐시 위치에 어텐션하고 동일한 가중치로 키와 값을 함께 풀링해, 레이어·헤드마다 한 번의 벡터화 연산으로 N개 위치를 k개 슬롯으로 접는다. 송신자 것과 나란히 수신자 자신의 상태도 풀링되므로, 무엇을 전달할 가치가 있는지는 송신자가 눈감고 쓰는 게 아니라 공동으로 결정된다. 이어 레이어 축을 따라 학습된 아핀 맵이 송신자의 L<sub>S</sub>개 레이어를 수신자의 L<sub>R</sub>개로 변환해, 깊이와 KV 헤드 기하의 불일치가 더 이상 전제 조건이 아니게 된다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">where to write</span>
+        <h3>Per-position retrieval, not broadcast</h3>
+        <p class="t-en">The pooled slots are squeezed through a bottleneck MLP into exactly one memory token per receiver layer, and a pre-norm transformer block mixes those L<sub>R</sub> tokens so the memory is genuinely cross-layer. Then each raw receiver position flattens its own K and V into a query, cross-attends the whole memory, and gets back a ΔK/ΔV scaled by a sigmoid gate that is separate per position, per KV head, and per cache type. The output heads are zero-initialised, so an untrained translator is exactly the identity — the model only ever learns corrections on top of a working receiver.</p>
+        <p class="t-ko">풀링된 슬롯들은 병목 MLP를 거쳐 수신자 레이어당 정확히 메모리 토큰 하나로 압축되고, pre-norm 트랜스포머 블록이 이 L<sub>R</sub>개 토큰을 섞어 메모리를 진짜 크로스레이어로 만든다. 그 다음 수신자의 각 원본 위치가 자기 K와 V를 펼쳐 쿼리를 만들고, 메모리 전체에 크로스어텐션해 ΔK/ΔV를 돌려받는다. 이 값은 위치별·KV 헤드별·캐시 종류별로 따로 매겨지는 시그모이드 게이트로 스케일된다. 출력 헤드는 0으로 초기화되어 있어 학습 전 번역기는 정확히 항등 함수이며, 모델은 잘 돌아가는 수신자 위에 보정만 얹어 학습한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">zero decode cost</span>
+        <h3>One-shot prefix edit</h3>
+        <p class="t-en">The translator fires once, on the receiver's prefill cache, before the first generated token. After that the receiver decodes greedily as usual — there is no per-token communication overhead at all, which is why the end-to-end number stays close to plain single-model inference while text hand-off pays for a full generated message.</p>
+        <p class="t-ko">번역기는 첫 생성 토큰 이전에 수신자의 프리필 캐시에 대해 딱 한 번 작동한다. 그 뒤로 수신자는 평소처럼 그리디 디코딩을 하며 토큰당 통신 오버헤드가 전혀 없다. 텍스트 인계가 메시지 한 편을 통째로 생성하는 값을 치르는 동안 종단간 수치가 단일 모델 추론에 가깝게 유지되는 이유다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Prefill privately. </span><span class="t-ko">각자 프리필한다. </span></b><span class="t-en">Sharer and receiver each encode their own disjoint half of the evidence plus the shared question; neither half is sufficient alone. Both models stay frozen throughout.</span><span class="t-ko">송신자와 수신자가 각자 서로 겹치지 않는 절반의 근거와 공통 질문을 인코딩한다. 어느 쪽 절반만으로도 답할 수 없다. 두 모델은 끝까지 얼어 있다.</span></li>
+      <li><b><span class="t-en">Pool both caches to k slots. </span><span class="t-ko">양쪽 캐시를 k개 슬롯으로 풀링한다. </span></b><span class="t-en">Learned queries produce attention weights over cached positions, and those same weights pool keys and values — a single batched operation across layers, heads and slots, with padding masked out.</span><span class="t-ko">학습된 쿼리가 캐시 위치들에 대한 어텐션 가중치를 만들고, 그 동일한 가중치로 키와 값을 풀링한다. 레이어·헤드·슬롯을 가로지르는 한 번의 배치 연산이며 패딩은 마스킹된다.</span></li>
+      <li><b><span class="t-en">Align depth, build the joint memory. </span><span class="t-ko">깊이를 정렬하고 공동 메모리를 만든다. </span></b><span class="t-en">The sharer's summaries are mapped onto the receiver's layer axis, concatenated with the receiver's own, compressed to one token per layer, given a layer embedding, and mixed by a transformer block. Its length is L<sub>R</sub> — independent of prompt length.</span><span class="t-ko">송신자 요약을 수신자의 레이어 축으로 사상하고, 수신자 자신의 요약과 결합한 뒤 레이어당 토큰 하나로 압축하고, 레이어 임베딩을 더해 트랜스포머 블록으로 섞는다. 길이는 L<sub>R</sub>로 프롬프트 길이와 무관하다.</span></li>
+      <li><b><span class="t-en">Each position pulls what it needs. </span><span class="t-ko">각 위치가 필요한 것을 끌어온다. </span></b><span class="t-en">Every receiver cache row queries the memory through a shared decoder and receives its own gated ΔK/ΔV; residuals at padding positions are zeroed. The cache becomes C<sub>R</sub> + ΔC<sub>R</sub>.</span><span class="t-ko">수신자 캐시의 모든 행이 공유 디코더를 통해 메모리를 질의하고 자기 몫의 게이트된 ΔK/ΔV를 받는다. 패딩 위치의 잔차는 0으로 만든다. 캐시는 C<sub>R</sub> + ΔC<sub>R</sub>가 된다.</span></li>
+      <li><b><span class="t-en">Decode normally. </span><span class="t-ko">평소대로 디코딩한다. </span></b><span class="t-en">Training is teacher-forced cross-entropy on the answer tokens, with gradients flowing through the frozen receiver's attention; only the 4.55M-parameter translator is updated.</span><span class="t-ko">학습은 정답 토큰에 대한 teacher-forced 크로스엔트로피이며, 그래디언트는 얼어붙은 수신자의 어텐션을 통과해 흐른다. 갱신되는 것은 4.55M 파라미터짜리 번역기뿐이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Receiver-awareness turns out to be nearly free. Removing receiver pooling costs 0.46 points and removing per-position retrieval costs 0.83, while each buys back only ~1 ms of translator time and ~3% of end-to-end latency. The components that make the channel smarter are not the ones making it slow.</p><p class="t-ko">수신자 인지 능력은 사실상 공짜였다. 수신자 풀링을 빼면 0.46점, 위치별 검색을 빼면 0.83점을 잃는데, 그 대가로 되찾는 건 번역기 시간 약 1 ms와 종단간 지연 약 3%뿐이다. 채널을 똑똑하게 만드는 구성요소가 채널을 느리게 만드는 구성요소는 아니었다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The real latency villain was the pooling scheme, not the idea of latent communication. Swapping XKV's single-pass direct pooling back to LCF-X's two-stage span pooling inflates translator time by 572.6% <i>and</i> loses 0.94 points — it was never a speed-for-accuracy trade, just a worse operator.</p><p class="t-ko">진짜 지연의 범인은 잠재 통신이라는 발상이 아니라 풀링 방식이었다. XKV의 단일 패스 직접 풀링을 LCF-X의 2단계 span 풀링으로 되돌리면 번역기 시간이 572.6% 늘어나고 <i>동시에</i> 0.94점을 잃는다. 속도와 정확도의 맞교환이 아니라 그냥 더 나쁜 연산자였던 것이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Cache-level channels no longer need matched architectures. A learned layer-axis map plus receiver-shaped output heads is enough to bridge different families, depths, KV-head counts and tokenizers — which is what makes latent communication usable in a system assembled from whatever models you actually have.</p><p class="t-ko">캐시 수준 통신 채널은 더 이상 동일한 아키텍처를 요구하지 않는다. 학습된 레이어 축 맵과 수신자 형태의 출력 헤드만으로 서로 다른 계열·깊이·KV 헤드 수·토크나이저를 잇기에 충분하다. 실제로 손에 있는 아무 모델이나 조립해 만든 시스템에서 잠재 통신이 쓸 만해지는 지점이 바로 여기다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the efficiency story is measured entirely at inference, and it quietly excludes the part that actually costs the most — a separate translator is trained for each ordered sharer→receiver pair, so the nine pairings here mean nine trained translators, and adding one model to a fleet of n means training 2n more. A text channel needs zero. The quality story is also less uniform than the 52.37 macro implies: every gain is concentrated in generative multi-hop QA, while on QASC with a Gemma receiver XKV trails plain text badly (55.1 vs 65.8 for Qwen→Gemma, 54.9 vs 55.9 for Llama→Gemma), so the macro win partly reflects which benchmarks text happens to be weak on. And with all three models at 3B or below, whether a channel this narrow — one memory token per receiver layer — still carries enough evidence at frontier scale is untested.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 효율 서사는 전적으로 추론 시점에서만 측정되었고, 정작 가장 비싼 부분을 조용히 빼놓았다. 번역기는 송신자→수신자 순서쌍마다 따로 학습되므로 여기 아홉 개 쌍은 곧 아홉 개의 학습된 번역기를 뜻하고, n개짜리 모델 풀에 하나를 추가하면 2n개를 더 학습해야 한다. 텍스트 채널은 0개다. 품질 서사도 매크로 52.37이 시사하는 것만큼 균일하지 않다. 이득은 전부 생성형 멀티홉 QA에 몰려 있고, 수신자가 Gemma인 QASC에서는 XKV가 평범한 텍스트에 크게 뒤진다(Qwen→Gemma 55.1 vs 65.8, Llama→Gemma 54.9 vs 55.9). 즉 매크로 승리는 텍스트가 마침 약한 벤치마크가 무엇인지도 일부 반영한다. 게다가 세 모델이 모두 3B 이하여서, 수신자 레이어당 메모리 토큰 하나라는 이 좁은 채널이 프런티어 규모에서도 충분한 근거를 실어 나르는지는 검증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.20617">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.20617">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.20617">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.20617">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is drained, so this came from the fallback search; the last three days all landed on the compression axis, and this rebalances toward Multi-Agent Latent Communication. It is also the direct successor to Latent Cache Flow (arXiv:2605.22863), already in this archive, and it inverts that paper's core assumption — the receiver, not just the sharer, decides what gets sent</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-26.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 소진되어 폴백 검색에서 선정. 최근 사흘이 모두 압축 축에 몰려 있어 Multi-Agent Latent Communication 쪽으로 균형을 되돌린다. 또한 이 아카이브에 이미 있는 Latent Cache Flow(arXiv:2605.22863)의 직계 후속작으로, 그 논문의 핵심 가정을 뒤집는다 — 무엇을 보낼지를 송신자만이 아니라 수신자가 함께 결정한다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-26.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
