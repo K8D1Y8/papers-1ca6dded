@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · PuzzleKV: Page-Wise Low-Rank Decomposition for KV Cache Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache</span><span class="t-ko">모델 압축 · KV 캐시</span></span>
+      <span>2026.08.27</span>
+    </div>
+    <h1>PuzzleKV: Page-Wise Low-Rank Decomposition for KV Cache Compression<br>
+      <span class="glow t-en">— stop looking for one basis; give every page its own</span>
+      <span class="glow t-ko">— 하나의 기저를 찾지 말고, 페이지마다 각자의 기저를 주라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Zizhong Wang</b> <span class="t-en">, Jieying Wang, Zhao Zhang, Jiajia Li</span><span class="t-ko">, Jieying Wang, Zhao Zhang, Jiajia Li</span></span>
+      <span>🏛 <span class="t-en">not listed on the preprint</span><span class="t-ko">프리프린트에 소속 미기재</span></span>
+      <span>🗓 2026-08-24</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.23843">arXiv:2608.23843</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Every low-rank KV cache method so far picks <i>one</i> compression basis and shares it across a wide region — a whole layer, a whole head, a whole prompt. PuzzleKV argues the granularity itself is the bug. It reuses PagedAttention's fixed-size logical page (P = 32 tokens) as the unit of compression, gives each completed page its own truncated SVD, and keeps only an attention-sink page and a sliding local window dense. No training, no calibration, no token thrown away. At 58.8% of Full KV storage it holds ≥96% of Full KV on RULER across both models and both context lengths, and beats a single global basis by <b>26.21 points</b> on Llama-3.1-8B at 16K. The catch is the comparison the paper does not lead with: in its own Table 3, plain INT4 on the uncompressed cache reaches 28.3% storage at <i>higher</i> accuracy than PuzzleKV at 58.8%.</p>
+    <p class="t-ko">지금까지의 저랭크 KV 캐시 압축은 모두 <i>하나의</i> 압축 기저를 골라 넓은 영역 — 레이어 전체, 헤드 전체, 프롬프트 전체 — 에 공유해 왔다. PuzzleKV는 그 <b>granularity 자체가 문제</b>라고 본다. PagedAttention의 고정 크기 논리 페이지(P = 32 토큰)를 그대로 압축 단위로 재해석해, 완성된 페이지마다 각자의 truncated SVD를 붙이고, 어텐션 싱크 페이지와 슬라이딩 로컬 윈도만 dense로 남긴다. 학습도, 캘리브레이션도, 버리는 토큰도 없다. Full KV 대비 58.8% 저장량에서 RULER 두 모델·두 컨텍스트 길이 전부 Full KV의 96% 이상을 지키고, 단일 전역 기저(Global SVD)를 Llama-3.1-8B 16K에서 <b>26.21점</b> 앞선다. 다만 논문이 앞세우지 않는 비교가 하나 있다 — 자기 Table 3에서, 압축하지 않은 캐시에 그냥 INT4를 걸면 저장량 28.3%로 PuzzleKV의 58.8%보다 정확도가 <i>더</i> 높다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Low-rank KV compression has been quietly losing to eviction and quantization, and this paper offers a clean diagnosis of why: the basis was always too wide.</p>
+    <p class="lead t-ko">저랭크 KV 압축은 그동안 조용히 eviction과 quantization에 밀려 왔다. 이 논문은 그 이유를 깔끔하게 진단한다 — 기저(basis)를 잡는 범위가 늘 너무 넓었다는 것.</p>
+    <p class="t-en">A Qwen3-32B request at 128K tokens holds roughly 32 GiB of KV cache in BF16, and that footprint scales linearly with both context and batch size. Low-rank methods are the attractive answer because, unlike eviction, they keep <i>every</i> token — just in fewer dimensions. But they have all made the same structural choice: derive one projection space (from weights, from a calibration set, or from the prompt at inference) and apply it across a broad region. A single basis optimizes for the directions that dominate overall reconstruction, which means whatever is rare gets treated as noise. The failure is spectacular rather than gradual: on NIAH-S1, which hides one unique key–value pair inside a highly repetitive haystack, a global-basis SVD scores <b>0.00</b> on Llama-3.1 while Full KV scores 100.00. The repeated background wins the reconstruction objective, and the needle is exactly what gets truncated away.</p>
+    <p class="t-ko">Qwen3-32B가 128K 토큰을 처리하면 BF16 기준 KV 캐시만 약 32 GiB다. 이 용량은 컨텍스트 길이와 배치 크기 양쪽에 선형으로 커진다. 저랭크 방식이 매력적인 이유는 eviction과 달리 <i>모든</i> 토큰을 — 단지 더 낮은 차원으로 — 남기기 때문이다. 그런데 기존 방식들은 하나같이 같은 구조적 선택을 했다. 투영 공간을 하나 구해(가중치에서든, 캘리브레이션 데이터에서든, 추론 시점 프롬프트에서든) 넓은 영역에 일괄 적용하는 것. 단일 기저는 전체 재구성 오차를 지배하는 방향에 최적화되고, 그 결과 드문 정보는 노이즈 취급을 받는다. 실패는 완만하지 않고 극적이다. 반복적인 건초더미 속에 고유한 키–값 쌍 하나를 숨겨 둔 NIAH-S1에서, 전역 기저 SVD는 Llama-3.1 기준 <b>0.00</b>점을 받는다(Full KV는 100.00). 반복되는 배경이 재구성 목적함수를 이기고, 하필 찾아야 할 바늘이 잘려 나간다.</p>
+    <p class="t-en">PuzzleKV's move is to shrink the region until this cannot happen. If the basis only has to explain 32 consecutive tokens, then within that window the needle is no longer a rare direction — it is a substantial fraction of the local signal. The choice of 32 is not arbitrary either: it is already the page size that PagedAttention and vLLM use to manage cache memory, so one abstraction now governs representation, memory management, and GPU batching at the same time.</p>
+    <p class="t-ko">PuzzleKV의 수는 그런 일이 일어날 수 없을 만큼 영역을 좁히는 것이다. 기저가 연속된 32개 토큰만 설명하면 되는 순간, 그 창 안에서 바늘은 더 이상 희귀 방향이 아니다 — 국소 신호의 상당한 비중을 차지한다. 32라는 숫자도 임의가 아니다. PagedAttention과 vLLM이 이미 캐시 메모리를 관리하는 단위로 쓰는 페이지 크기이며, 덕분에 표현·메모리 관리·GPU 배치가 하나의 추상으로 동시에 다뤄진다.</p>
+    <figure class="fig">
+      <img src="fig/2608.23843/PuzzleKV_Figure1.svg" alt="PuzzleKV overview: prefill partitions the dense KV cache into pages and factorizes completed pages with SVD; decoding runs mixed paged attention over dense and factorized pages and incrementally converts newly eligible pages.">
+      <figcaption class="t-en"><b>Figure 1.</b> The two halves of PuzzleKV. <b>Prefill (left):</b> ① compute the ordinary dense KV cache, ② partition it into fixed-size pages per layer and KV head, ③ factorize every completed page with SVD while the sink page and local window stay dense. <b>Decode (right):</b> ④ mixed paged attention reads dense and factorized pages together and merges them with online softmax, ⑤ each new token is appended to the current dense page, and once that page fills and leaves the local window it is factorized in place.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> PuzzleKV의 두 국면. <b>Prefill(왼쪽):</b> ① 평범한 dense KV 캐시를 계산하고, ② 레이어·KV 헤드별로 고정 크기 페이지로 분할한 뒤, ③ 완성된 페이지마다 SVD로 분해한다(싱크 페이지와 로컬 윈도는 dense 유지). <b>Decode(오른쪽):</b> ④ mixed paged attention이 dense 페이지와 분해된 페이지를 함께 읽어 online softmax로 병합하고, ⑤ 새 토큰은 현재 dense 페이지에 덧붙여지며, 그 페이지가 가득 차 로컬 윈도를 벗어나는 순간 제자리에서 분해된다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.23843</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.588</div><div class="l"><span class="t-en">KV storage ratio in the main setting (P=32, r<sub>K</sub>/r<sub>V</sub> = 16/14)</span><span class="t-ko">주 설정의 KV 저장 비율 (P=32, r<sub>K</sub>/r<sub>V</sub> = 16/14)</span></div></div>
+      <div class="stat"><div class="n">≥96%</div><div class="l"><span class="t-en">of Full KV score on RULER — in every model × context setting</span><span class="t-ko">RULER에서 Full KV 대비 점수 — 모든 모델×컨텍스트 조합에서</span></div></div>
+      <div class="stat"><div class="n">+26.21</div><div class="l"><span class="t-en">RULER points over a single global basis (Llama-3.1, 16K)</span><span class="t-ko">단일 전역 기저 대비 RULER 점수 차 (Llama-3.1, 16K)</span></div></div>
+      <div class="stat"><div class="n">0.18%</div><div class="l"><span class="t-en">extra time per output token vs. the uncompressed paged cache</span><span class="t-ko">비압축 페이지 캐시 대비 토큰당 생성 시간 증가</span></div></div>
+      <div class="stat"><div class="n">20.9%</div><div class="l"><span class="t-en">TTFT overhead at 32K — the whole cost sits in prefill</span><span class="t-ko">32K에서의 TTFT 오버헤드 — 비용은 전부 prefill에 몰려 있다</span></div></div>
+      <div class="stat"><div class="n">0.187</div><div class="l"><span class="t-en">storage ratio when the factors are further quantized to INT4</span><span class="t-ko">분해 인자를 INT4로 추가 양자화했을 때의 저장 비율</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The main result</span><span class="t-ko">핵심 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> RULER averages (%) over 13 tasks at a matched KV storage budget of ρ ≈ 0.6. Global SVD is the controlled baseline: identical pipeline, one shared basis per layer and KV head instead of one per page. It is the cleanest isolation of what granularity alone buys.</caption>
+        <caption class="t-ko"><b>Table 1.</b> KV 저장 예산 ρ ≈ 0.6을 맞춘 상태에서의 RULER 13개 태스크 평균(%). Global SVD는 통제 베이스라인이다 — 파이프라인은 동일하고, 페이지마다가 아니라 레이어·KV 헤드마다 기저를 하나씩 공유한다. granularity만의 효과를 가장 깨끗하게 분리해 준다.</caption>
+        <thead><tr><th>Method</th><th>Llama3.1 16K</th><th>Llama3.1 32K</th><th>Qwen3 16K</th><th>Qwen3 32K</th></tr></thead>
+        <tbody>
+          <tr><td>Full KV <span class="t-en">(uncompressed)</span><span class="t-ko">(비압축)</span></td><td>92.33</td><td>87.54</td><td>91.41</td><td>89.44</td></tr>
+          <tr><td>Global SVD</td><td>62.61</td><td>59.38</td><td>76.51</td><td>71.89</td></tr>
+          <tr><td>Palu (G-LRD)</td><td>87.26</td><td>82.68</td><td>79.02</td><td>71.03</td></tr>
+          <tr><td>H2O</td><td>68.76</td><td>61.75</td><td>64.00</td><td>62.95</td></tr>
+          <tr><td><b>PuzzleKV</b></td><td class="up">88.82</td><td class="up">84.39</td><td class="up">90.73</td><td class="up">87.53</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">PuzzleKV is the top compressed method in all four settings, but read the columns rather than the bold: against Palu it wins by 11.71 and 16.50 points on Qwen3 and <i>loses</i> to it in raw retrieval on Llama-3.1 by 1.56 and 1.71 — the real, consistent gap is against Global SVD and H2O. Note also how badly the baselines transfer across model families: Palu collapses from 87.26 on Llama-3.1 to 79.02 on Qwen3, while PuzzleKV moves in the opposite direction. Being calibration-free is doing visible work here.</p>
+    <p class="t-ko">PuzzleKV는 네 설정 모두에서 압축 기법 중 1위지만, 굵은 글씨보다 열을 읽는 편이 낫다. Palu 대비로는 Qwen3에서 11.71·16.50점 앞서지만 Llama-3.1에서는 1.56·1.71점 <i>뒤진다</i> — 일관되게 벌어지는 진짜 격차는 Global SVD와 H2O 상대다. 그리고 베이스라인들이 모델 계열을 건너갈 때 얼마나 무너지는지도 봐야 한다. Palu는 Llama-3.1의 87.26에서 Qwen3의 79.02로 내려앉는데, PuzzleKV는 반대 방향으로 움직인다. 캘리브레이션이 필요 없다는 성질이 여기서 눈에 보이게 일한다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas that carry the paper</span><span class="t-ko">이 논문을 떠받치는 두 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">granularity</span>
+        <h3>The page is a local subspace</h3>
+        <p class="t-en">A basis spanning the whole prompt maximizes reuse but must serve regions with completely different dominant directions. Give each 32-token page its own compact basis and every region is described by the directions that actually matter to it. The authors verify the premise before using it: across layers, KV heads, and page sizes in both models, the rank needed for 80% reconstruction stays well below the full page rank. The payoff shows up exactly where a global basis dies — Variable Tracking, which needs a five-variable four-hop chain recovered among distractors, goes from 0.04 (Global SVD) to 98.80 (PuzzleKV) on Llama-3.1 at 16K.</p>
+        <p class="t-ko">프롬프트 전체를 덮는 기저는 재사용성은 최대지만, 지배적 방향이 완전히 다른 영역들을 한꺼번에 감당해야 한다. 32토큰짜리 페이지마다 자기 기저를 주면 각 영역은 자기에게 실제로 중요한 방향들로 기술된다. 저자들은 이 전제를 먼저 검증한다 — 두 모델의 레이어·KV 헤드·페이지 크기 전반에서, 재구성 정확도 80%에 필요한 랭크는 페이지 풀랭크보다 확실히 낮게 유지된다. 효과는 전역 기저가 죽는 바로 그 지점에서 드러난다. 방해자들 사이에서 5변수 4홉 연쇄를 복원해야 하는 Variable Tracking은 Llama-3.1 16K에서 0.04(Global SVD) → 98.80(PuzzleKV)으로 뛴다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">systems</span>
+        <h3>Never reconstruct, never stall</h3>
+        <p class="t-en">Two engineering choices keep the idea from being ruinously expensive. First, decomposition: pages are short and wide (P &lt; d), so instead of running an SVD per P×d page, PuzzleKV eigendecomposes the smaller P×P Gram matrix XXᵀ — mathematically the same truncated-SVD factors, but a uniform batched GPU op across all pages. Second, attention: for a factorized page K̂ = LR, the query is contracted with the small factors first, so the dense page is never materialized. Page-local softmax states are then merged by FlashAttention's online-softmax reduction. The result is that decoding costs 0.075 ms/token more than an uncompressed paged cache, and the entire overhead lands in prefill.</p>
+        <p class="t-ko">두 가지 엔지니어링 선택이 이 아이디어가 파산하지 않게 붙든다. 첫째, 분해: 페이지는 짧고 넓으므로(P &lt; d) P×d 페이지마다 SVD를 돌리는 대신 더 작은 P×P Gram 행렬 XXᵀ를 고유분해한다 — 수학적으로는 동일한 truncated-SVD 인자지만, 모든 페이지에 걸쳐 균일한 배치 GPU 연산이 된다. 둘째, 어텐션: 분해된 페이지 K̂ = LR에 대해 쿼리를 작은 인자들과 먼저 축약하므로 dense 페이지가 실체화되는 일이 없다. 그렇게 얻은 페이지별 softmax 상태를 FlashAttention의 online-softmax 리덕션으로 병합한다. 그 결과 디코딩 비용은 비압축 페이지 캐시보다 토큰당 0.075 ms 더 들 뿐이고, 오버헤드는 전부 prefill에 떨어진다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Prefill dense, then partition. </span><span class="t-ko">Dense로 prefill한 뒤 분할한다. </span></b><span class="t-en">The standard KV cache is computed normally, then split per layer and per KV head into fixed pages of P = 32 tokens. Nothing about the forward pass changes.</span><span class="t-ko">평범하게 KV 캐시를 계산한 다음, 레이어별·KV 헤드별로 P = 32 토큰짜리 고정 페이지로 자른다. 순전파 자체는 전혀 건드리지 않는다.</span></li>
+      <li><b><span class="t-en">Factorize every completed page — except two regions. </span><span class="t-ko">완성된 페이지를 전부 분해한다 — 두 영역만 빼고. </span></b><span class="t-en">Each eligible page becomes L·R via truncated SVD at rank r<sub>K</sub>=16 for keys and r<sub>V</sub>=14 for values. The first page (attention sinks, which absorb disproportionate attention) and a sliding window of the most recent pages stay dense. Storage per factorized page pair is (r<sub>K</sub>+r<sub>V</sub>)(P+d) / 2Pd ≈ 0.586 at d = 128.</span><span class="t-ko">자격이 된 페이지는 키 랭크 r<sub>K</sub>=16, 값 랭크 r<sub>V</sub>=14의 truncated SVD로 L·R이 된다. 첫 페이지(어텐션이 과도하게 쏠리는 sink)와 가장 최근 페이지들의 슬라이딩 윈도는 dense로 남는다. 분해된 키–값 페이지 쌍의 저장량은 (r<sub>K</sub>+r<sub>V</sub>)(P+d) / 2Pd 이고, d = 128에서 ≈ 0.586이다.</span></li>
+      <li><b><span class="t-en">Attend over the mixed cache. </span><span class="t-ko">혼합 캐시 위에서 어텐션한다. </span></b><span class="t-en">Each query produces a partial softmax state (max, normalizer, unnormalized output) per page — computed from stored factors for compressed pages, from raw K/V for dense ones — and all states are merged into one globally normalized result.</span><span class="t-ko">각 쿼리는 페이지마다 부분 softmax 상태(최댓값·정규화항·비정규화 출력)를 만든다. 압축 페이지는 저장된 인자에서, dense 페이지는 원래 K/V에서 계산되며, 모든 상태가 하나의 전역 정규화 결과로 병합된다.</span></li>
+      <li><b><span class="t-en">Convert incrementally while decoding. </span><span class="t-ko">디코딩하면서 점진적으로 전환한다. </span></b><span class="t-en">New tokens append to the current dense page. When it fills and slides out of the local window, it is factorized once and its dense slot is released. Already-compressed pages are never revisited, so each decode step costs at most one page factorization — and every generated token ends up compressed too, not just the prompt.</span><span class="t-ko">새 토큰은 현재 dense 페이지에 덧붙는다. 그 페이지가 가득 차 로컬 윈도 밖으로 밀려나면 한 번 분해되고 dense 슬롯은 반납된다. 이미 압축된 페이지는 다시 건드리지 않으므로 디코딩 한 스텝의 비용은 최대 페이지 분해 1회다 — 그리고 프롬프트뿐 아니라 생성된 토큰까지 결국 전부 압축된 형태로 남는다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Compression granularity is a design axis, not an implementation detail. The controlled Global SVD baseline — same code, same budget, one basis per head instead of per page — loses by 26.21 points. That gap is attributable to granularity alone, which is the cleanest ablation in the paper and the one worth stealing.</p><p class="t-ko">압축 granularity는 구현 디테일이 아니라 설계 축이다. 통제된 Global SVD 베이스라인은 — 같은 코드, 같은 예산, 페이지가 아니라 헤드마다 기저 하나 — 26.21점을 잃는다. 이 격차는 오롯이 granularity 탓이며, 논문에서 가장 깨끗한 ablation이자 가져다 쓸 만한 설계다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Aligning the compression unit with the serving engine's memory unit is the underrated contribution. Because the page is already vLLM's allocation block, page-wise factors inherit uniform shape, independence, and batchability for free — and incremental conversion becomes trivial. Low-rank work that ignores the memory manager tends to give its savings back in transient reconstruction buffers.</p><p class="t-ko">압축 단위를 서빙 엔진의 메모리 단위에 맞춘 것이 저평가된 기여다. 페이지가 이미 vLLM의 할당 블록이기 때문에, 페이지 단위 인자는 균일한 shape·독립성·배치 가능성을 공짜로 얻고 점진적 전환도 자명해진다. 메모리 관리자를 무시하는 저랭크 연구는 아껴 둔 메모리를 일시적 재구성 버퍼로 도로 뱉어내기 쉽다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Retaining every token is what beats eviction, and the receipts are specific. On NIAH-S3, which demands verbatim recovery of a long UUID, H2O scores 33.40 because it has irreversibly discarded the relevant entries; PuzzleKV scores 82.00 because the UUID is still there, just in fewer dimensions. If your workload has exact-recall requirements, that distinction is not a rounding error.</p><p class="t-ko">모든 토큰을 남긴다는 성질이 eviction을 이기는 지점이고, 증거도 구체적이다. 긴 UUID를 글자 그대로 복원해야 하는 NIAH-S3에서 H2O는 관련 엔트리를 되돌릴 수 없게 버렸기 때문에 33.40점을 받는다. PuzzleKV는 UUID가 차원만 줄어든 채 여전히 거기 있기 때문에 82.00점이다. 정확 복원이 필요한 워크로드라면 이 차이는 반올림 오차가 아니다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the paper's own Table 3 undercuts its headline operating point. Full KV + plain INT4 quantization needs only <b>28.3%</b> of the cache and scores <b>92.34 / 91.09</b> (Llama3.1 / Qwen3), while PuzzleKV at <b>58.8%</b> scores <b>88.82 / 90.73</b> — that is half the storage at higher accuracy, so the main configuration is strictly dominated by a method that existed already. Low-rank only becomes the better trade further down: PuzzleKV+INT4 reaches 0.187 storage, below INT3's 0.223, though still 2.27 points behind it on Llama3.1. The honest claim is therefore narrower than "page-wise low-rank works" — it is that page-wise low-rank is the right way to reach <i>sub-quantization</i> budgets, and the paper never frames it that way. Two further limits: everything is measured on 8B models with a batch-size-1 HuggingFace prototype, so the vLLM integration that motivates the entire page abstraction remains future work; and the storage formula (r<sub>K</sub>+r<sub>V</sub>)(P+d)/2Pd carries a per-page basis overhead that grows as pages shrink, which is precisely why P=16 underperforms P=32 despite being finer-grained — the granularity argument has a floor the paper acknowledges only through an ablation curve.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 논문의 Table 3이 스스로 대표 동작점을 무너뜨린다. Full KV에 그냥 INT4를 걸면 캐시의 <b>28.3%</b>만 쓰고 <b>92.34 / 91.09</b>(Llama3.1 / Qwen3)를 받는데, PuzzleKV는 <b>58.8%</b>를 쓰고 <b>88.82 / 90.73</b>이다 — 저장량은 절반인데 정확도는 더 높으니, 주 설정이 이미 존재하던 방법에 완전히 지배당한다. 저랭크가 더 나은 거래가 되는 건 훨씬 아래 예산부터다. PuzzleKV+INT4는 저장 비율 0.187로 INT3의 0.223보다 낮지만, Llama3.1에서는 여전히 2.27점 뒤진다. 그러므로 정직한 주장은 "페이지 단위 저랭크가 통한다"보다 좁다 — 페이지 단위 저랭크는 <i>양자화 이하</i> 예산에 도달하는 올바른 방법이라는 것이고, 논문은 끝내 그렇게 프레이밍하지 않는다. 한계 둘 더. 모든 측정이 8B 모델에 배치 크기 1의 HuggingFace 프로토타입이라, 페이지 추상 전체를 정당화하는 vLLM 통합은 여전히 future work다. 그리고 저장량 공식 (r<sub>K</sub>+r<sub>V</sub>)(P+d)/2Pd에는 페이지가 작아질수록 커지는 페이지별 기저 오버헤드가 들어 있는데, P=16이 더 잘게 쪼개고도 P=32보다 못한 이유가 바로 이것이다 — granularity 논증에는 바닥이 있고, 논문은 그것을 ablation 곡선으로만 인정한다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.23843">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.23843">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.23843">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.23843">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is drained, so this came from the fallback search. It sits squarely on the Low-rank Decomposition axis and is the sharpest counterpoint yet to two papers already in this archive: xKV (arXiv:2503.18893), which shares a basis <i>across layers</i>, and the calibration-drift study from 2026-08-25 — PuzzleKV's answer to both is to make the basis so local that neither calibration nor cross-region sharing is needed. Posted three days ago and not yet under review anywhere</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-27.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 소진되어 폴백 검색에서 선정. Low-rank Decomposition 축 정중앙에 있으면서, 이 아카이브에 이미 있는 두 논문에 대한 가장 날카로운 반론이다 — 기저를 <i>레이어 사이</i>에 공유하는 xKV(arXiv:2503.18893), 그리고 2026-08-25의 캘리브레이션 드리프트 연구. PuzzleKV의 답은 기저를 아주 국소적으로 만들어 캘리브레이션도 광역 공유도 필요 없게 하는 것이다. 사흘 전 공개되었고 아직 어느 학회 심사에도 올라가 있지 않다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-27.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
