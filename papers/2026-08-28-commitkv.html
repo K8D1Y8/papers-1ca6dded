@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · CommitKV</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Agentic KV Cache</span><span class="t-ko">모델 압축 · 에이전트 KV 캐시</span></span>
+      <span>2026.08.28</span>
+    </div>
+    <h1>CommitKV: Lifecycle-Aware KV Cache Compression via Commit Transitions for Multi-Turn Agents<br>
+      <span class="glow t-en">— a low attention score is ambiguous; measure the page twice instead</span>
+      <span class="glow t-ko">— 낮은 어텐션 점수는 애매하다; 대신 같은 페이지를 두 번 재라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Weizhong Huang</b> <span class="t-en">, Jinchao Zhang*, Xiawu Zheng* (*corresponding)</span><span class="t-ko">, Jinchao Zhang*, Xiawu Zheng* (*교신저자)</span></span>
+      <span>🏛 <span class="t-en">Xiamen University · WeChat AI, Tencent</span><span class="t-ko">샤먼대학교 · 텐센트 WeChat AI</span></span>
+      <span>🗓 2026-08-08</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.07855">arXiv:2608.07855</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Every KV eviction method — SnapKV, R-KV, TriAttention — scores a token from <i>one</i> snapshot of the current inference state and drops the low scorers. CommitKV's claim is that in a multi-turn ReAct agent this single reading is fundamentally ambiguous: a page scoring low may be <b>dormant</b> (the city name "Paris" nobody is attending to right now, but which the final answer needs) or <b>completed</b> (the tool call whose weather result has already come back). One number cannot tell them apart. So CommitKV measures the same page <b>twice</b> — once in the last W=8 decode queries before a tool call commits, once in the first 8 queries after the returned observation lands — and reads the <i>transition</i>. HIGH→LOW means the page's observed role is finished; LOW→LOW means merely dormant, keep it. Only high-to-low pages are nominated, and even then only retired if they survive a greedy <i>joint</i> test. On Qwen3-14B at a 2048-token budget it beats the best baseline by <b>22.24 points</b> while cutting peak KV memory <b>5.00×</b> and end-to-end latency <b>5.62×</b>. The number to watch is elsewhere: on DeepSeek-R1-Distill-Llama-8B the same method wins by only <b>1.54</b> points.</p>
+    <p class="t-ko">지금까지의 KV eviction — SnapKV, R-KV, TriAttention — 은 모두 현재 추론 상태의 <i>한 장면</i>에서 토큰 점수를 매기고 낮은 것을 버린다. CommitKV의 주장은, 멀티턴 ReAct 에이전트에서 이 한 번의 측정은 근본적으로 애매하다는 것이다. 점수가 낮은 페이지는 <b>휴면(dormant)</b> 상태일 수도 있고 — 지금은 아무도 안 보지만 최종 답에 필요한 도시 이름 "Paris" — <b>역할이 끝난(completed)</b> 것일 수도 있다 — 날씨 결과가 이미 돌아온 tool call. 숫자 하나로는 이 둘을 구분할 수 없다. 그래서 CommitKV는 같은 페이지를 <b>두 번</b> 잰다. tool call이 커밋되기 직전 마지막 W=8개 디코드 쿼리에서 한 번, 관측(observation)이 들어온 직후 다음 턴의 첫 8개 쿼리에서 한 번. 그리고 그 <i>변화</i>를 읽는다. HIGH→LOW면 그 페이지의 관측된 역할이 끝난 것이고, LOW→LOW면 그냥 휴면이니 남긴다. high-to-low만 후보가 되고, 그마저도 greedy <b>joint</b> 검증을 통과해야 실제로 퇴역한다. Qwen3-14B·2048 토큰 예산에서 최고 베이스라인을 <b>22.24점</b> 앞서면서 peak KV 메모리 <b>5.00배</b>, 종단 지연 <b>5.62배</b>를 줄인다. 정작 봐야 할 숫자는 다른 곳에 있다 — DeepSeek-R1-Distill-Llama-8B에서 같은 방법의 우위는 <b>1.54점</b>에 불과하다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">KV cache compression was designed for a single long prompt. An agent is not a long prompt — it is a sequence of turns in which information changes role.</p>
+    <p class="lead t-ko">KV 캐시 압축은 원래 하나의 긴 프롬프트를 위해 설계됐다. 그런데 에이전트는 긴 프롬프트가 아니라, 정보의 <i>역할이 바뀌는</i> 턴의 연속이다.</p>
+    <p class="t-en">In the ReAct loop the server reuses KV states across turns so it never re-prefills the history: at turn <i>t</i> it prefills only the new observation o<sub>t−1</sub> and appends the KV of the generated reasoning z<sub>t</sub> and decision a<sub>t</sub>. That is exactly why the cache becomes the bottleneck — it is <i>persistent</i>, growing monotonically with the trajectory. Compression is unavoidable. But every existing policy imports an assumption from the single-prompt setting: that importance measured now predicts importance later. CommitKV's Figure 1 is built to break that assumption with a two-line example. An earlier observation page containing "The festival is held in Paris" and a tool-call page reading "Weather(place ID)" can carry the <i>same</i> low score at the same checkpoint. Evicting the first is a silent, unrecoverable error that only surfaces in the final answer; evicting the second is free. The snapshot has no way to choose.</p>
+    <p class="t-ko">ReAct 루프에서 서버는 턴 간에 KV 상태를 재사용해 히스토리를 다시 prefill 하지 않는다. 턴 <i>t</i>에서는 새 관측 o<sub>t−1</sub>만 prefill 하고, 생성된 추론 z<sub>t</sub>와 결정 a<sub>t</sub>의 KV를 이어 붙인다. 바로 그래서 캐시가 병목이 된다 — 캐시가 <i>영속적</i>이고, 궤적을 따라 단조 증가하기 때문이다. 압축은 피할 수 없다. 문제는 기존 정책들이 단일 프롬프트 세팅의 가정을 그대로 들고 온다는 것 — 지금 잰 중요도가 나중의 중요도를 예측한다는 가정이다. 논문의 Figure 1은 이 가정을 두 줄짜리 예시로 깨뜨리도록 설계돼 있다. "The festival is held in Paris"를 담은 이전 관측 페이지와 "Weather(place ID)"라는 tool-call 페이지가 같은 체크포인트에서 <i>똑같이</i> 낮은 점수를 받을 수 있다. 앞의 것을 버리면 최종 답에서야 드러나는 조용하고 복구 불가능한 오류가 되고, 뒤의 것을 버리면 공짜다. 스냅샷은 이 둘을 고를 방법이 없다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+22.24</div><div class="l"><span class="t-en">points over the best baseline, Qwen3-14B @ 2048 tokens (38.45 vs R-KV 16.21)</span><span class="t-ko">최고 베이스라인 대비 점수차, Qwen3-14B @ 2048 토큰 (38.45 vs R-KV 16.21)</span></div></div>
+      <div class="stat"><div class="n">5.00×</div><div class="l"><span class="t-en">peak KV-memory saving vs FullKV (GPQA: 21.74 → 4.35 GB)</span><span class="t-ko">FullKV 대비 peak KV 메모리 절감 (GPQA: 21.74 → 4.35 GB)</span></div></div>
+      <div class="stat"><div class="n">5.62×</div><div class="l"><span class="t-en">end-to-end speedup per sample (GPQA: 10.46 → 1.86 s)</span><span class="t-ko">샘플당 종단 속도 향상 (GPQA: 10.46 → 1.86 초)</span></div></div>
+      <div class="stat"><div class="n">+1.54</div><div class="l"><span class="t-en">points on DeepSeek-R1-Distill-Llama-8B — the weakest backbone margin</span><span class="t-ko">DeepSeek-R1-Distill-Llama-8B에서의 점수차 — 가장 약한 백본 결과</span></div></div>
+      <div class="stat"><div class="n">16 / 8</div><div class="l"><span class="t-en">page size G / query-window size W, in tokens</span><span class="t-ko">페이지 크기 G / 쿼리 윈도 크기 W (토큰)</span></div></div>
+      <div class="stat"><div class="n">−7.36</div><div class="l"><span class="t-en">points when the lifecycle mechanism is ablated (48.04 → 40.68)</span><span class="t-ko">lifecycle 메커니즘 제거 시 하락폭 (48.04 → 40.68)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The result, across three budgets</span><span class="t-ko">세 가지 예산에서의 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1+2 (condensed).</b> Qwen3-14B, unweighted mean accuracy (%) over eight benchmarks — FRAMES, GAIA, ToolHop, xbench-DeepSearch, GPQA, Bamboogle, MATH-500, AIME25. FullKV is the uncompressed reference and does not change with the budget. Read the columns right-to-left: the tighter the budget, the wider CommitKV's margin — and the wider FullKV's lead over everything.</caption>
+        <caption class="t-ko"><b>Table 1+2 (요약).</b> Qwen3-14B, 8개 벤치마크(FRAMES, GAIA, ToolHop, xbench-DeepSearch, GPQA, Bamboogle, MATH-500, AIME25)의 비가중 평균 정확도(%). FullKV는 압축하지 않은 기준선이라 예산에 따라 변하지 않는다. 열을 오른쪽에서 왼쪽으로 읽어라 — 예산이 빠듯할수록 CommitKV의 우위가 커지지만, 동시에 FullKV와의 격차도 커진다.</caption>
+        <thead><tr><th>Method</th><th>2048</th><th>4096</th><th>8192</th></tr></thead>
+        <tbody>
+          <tr><td>FullKV</td><td>50.62</td><td>50.62</td><td>50.62</td></tr>
+          <tr><td>SnapKV</td><td>13.80</td><td>26.34</td><td>43.30</td></tr>
+          <tr><td>R-KV</td><td>16.21</td><td>26.66</td><td>43.70</td></tr>
+          <tr><td>TriAttention</td><td>13.79</td><td>26.69</td><td>40.06</td></tr>
+          <tr><td><b>CommitKV</b></td><td class="up"><b>38.45</b></td><td class="up"><b>46.54</b></td><td class="up"><b>47.41</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in two moves</span><span class="t-ko">두 수로 요약한 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">commit transition</span>
+        <h3>Measure the same page on both sides of the observation</h3>
+        <p class="t-en">A tool call ends at a well-defined position — the <b>commit</b> c. That boundary is the only place in an agent trajectory where you know a piece of information has just been <i>answered</i>. CommitKV puts two query windows around it: Q<sup>−</sup><sub>c</sub>, the last W self-attention queries ending at the tool call's completion, and Q<sup>+</sup><sub>c</sub>, the first W queries of the next turn, generated <i>after</i> the returned observation was appended. For the same page E it computes a deletion effect in each: remove E's attention mass, renormalize the remaining weights, and take the maximum relative change in the attention output over positions and then over heads. The pair (R<sup>−</sup>, R<sup>+</sup>) is the signal — not either number alone.</p>
+        <p class="t-ko">tool call은 명확히 정의된 위치에서 끝난다 — <b>commit</b> c다. 에이전트 궤적에서 어떤 정보가 방금 <i>답을 받았다</i>는 걸 알 수 있는 유일한 경계가 여기다. CommitKV는 그 주변에 두 개의 쿼리 윈도를 놓는다. Q<sup>−</sup><sub>c</sub>는 tool call이 끝나는 지점의 마지막 W개 self-attention 쿼리, Q<sup>+</sup><sub>c</sub>는 관측이 붙은 <i>다음</i> 턴의 첫 W개 쿼리다. 같은 페이지 E에 대해 각각 deletion effect를 계산한다 — E의 어텐션 질량을 제거하고 남은 가중치를 재정규화한 뒤, 어텐션 출력의 상대 변화량을 위치에 대해 최대, 다시 헤드에 대해 최대로 취한다. 신호는 (R<sup>−</sup>, R<sup>+</sup>) 쌍이지, 둘 중 하나가 아니다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">absolute + percentile</span>
+        <h3>Neither threshold works alone</h3>
+        <p class="t-en">The two windows contain different query tokens, so their deletion effects sit on different numerical scales — a fixed threshold would label them inconsistently. But a pure percentile is just as broken: a page can rank in the top quartile while <i>every</i> deletion effect is negligible, or rank low while all pages genuinely matter. So a page is HIGH only if R ≥ τ<sub>use</sub>=0.05 <b>and</b> its percentile ≥ ρ<sub>use</sub>=0.75, and LOW only if R ≤ τ<sub>dead</sub>=0.01 <b>and</b> percentile ≤ ρ<sub>dead</sub>=0.25. Anything satisfying neither is left <i>uncertain</i> and simply not acted on — the policy is deliberately allowed to abstain.</p>
+        <p class="t-ko">두 윈도는 서로 다른 쿼리 토큰을 담고 있어서 deletion effect의 수치 스케일이 다르다 — 고정 임계값 하나로는 라벨이 일관되지 않는다. 그렇다고 순수 백분위만 쓰는 것도 똑같이 망가진다. <i>모든</i> deletion effect가 무시할 만한 크기인데도 어떤 페이지가 상위 사분위에 들 수 있고, 반대로 모든 페이지가 진짜 중요한데 어떤 페이지가 낮게 매겨질 수도 있다. 그래서 HIGH는 R ≥ τ<sub>use</sub>=0.05 <b>이고</b> 백분위 ≥ ρ<sub>use</sub>=0.75일 때만, LOW는 R ≤ τ<sub>dead</sub>=0.01 <b>이고</b> 백분위 ≤ ρ<sub>dead</sub>=0.25일 때만 성립한다. 둘 다 아니면 <i>uncertain</i>으로 남기고 아무 조치도 하지 않는다 — 판단 보류를 의도적으로 허용한 설계다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">joint validation</span>
+        <h3>Individually harmless ≠ collectively harmless</h3>
+        <p class="t-en">Retiring pages one at a time on individual scores is the trap that snapshot methods fall into: fifty pages that each change the output by 0.9% can together destroy it. CommitKV builds the retirement set D<sub>c</sub> greedily — candidates ordered by increasing R<sup>+</sup> then decreasing R<sup>−</sup> — and admits E only if the deletion effect of the <i>whole set</i> D<sub>c</sub> ∪ {E} still satisfies R<sup>+</sup>(D<sub>c</sub> ∪ {E}) ≤ τ<sub>joint</sub> = 0.01. Removing this one test costs 5.11 points in the ablation.</p>
+        <p class="t-ko">개별 점수로 페이지를 하나씩 퇴역시키는 것이 스냅샷 방식이 빠지는 함정이다. 각각 출력을 0.9%씩만 바꾸는 페이지 50개가 합쳐지면 출력을 파괴할 수 있다. CommitKV는 퇴역 집합 D<sub>c</sub>를 greedy하게 구성하되 — 후보를 R<sup>+</sup> 오름차순, 다음 R<sup>−</sup> 내림차순으로 정렬 — <i>집합 전체</i>의 deletion effect가 R<sup>+</sup>(D<sub>c</sub> ∪ {E}) ≤ τ<sub>joint</sub> = 0.01을 여전히 만족할 때만 E를 받아들인다. 이 검증 하나를 빼면 ablation에서 5.11점이 날아간다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">transition protection</span>
+        <h3>Don't evict a page you haven't finished measuring</h3>
+        <p class="t-en">A page whose pre-commit effect is recorded but whose post-commit effect is still pending has an <i>incomplete</i> transition — evicting it destroys the very measurement the method depends on. CommitKV protects these pending indices, but caps them at B<sub>N</sub> = ⌊ηB⌋ with η = 0.125, so bookkeeping can never eat more than an eighth of the budget. Over the cap, pages with larger pre-commit effect are protected first, since a strong R<sup>−</sup> is a precondition for a meaningful high-to-low transition. This is the single most valuable component in the ablation: removing it costs 6.52 points.</p>
+        <p class="t-ko">pre-commit 효과는 기록됐지만 post-commit 효과가 아직 측정되지 않은 페이지는 <i>미완성</i> transition을 갖는다 — 이걸 evict 하면 방법이 의존하는 측정 자체가 사라진다. CommitKV는 이 pending 인덱스들을 보호하되, B<sub>N</sub> = ⌊ηB⌋ (η = 0.125)로 상한을 둬서 관리 오버헤드가 예산의 1/8을 넘지 못하게 한다. 상한을 넘으면 pre-commit 효과가 큰 페이지를 우선 보호한다 — 강한 R<sup>−</sup>는 의미 있는 high-to-low transition의 전제조건이기 때문이다. ablation에서 가장 값비싼 구성요소로, 제거 시 6.52점이 하락한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Page the events. </span><span class="t-ko">이벤트를 페이지로 나눈다. </span></b><span class="t-en">Each completed tool call a<sub>i</sub> and each returned observation o<sub>i</sub> is an "agent event", split into contiguous spans of at most G = 16 tokens. The page — not the token — is the unit that gets measured and retired.</span><span class="t-ko">완성된 tool call a<sub>i</sub>와 반환된 관측 o<sub>i</sub> 각각이 "agent event"가 되고, 최대 G = 16 토큰의 연속 구간으로 쪼개진다. 측정과 퇴역의 단위는 토큰이 아니라 페이지다.</span></li>
+      <li><b><span class="t-en">Measure before the commit. </span><span class="t-ko">커밋 직전에 측정한다. </span></b><span class="t-en">When a tool call finishes generating, compute R<sup>−</sup><sub>c</sub>(E) over the last W = 8 decode queries for every newly completed page, and mark those pages as pending (subject to the B<sub>N</sub> cap).</span><span class="t-ko">tool call 생성이 끝나면, 새로 완성된 모든 페이지에 대해 마지막 W = 8개 디코드 쿼리에서 R<sup>−</sup><sub>c</sub>(E)를 계산하고 그 페이지들을 pending으로 표시한다 (B<sub>N</sub> 상한 적용).</span></li>
+      <li><b><span class="t-en">Measure after the observation, then classify. </span><span class="t-ko">관측이 들어온 뒤 다시 재고, 분류한다. </span></b><span class="t-en">Once the next turn begins, compute R<sup>+</sup><sub>c</sub>(E) over its first 8 queries and the percentile ranks in both windows. HIGH→LOW becomes a completion candidate; LOW→LOW is dormant and explicitly spared; LOW→HIGH, HIGH→HIGH and everything else are left untouched by the lifecycle rule.</span><span class="t-ko">다음 턴이 시작되면 그 첫 8개 쿼리에서 R<sup>+</sup><sub>c</sub>(E)와 두 윈도의 백분위를 계산한다. HIGH→LOW는 completion candidate가 되고, LOW→LOW는 dormant로 명시적으로 보호되며, LOW→HIGH·HIGH→HIGH와 나머지는 lifecycle 규칙이 건드리지 않는다.</span></li>
+      <li><b><span class="t-en">Validate jointly, then retire. </span><span class="t-ko">묶어서 검증한 뒤 퇴역시킨다. </span></b><span class="t-en">Candidates are admitted into the retirement set D<sub>c</sub> one at a time, each only if the accumulated set's post-commit deletion effect stays under τ<sub>joint</sub>. A candidate that fails simply stays resident.</span><span class="t-ko">후보를 하나씩 퇴역 집합 D<sub>c</sub>에 넣되, 누적 집합의 post-commit deletion effect가 τ<sub>joint</sub> 아래로 유지될 때만 받아들인다. 탈락한 후보는 그냥 캐시에 남는다.</span></li>
+      <li><b><span class="t-en">At the checkpoint: exclude, protect, select. </span><span class="t-ko">체크포인트에서: 제외·보호·선택. </span></b><span class="t-en">Compression fires every 128 decoded tokens (the same trigger R-KV and TriAttention use, so the comparison is fair). Tokens in D<sub>c</sub> are excluded, pending indices N<sub>j</sub> are kept, and the remainder is selected to fill budget B. Crucially the <i>same</i> index set I<sub>j</sub> is applied to keys, values <b>and</b> absolute positions — RoPE encodes relationships from those positions, so letting them drift would corrupt the retained cache.</span><span class="t-ko">압축은 128 디코드 토큰마다 발동한다 (R-KV·TriAttention과 동일한 트리거라 비교가 공정하다). D<sub>c</sub>의 토큰은 제외하고, pending 인덱스 N<sub>j</sub>는 유지하며, 나머지로 예산 B를 채운다. 핵심은 <i>동일한</i> 인덱스 집합 I<sub>j</sub>를 key·value <b>그리고</b> 절대 위치에까지 똑같이 적용한다는 점이다 — RoPE가 그 위치로 관계를 인코딩하므로, 위치가 어긋나면 남긴 캐시가 오염된다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The reusable idea is not the algorithm, it's the <b>boundary</b>. Agent trajectories contain structural events — a tool call committing, an observation returning — that mark exactly when a piece of information's role could plausibly have ended. Any cache policy for agents can exploit those boundaries; CommitKV just happens to exploit them with deletion effects.</p><p class="t-ko">재사용 가능한 아이디어는 알고리즘이 아니라 <b>경계</b>다. 에이전트 궤적에는 구조적 이벤트 — tool call의 커밋, 관측의 반환 — 가 있고, 이 지점이 바로 어떤 정보의 역할이 끝났을 법한 시점을 표시한다. 에이전트용 캐시 정책이라면 어떤 것이든 이 경계를 활용할 수 있다. CommitKV는 그걸 deletion effect로 활용했을 뿐이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Deletion effect (Eq. 6–7) is a strictly better importance proxy than raw attention weight, and it is cheap: renormalize the remaining weights after removing a span and read the relative change in the head output. It answers "what happens if this is gone" rather than "how much is this looked at" — and those differ whenever attention is spread across redundant tokens.</p><p class="t-ko">deletion effect(식 6–7)는 원시 어텐션 가중치보다 엄밀히 나은 중요도 대리 지표이면서 계산도 싸다. 어떤 구간을 제거한 뒤 남은 가중치를 재정규화하고 헤드 출력의 상대 변화를 읽으면 된다. "이게 얼마나 주목받는가"가 아니라 "이게 사라지면 어떻게 되는가"에 답하는데, 어텐션이 중복 토큰에 분산돼 있을 때 이 둘은 달라진다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">The ablation is the honest part of the paper. Every one of the five components is load-bearing (−4.4 to −7.4 points), which is a genuine result — but it also means the method is five interacting heuristics with eight hyperparameters (W, G, η, τ<sub>use</sub>, τ<sub>dead</sub>, τ<sub>joint</sub>, ρ<sub>use</sub>, ρ<sub>dead</sub>), and the main text carries no sensitivity study for any of them.</p><p class="t-ko">ablation은 이 논문의 정직한 부분이다. 다섯 구성요소가 전부 실제로 기여한다(−4.4 ~ −7.4점). 이건 진짜 결과다. 하지만 동시에 이 방법이 8개 하이퍼파라미터(W, G, η, τ<sub>use</sub>, τ<sub>dead</sub>, τ<sub>joint</sub>, ρ<sub>use</sub>, ρ<sub>dead</sub>)를 가진 다섯 개의 상호작용하는 휴리스틱이라는 뜻이기도 하며, 본문에는 그 어느 것에 대해서도 민감도 분석이 없다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> The headline "+22.24 points" is measured where every snapshot baseline has already collapsed — at the 2048-token budget SnapKV scores 13.80 and TriAttention 13.79, against a FullKV of 50.62, which is near-total failure. Beating a broken baseline by a lot is a weaker claim than it reads. Scale the budget up and the margin decays fast: +19.85 at 4096, +3.71 at 8192. Change the backbone and it nearly vanishes — on DeepSeek-R1-Distill-Llama-8B the gain is <b>+1.54</b> points, and on that model CommitKV is actually <i>worse</i> than SnapKV on GPQA (27.78 vs 35.35) and worse than R-KV on GAIA (2.91 vs 4.85). Two further gaps: the related-work section cites agent-specific cache managers (EpiCache, SideQuest, IntentKV) and then never compares against any of them — all three baselines are single-turn reasoning methods, which is precisely the mismatch the paper's own premise predicts they would lose to. And the 5.62× speedup is measured against uncompressed FullKV, not against the compressed baselines, which is the comparison that would isolate the cost of CommitKV's per-page, per-head deletion-effect bookkeeping.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 수치 "+22.24점"은 모든 스냅샷 베이스라인이 이미 붕괴한 지점에서 측정됐다. 2048 토큰 예산에서 SnapKV는 13.80점, TriAttention은 13.79점인데 FullKV가 50.62점이니 사실상 전면 실패다. 망가진 베이스라인을 크게 이기는 건 읽히는 것보다 약한 주장이다. 예산을 키우면 격차는 빠르게 줄어든다 — 4096에서 +19.85, 8192에서 +3.71. 백본을 바꾸면 거의 사라진다 — DeepSeek-R1-Distill-Llama-8B에서 이득은 <b>+1.54</b>점이고, 이 모델에서 CommitKV는 GPQA에서 SnapKV보다 <i>못하고</i>(27.78 vs 35.35), GAIA에서 R-KV보다 못하다(2.91 vs 4.85). 빈틈이 둘 더 있다. related work에서 에이전트 전용 캐시 관리자(EpiCache, SideQuest, IntentKV)를 인용해 놓고 그 어느 것과도 비교하지 않는다 — 비교 대상 세 개는 전부 단일 턴 추론용 방법이고, 이들이 질 수밖에 없다는 건 바로 이 논문의 전제가 예측하는 바다. 그리고 5.62배 속도 향상은 압축 베이스라인이 아니라 비압축 FullKV 대비 측정치인데, CommitKV의 페이지별·헤드별 deletion-effect 관리 비용을 분리해 보여줄 비교는 바로 후자다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.07855">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.07855">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.07855">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.07855">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is fully drained (all 10 IDs processed), so this came from the fallback search. It extends the Model Compression axis into the one setting this archive keeps circling — multi-turn agents — and is the direct counterpart to TriAttention (arXiv:2604.04921), which it uses as a baseline and beats, and to xKV / LCGuard, which share KV <i>across</i> agents where CommitKV retires it <i>within</i> one. Posted three weeks ago, preprint, no venue claimed</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-28.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 완전히 소진되어(10개 전부 처리) 폴백 검색에서 골랐다. Model Compression 축을 이 아카이브가 계속 맴도는 세팅 — 멀티턴 에이전트 — 으로 확장하는 논문이고, 여기서 베이스라인으로 쓰여 패배하는 TriAttention(arXiv:2604.04921)의 직접적 대응물이자, KV를 에이전트 <i>간에</i> 공유하는 xKV·LCGuard와 달리 KV를 한 에이전트 <i>안에서</i> 퇴역시키는 반대편 접근이다. 3주 전 공개된 프리프린트로 학회 accept 주장 없음</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-28.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
