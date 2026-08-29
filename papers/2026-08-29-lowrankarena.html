@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · LowRankArena</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank / SVD</span><span class="t-ko">Model Compression · Low-rank / SVD</span></span>
+      <span>2026.08.29</span>
+    </div>
+    <h1>LowRankArena<br>
+      <span class="glow t-en">— when you re-run five SVD papers under one protocol, the leaderboard falls apart</span>
+      <span class="glow t-ko">— 다섯 편의 SVD 논문을 같은 프로토콜로 다시 돌리자, 순위표가 무너졌다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Zishan Shao</b> <span class="t-en">(first &amp; corresponding) + 12, incl. Yiran Chen, Hai Li</span><span class="t-ko">(1저자 겸 교신) 외 12인, Yiran Chen · Hai Li 포함</span></span>
+      <span>🏛 Duke University · Wake Forest University</span>
+      <span>🗓 2026-08-26</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.26389">arXiv:2608.26389</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Five well-known training-free SVD compression methods were re-run under one fixed protocol — same keep-ratio definition, same task versions, same vLLM inference stack, no post-compression recovery. Almost nothing survives cleanly: the "best" method changes with the backbone (ASVD goes #2 → #5 just by moving from Llama-1 to Llama-3.1), multiple-choice accuracy stays flat while perplexity explodes by 100×, structured pruning is still ahead on language modeling, and the 4.2× prefill speedup collapses to 0.68× end-to-end once decoding dominates. The deliverable is the platform plus 3+ TiB of released compressed checkpoints.</p>
+    <p class="t-ko">널리 쓰이는 training-free SVD 압축 5종을 하나의 고정 프로토콜로 다시 돌렸다 — keep ratio 정의, 태스크 버전, vLLM 추론 스택을 모두 통일하고 압축 후 recovery는 뺐다. 깨끗하게 살아남는 결론이 거의 없다. "최고" 방법은 백본에 따라 바뀌고(ASVD는 Llama-1 → Llama-3.1로 옮기는 것만으로 #2 → #5), 객관식 정확도는 그대로인데 perplexity는 100배로 터지며, 언어모델링에서는 여전히 structured pruning이 앞선다. 그리고 4.2배였던 prefill 가속은 디코딩이 지배하는 순간 종단간 0.68배로 뒤집힌다. 결과물은 플랫폼과 함께 공개된 3 TiB 이상의 압축 체크포인트다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">This is the paper that audits the field this archive has been reading all year — and it says the reported progress is mostly conditional on evaluation setup.</p>
+    <p class="lead t-ko">이 아카이브가 1년 내내 읽어온 바로 그 분야를 감사하는 논문이고, 결론은 보고된 진전 대부분이 평가 세팅에 종속적이라는 것이다.</p>
+    <p class="t-en">Every SVD compression paper reports gains against numbers copied from other papers, because actually re-running the baselines across model families, keep ratios and task suites costs more GPU time than most groups will spend. So the comparisons drift: different benchmark versions, different backbones, and — critically — different definitions of "compression ratio", with mixed-precision quantization or weight remapping folded into what is labelled a low-rank budget. The authors did not just assert this. They audited <b>76 public OpenReview reviewer and Area Chair notes</b> on recent SVD papers and found the same six complaints recurring: narrow coverage (22.4%), weak baselines (22.4%), no end-to-end speed (21.1%), budget mismatch (17.1%), mixed-precision confounds (6.6%), missing artifacts (5.3%).</p>
+    <p class="t-ko">모든 SVD 압축 논문은 다른 논문에서 베껴온 숫자를 상대로 개선을 보고한다. 모델 패밀리·keep ratio·태스크 스위트 전반에 걸쳐 베이스라인을 실제로 다시 돌리는 비용이 대부분의 연구실이 감당할 GPU 시간을 넘기 때문이다. 그래서 비교가 표류한다. 벤치마크 버전이 다르고, 백본이 다르고, 결정적으로 "압축률" 정의 자체가 다르다 — mixed-precision 양자화나 weight remapping이 low-rank 예산이라는 이름 안에 섞여 들어간다. 저자들은 이걸 주장만 하지 않았다. 최근 SVD 논문들에 달린 <b>공개 OpenReview 리뷰어·AC 코멘트 76건</b>을 감사해, 동일한 여섯 가지 불만이 반복됨을 확인했다: 좁은 커버리지(22.4%), 약한 베이스라인(22.4%), 종단간 속도 미보고(21.1%), 예산 불일치(17.1%), mixed-precision 혼입(6.6%), 아티팩트 누락(5.3%).</p>
+    <figure class="fig">
+      <img src="fig/2608.26389/pipeline.png" alt="LowRankArena overview: four evaluation problems, the standardized platform, and four takeaways">
+      <figcaption class="t-en"><b>Figure 1.</b> The paper's own framing. Left: four ways current SVD evaluations resist comparison — misaligned budgets, mismatched tasks, partial speed claims, closed baselines. Middle: what LowRankArena fixes, plus the 3+ TiB checkpoint zoo. Right: the four things the aligned re-run actually showed — progress is conditional, perplexity reveals a gap to pruning, theoretical savings do not become serving speedups.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> 논문 스스로의 구도. 왼쪽: 현재 SVD 평가가 비교를 거부하는 네 가지 방식 — 어긋난 예산, 맞지 않는 태스크, 부분적인 속도 주장, 닫힌 베이스라인. 가운데: LowRankArena가 고정하는 것들과 3 TiB 이상의 체크포인트 저장소. 오른쪽: 정렬된 재실행이 실제로 보여준 네 가지 — 진전은 조건부이고, perplexity가 pruning과의 격차를 드러내며, 이론적 절감이 서빙 가속으로 이어지지 않는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.26389</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">5</div><div class="l"><span class="t-en">SVD methods re-run under one protocol (ASVD, SVD-LLM, DoBi-SVD, Basis Sharing, MoDeGPT)</span><span class="t-ko">하나의 프로토콜로 재실행된 SVD 방법 수 (ASVD·SVD-LLM·DoBi-SVD·Basis Sharing·MoDeGPT)</span></div></div>
+      <div class="stat"><div class="n">3+ TiB</div><div class="l"><span class="t-en">released compressed checkpoints, so the next paper can compare without re-running anything</span><span class="t-ko">공개된 압축 체크포인트 용량 — 다음 논문은 재실행 없이 비교 가능</span></div></div>
+      <div class="stat"><div class="n">76</div><div class="l"><span class="t-en">public OpenReview reviewer notes audited to derive the six recurring evaluation complaints</span><span class="t-ko">반복되는 평가 문제 6종을 도출하기 위해 감사한 공개 OpenReview 코멘트 수</span></div></div>
+      <div class="stat"><div class="n">23×</div><div class="l"><span class="t-en">C4 perplexity gap between the best and second-best SVD method at 60% keep on Llama-3.1-8B (51.82 vs 1187.78)</span><span class="t-ko">Llama-3.1-8B·60% keep에서 1위와 2위 SVD 방법의 C4 perplexity 격차 (51.82 대 1187.78)</span></div></div>
+      <div class="stat"><div class="n">4.20× → 0.68×</div><div class="l"><span class="t-en">best TTFT speedup vs. worst end-to-end speedup — the same compressed models, different workload phase</span><span class="t-ko">최고 TTFT 가속 대 최악 종단간 가속 — 같은 압축 모델, 다른 워크로드 단계</span></div></div>
+      <div class="stat"><div class="n">0 / 5</div><div class="l"><span class="t-en">methods that produced a 70B checkpoint on the fixed one-H200 recipe; all five failed on engineering, not algorithms</span><span class="t-ko">고정된 H200 1장 레시피로 70B 체크포인트를 만들어낸 방법 수 — 다섯 모두 알고리즘이 아니라 엔지니어링에서 실패</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The table that carries the argument</span><span class="t-ko">논지를 떠받치는 표</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (Llama-3.1-8B block).</b> Every method at a matched keep ratio, matched task versions, matched scripts, no post-compression recovery. Read the MCQ Avg column against the C4 PPL column: at 80% keep, ASVD and DoBi-SVD sit at 0.353 / 0.355 — essentially the 0.357 macro chance floor — while their perplexities are in the four digits. Multiple-choice accuracy alone would have hidden that completely.</caption>
+        <caption class="t-ko"><b>표 1 (Llama-3.1-8B 부분).</b> 모든 방법을 동일 keep ratio·동일 태스크 버전·동일 스크립트에서, 압축 후 recovery 없이 평가했다. MCQ Avg 열을 C4 PPL 열과 나란히 볼 것: 80% keep에서 ASVD와 DoBi-SVD는 0.353 / 0.355로 사실상 매크로 찍기 하한선 0.357에 앉아 있는데 perplexity는 네 자리다. 객관식 정확도만 봤다면 이 사실은 완전히 가려졌다.</caption>
+        <thead><tr><th>Method</th><th>Keep</th><th>WikiText-2 PPL ↓</th><th>C4 PPL ↓</th><th>MCQ Avg ↑</th><th>Q. Ret. ↑</th></tr></thead>
+        <tbody>
+          <tr><td>Dense FP</td><td>100%</td><td>6.24</td><td>9.10</td><td>0.716</td><td class="up">1.000</td></tr>
+          <tr><td>ASVD</td><td>80%</td><td>2011.38</td><td>1281.96</td><td>0.353</td><td>0.304</td></tr>
+          <tr><td>SVD-LLM v1</td><td>80%</td><td>14.83</td><td>80.94</td><td>0.516</td><td>0.520</td></tr>
+          <tr><td>DoBi-SVD</td><td>80%</td><td>556.59</td><td>1008.41</td><td>0.355</td><td>0.341</td></tr>
+          <tr><td>Basis Sharing</td><td>80%</td><td>15.61</td><td>54.36</td><td>0.561</td><td>0.531</td></tr>
+          <tr><td>MoDeGPT</td><td>80%</td><td>9.01</td><td>17.68</td><td>0.590</td><td class="up">0.766</td></tr>
+          <tr><td>ASVD</td><td>60%</td><td>22684.63</td><td>14186.23</td><td>0.351</td><td>0.326</td></tr>
+          <tr><td>SVD-LLM v1</td><td>60%</td><td>199.84</td><td>1187.78</td><td>0.360</td><td>0.329</td></tr>
+          <tr><td>DoBi-SVD</td><td>60%</td><td>987.51</td><td>1529.38</td><td>0.349</td><td>0.325</td></tr>
+          <tr><td>Basis Sharing</td><td>60%</td><td>82.96</td><td>461.21</td><td>0.396</td><td>0.330</td></tr>
+          <tr><td>MoDeGPT</td><td>60%</td><td>24.50</td><td>51.82</td><td>0.504</td><td class="up">0.446</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">And the comparison the field mostly avoids: at that same 60% keep on Llama-3.1-8B, <b>LLM-Pruner reaches 34.85 C4 PPL</b> — better than the best SVD method's 51.82. Structured pruning degrades gracefully where several SVD methods hit a cliff.</p>
+    <p class="t-ko">그리고 이 분야가 대체로 피해온 비교: 같은 Llama-3.1-8B·60% keep에서 <b>LLM-Pruner는 C4 PPL 34.85</b>를 기록한다 — 최고 SVD 방법의 51.82보다 낫다. 여러 SVD 방법이 절벽을 만나는 구간에서 structured pruning은 완만하게 저하된다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What the platform actually fixes</span><span class="t-ko">플랫폼이 실제로 고정하는 것</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">budget axis</span>
+        <h3>One keep-ratio definition, one precision</h3>
+        <p class="t-en">The keep ratio is defined as retained factorized parameters over original parameters, <i>with the bit-width of every compressed layer pinned to the original</i>. That single constraint is what separates pure subspace selection from the mixed-precision and remapping tricks that had been quietly bundled into reported "compression ratios". Uniform-precision SVD becomes the primary leaderboard; mixed-precision and runtime-adaptive variants are pushed to auxiliary audits rather than merged in.</p>
+        <p class="t-ko">keep ratio를 "유지된 분해 파라미터 / 원본 파라미터"로 정의하되, <i>압축된 모든 레이어의 비트폭을 원본에 고정</i>한다. 이 하나의 제약이 순수한 부분공간 선택을, 그동안 보고된 "압축률" 안에 조용히 묶여 있던 mixed-precision·remapping 기법과 분리한다. uniform-precision SVD가 메인 리더보드가 되고, mixed-precision·런타임 적응형 변형은 병합되지 않고 보조 감사로 밀려난다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">metric pairing</span>
+        <h3>Perplexity next to accuracy, always</h3>
+        <p class="t-en">Seven zero-shot multiple-choice tasks (LM-Eval-Harness v0.4.11) are reported <i>beside</i> WikiText-2 and C4 perplexity, never instead of it — plus MathQA and MMLU-Math at 5-shot. The pairing is the point: MCQ accuracy has a chance floor around 0.357 that a fully broken model still clears, so a method can look like it retained half its capability while its generative behaviour has collapsed.</p>
+        <p class="t-ko">7종 zero-shot 객관식 태스크(LM-Eval-Harness v0.4.11)를 WikiText-2·C4 perplexity <i>옆에</i> 함께 보고한다 — 대체가 아니라 병기다. 여기에 MathQA와 MMLU-Math를 5-shot으로 더한다. 병기가 핵심이다. 객관식 정확도에는 0.357 근처의 찍기 하한선이 있어 완전히 망가진 모델도 그 선은 넘는다. 그래서 생성 능력이 붕괴한 방법이 능력의 절반을 지킨 것처럼 보일 수 있다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">serving</span>
+        <h3>One vLLM path, end-to-end</h3>
+        <p class="t-en">Compressed checkpoints are exported and served through a single vLLM 0.18.1 path with hardware, precision, tensor parallelism, scheduler settings, prompt/output lengths and request arrival all fixed within each table. TTFT, inter-token latency, end-to-end latency and throughput are reported together — so a prefill-only win cannot be presented as a deployment win.</p>
+        <p class="t-ko">압축 체크포인트를 export해 단일 vLLM 0.18.1 경로로 서빙하며, 표 내부에서 하드웨어·정밀도·텐서 병렬·스케줄러 설정·프롬프트/출력 길이·요청 도착 과정을 모두 고정한다. TTFT·토큰 간 지연·종단간 지연·처리량을 함께 보고하므로, prefill에서만 이긴 것을 배포에서의 승리로 제시할 수 없다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">artifacts</span>
+        <h3>3+ TiB of checkpoints, not just code</h3>
+        <p class="t-en">Method adapters, standardized scripts, inference harnesses, normalized result schemas and the compressed checkpoints themselves are released on Hugging Face. This is the part that changes incentives: the next SVD paper no longer has an excuse to cite reported numbers, because the compared model states are downloadable rather than re-derivable.</p>
+        <p class="t-ko">방법별 어댑터, 표준화 스크립트, 추론 하네스, 정규화된 결과 스키마, 그리고 압축 체크포인트 자체를 Hugging Face에 공개한다. 인센티브를 바꾸는 건 이 부분이다. 다음 SVD 논문은 더 이상 보고된 숫자를 인용할 핑계가 없다. 비교 대상 모델 상태를 다시 만들어낼 필요 없이 내려받을 수 있기 때문이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Derive the problem from reviewers, not intuition</span><span class="t-ko">직관이 아니라 리뷰어에게서 문제를 도출</span></b><span class="t-en">Audit 76 public OpenReview notes on recent SVD compression papers, cluster the complaints, and let that distribution decide which evaluation axes the platform has to pin down.</span><span class="t-ko">최근 SVD 압축 논문들에 달린 공개 OpenReview 코멘트 76건을 감사하고 불만을 군집화한 뒤, 그 분포가 플랫폼이 고정해야 할 평가 축을 결정하게 한다.</span></li>
+      <li><b><span class="t-en">Pin the four axes</span><span class="t-ko">네 개의 축을 고정</span></b><span class="t-en">Model coverage (Llama-1/2-7B, Llama-3.1-8B, Qwen3-8B-Base), task coverage and versions, inference measurement, and the uniform-precision keep-ratio budget at r ∈ {0.8, 0.6, 0.4}.</span><span class="t-ko">모델 커버리지(Llama-1/2-7B, Llama-3.1-8B, Qwen3-8B-Base), 태스크 커버리지와 버전, 추론 측정, 그리고 r ∈ {0.8, 0.6, 0.4}의 uniform-precision keep ratio 예산.</span></li>
+      <li><b><span class="t-en">Re-run five methods from their own released code</span><span class="t-ko">공개 코드로 다섯 방법을 재실행</span></b><span class="t-en">ASVD, SVD-LLM, DoBi-SVD, Basis Sharing and MoDeGPT, each keeping its own default calibration recipe but nothing else — and with post-compression recovery excluded from all primary comparisons.</span><span class="t-ko">ASVD·SVD-LLM·DoBi-SVD·Basis Sharing·MoDeGPT를 각자의 기본 calibration 레시피만 유지한 채 재실행하고, 모든 주요 비교에서 압축 후 recovery는 제외한다.</span></li>
+      <li><b><span class="t-en">Ask whether rankings survive the alignment</span><span class="t-ko">순위가 정렬을 견디는지 묻는다</span></b><span class="t-en">Q1: track quality-retention rank across backbones and keep ratios. They do not survive — MoDeGPT leads on Llama but ASVD and Basis Sharing take the top spot on Qwen3-8B-Base at 80% and 60% keep respectively.</span><span class="t-ko">Q1: 백본과 keep ratio에 걸쳐 품질 유지 순위를 추적한다. 견디지 못한다 — MoDeGPT는 Llama에서 선두지만, Qwen3-8B-Base에서는 80%·60% keep에서 각각 ASVD와 Basis Sharing이 1위를 차지한다.</span></li>
+      <li><b><span class="t-en">Put pruning on the same budget axis</span><span class="t-ko">pruning을 같은 예산 축에 올린다</span></b><span class="t-en">Q2: compare against LLM-Pruner, SliceGPT and BlockPruner at matched parameter counts and precision. SVD stays competitive on MCQ but loses on C4 perplexity at aggressive ratios.</span><span class="t-ko">Q2: LLM-Pruner·SliceGPT·BlockPruner와 동일 파라미터 수·정밀도에서 비교한다. SVD는 객관식에서는 경쟁력을 유지하지만 공격적인 압축률의 C4 perplexity에서는 진다.</span></li>
+      <li><b><span class="t-en">Serve the checkpoints and measure the whole lifecycle</span><span class="t-ko">체크포인트를 서빙해 전체 생애주기를 측정</span></b><span class="t-en">Q3: run prefill-heavy, balanced and decode-heavy request profiles through the fixed vLLM path. TTFT gains up to 4.20× do not survive into end-to-end throughput once memory bandwidth and dual low-rank GEMM overhead dominate.</span><span class="t-ko">Q3: prefill 위주·균형·decode 위주 요청 프로파일을 고정된 vLLM 경로로 돌린다. 최대 4.20배의 TTFT 이득은, 메모리 대역폭과 두 개의 low-rank GEMM 오버헤드가 지배하는 순간 종단간 처리량으로 살아남지 못한다.</span></li>
+      <li><b><span class="t-en">Audit what the protocol itself might be doing</span><span class="t-ko">프로토콜 자체의 영향을 감사</span></b><span class="t-en">Vary only the calibration corpus on Llama-3.1-8B at 80% keep. Ordering holds across three WikiText-2 resamples (largest range 0.0284, below the 0.093–0.235 leader margins), but switching to C4 reverses the close Basis Sharing / SVD-LLM pair.</span><span class="t-ko">Llama-3.1-8B·80% keep에서 calibration 코퍼스만 바꿔본다. WikiText-2 3회 재샘플링에서 순서는 유지되지만(최대 변동 0.0284로 선두 마진 0.093–0.235보다 작다), C4로 바꾸면 근소한 차이의 Basis Sharing / SVD-LLM 쌍은 역전된다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><b>Report perplexity or the result is not interpretable.</b> The single most transferable finding: MCQ accuracy has a floor near 0.357 that a model with four-digit perplexity still clears. Any low-rank result reported on multiple-choice benchmarks alone should be treated as unverified until a generative metric sits next to it.</p><p class="t-ko"><b>perplexity를 함께 보고하지 않으면 결과를 해석할 수 없다.</b> 가장 널리 전이되는 발견이다. 객관식 정확도에는 0.357 근처의 하한선이 있고, perplexity가 네 자리인 모델도 그 선은 넘는다. 객관식 벤치마크만으로 보고된 low-rank 결과는 생성 지표가 옆에 놓이기 전까지 미검증으로 취급해야 한다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><b>"SOTA on Llama-1-7B" is not a claim about SVD.</b> Rankings reshuffle wholesale between backbone generations — ASVD drops #2 → #5 and Basis Sharing climbs #4 → #2 on the same 80% budget, purely by swapping Llama-1 for Llama-3.1. Method selection has to be re-done per backbone, which is a much weaker form of progress than the literature reads as.</p><p class="t-ko"><b>"Llama-1-7B에서 SOTA"는 SVD에 대한 주장이 아니다.</b> 백본 세대가 바뀌면 순위가 통째로 뒤섞인다 — 같은 80% 예산에서 Llama-1을 Llama-3.1로 바꾸는 것만으로 ASVD는 #2 → #5로 내려가고 Basis Sharing은 #4 → #2로 올라간다. 방법 선택은 백본마다 다시 해야 하며, 이는 문헌이 읽히는 방식보다 훨씬 약한 형태의 진전이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><b>Parameter savings are not latency savings.</b> Two smaller low-rank GEMMs are not free relative to one optimized dense GEMM. The win is concentrated in compute-bound prefill (up to 4.20× TTFT) and inverts under decode-heavy load (0.68× E2E, 0.80× throughput for SVD-LLM). Compression papers that report FLOPs instead of served throughput are reporting the phase where they win.</p><p class="t-ko"><b>파라미터 절감은 지연 절감이 아니다.</b> 작은 low-rank GEMM 두 개는 최적화된 dense GEMM 하나에 비해 공짜가 아니다. 이득은 compute-bound인 prefill에 집중되고(TTFT 최대 4.20배), decode 위주 부하에서는 뒤집힌다(종단간 0.68배, SVD-LLM 처리량 0.80배). 서빙 처리량 대신 FLOPs를 보고하는 압축 논문은 자신이 이기는 단계를 보고하고 있는 것이다.</p></div>
+      <div class="t"><span class="ic">🛠</span><p class="t-en"><b>The checkpoint zoo may matter more than the findings.</b> 3+ TiB of released compressed model states removes the cost excuse that produced the fragmentation in the first place. Meanwhile all five methods failed to reach 70B on a fixed one-H200 recipe — on legacy dependencies, memory ceilings, CUDA eigensolver crashes and offloading bugs, not on anything algorithmic.</p><p class="t-ko"><b>체크포인트 저장소가 발견들보다 더 중요할 수 있다.</b> 3 TiB 이상의 공개된 압축 모델 상태는, 애초에 이 파편화를 만들어낸 비용이라는 핑계를 없앤다. 한편 다섯 방법 모두 H200 1장 고정 레시피에서 70B에 도달하지 못했다 — 알고리즘 문제가 아니라 낡은 의존성, 메모리 한계, CUDA eigensolver 크래시, offloading 버그 때문이었다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the headline "capability cliff" is measured with post-compression recovery excluded — but several of these methods were designed on the assumption that a short recovery pass follows, and the paper itself concedes it cannot claim the pruning ranking in Figure 5 survives once recovery is applied. Worse for the central claim, Table 1 keeps <i>each method's own default calibration recipe</i>, so the one axis most likely to move low-rank results is the one axis left unaligned in the main leaderboard; the calibration audit that addresses this covers a single model at a single keep ratio and drops DoBi-SVD for lack of compute. So the strong reading — that reported SVD progress is protocol artifact — is better supported for the efficiency claims (Q3, where the measurement is unambiguous) than for the ranking claims (Q1), which rest on a leaderboard that is matched on everything except calibration.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 간판 결과인 "능력 절벽"은 압축 후 recovery를 제외하고 측정됐다. 그런데 여기 실린 방법 중 몇몇은 짧은 recovery 단계가 뒤따른다는 전제로 설계됐고, 논문 스스로도 recovery를 적용하면 그림 5의 pruning 순위가 유지된다고 주장할 수 없다고 인정한다. 핵심 주장에 더 불리한 건, 표 1이 <i>각 방법의 기본 calibration 레시피를 그대로 유지</i>한다는 점이다. low-rank 결과를 가장 크게 흔들 축이, 메인 리더보드에서 유일하게 정렬되지 않은 축인 셈이다. 이를 다루는 calibration 감사는 단일 모델·단일 keep ratio만 커버하고 연산 부족으로 DoBi-SVD를 제외했다. 따라서 "보고된 SVD 진전은 프로토콜의 산물"이라는 강한 독해는, 측정이 명확한 효율 주장(Q3)에서는 잘 뒷받침되지만, calibration을 뺀 나머지만 맞춰진 리더보드에 기대는 순위 주장(Q1)에서는 덜 뒷받침된다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.26389">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.26389">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.26389">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.26389">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is fully drained, so this came from the fallback search. It is the meta-paper for the axis this archive reads most: it re-runs SVD-LLM, ASVD, DoBi-SVD, Basis Sharing and MoDeGPT — the exact baselines cited by SigmaScale (arXiv:2606.07098), SVD-Surgeon (arXiv:2606.23568) and the COLM'26 calibration-drift study (arXiv:2608.08506) already summarized here — and reports that their ranking does not survive standardization. Posted three days ago, preprint, no venue claimed</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-29.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 완전히 소진되어 폴백 검색에서 골랐다. 이 아카이브가 가장 많이 읽는 축의 메타 논문이다. SVD-LLM·ASVD·DoBi-SVD·Basis Sharing·MoDeGPT를 재실행하는데, 이들은 여기서 이미 요약한 SigmaScale(arXiv:2606.07098), SVD-Surgeon(arXiv:2606.23568), COLM'26 calibration drift 연구(arXiv:2608.08506)가 인용하는 바로 그 베이스라인들이며, 결론은 그 순위가 표준화를 견디지 못한다는 것이다. 3일 전 공개된 프리프린트로 학회 accept 주장 없음</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-29.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
