@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · FreqDepthKV</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache</span><span class="t-ko">Model Compression · KV Cache</span></span>
+      <span>2026.08.30</span>
+    </div>
+    <h1>FreqDepthKV<br>
+      <span class="glow t-en">— compress the KV cache along <i>depth</i>, but keep the frequencies that decide retrieval</span>
+      <span class="glow t-ko">— KV 캐시를 <i>깊이</i> 축으로 압축하되, 검색을 결정하는 주파수는 남긴다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Anna Córdoba</b> <span class="t-en">+ 6, incl. Adam Puente Tercero, Jesús Olivera</span><span class="t-ko">외 6인, Adam Puente Tercero · Jesús Olivera 포함</span></span>
+      <span>🏛 Instituto de Investigación en Visión Artificial</span>
+      <span>🗓 2026-07-07</span>
+      <span>📄 <a href="https://arxiv.org/abs/2607.06519">arXiv:2607.06519</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Adjacent transformer layers store nearly the same KV cache, so MiniCache-style methods share it across layers — and quietly delete the layer-specific detail that retrieval depends on. FreqDepthKV reframes that redundancy as a <b>frequency</b> problem: stack B adjacent layers, run a fixed DCT along the depth axis, keep the low-frequency component once per block, and store the high-frequency residuals only for the few tokens whose removal would actually move attention logits. A prefill probe then routes each head into shared / residual / exact mode. Result at 32k prefill: <b>3.9× compression, 6.2 GB peak KV (from 24.0), 70.4 tok/s (from 38.2)</b>, with F1 at 63.0 against Full KV's 63.4 — no retraining.</p>
+    <p class="t-ko">인접한 트랜스포머 레이어들은 거의 같은 KV 캐시를 저장한다. 그래서 MiniCache 계열은 이를 레이어 간에 공유해버리는데, 이 과정에서 검색이 의존하는 레이어 고유의 디테일이 조용히 삭제된다. FreqDepthKV는 이 중복을 <b>주파수</b> 문제로 다시 정의한다. 인접한 B개 레이어를 쌓고, 깊이 축으로 고정된 DCT를 돌려, 저주파 성분은 블록당 한 번만 저장하고, 고주파 잔차는 지워지면 실제로 attention logit을 흔드는 소수 토큰에 대해서만 저장한다. 이후 prefill 단계의 프로브가 각 헤드를 shared / residual / exact 모드로 라우팅한다. 32k prefill 기준 결과: <b>3.9배 압축, peak KV 6.2 GB(24.0에서), 70.4 tok/s(38.2에서)</b>, F1은 63.0으로 Full KV의 63.4에 근접 — 재학습 없음.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Nearly every KV compression paper this archive has read compresses along the <i>sequence</i> axis (evict tokens) or the <i>precision</i> axis (quantize). This one takes the third axis — depth — seriously, and shows the naive version of it has a specific, diagnosable failure mode.</p>
+    <p class="lead t-ko">이 아카이브가 읽어온 KV 압축 논문 대부분은 <i>시퀀스</i> 축(토큰 제거)이나 <i>정밀도</i> 축(양자화)으로 압축한다. 이 논문은 세 번째 축인 깊이를 정면으로 다루고, 그 소박한 버전에 특정하고 진단 가능한 실패 모드가 있음을 보인다.</p>
+    <p class="t-en">MiniCache established that neighboring layers hold highly similar KV states, which makes depth an unusually cheap compression axis: share one copy across B layers and the footprint drops by roughly B×. The problem is that "similar on average" and "interchangeable" are different claims. The evidence that decides a needle-in-a-haystack lookup or a cross-file code dependency is often a small deviation at one specific token-head-layer coordinate — information that is, by construction, invisible to an average. Uniform depth sharing has low reconstruction error and still shifts the attention logits that select the right span. FreqDepthKV's contribution is to make that distinction <i>representable</i>: a DCT along the depth axis separates the shared mean-like component from exactly those deviations, so they can be priced and preserved separately instead of being averaged away.</p>
+    <p class="t-ko">MiniCache는 이웃한 레이어들이 매우 유사한 KV 상태를 갖는다는 점을 확립했고, 그 덕에 깊이는 유난히 값싼 압축 축이 된다. B개 레이어에 걸쳐 한 벌만 공유하면 용량이 대략 B배 줄어든다. 문제는 "평균적으로 비슷하다"와 "서로 대체 가능하다"가 다른 주장이라는 것이다. needle-in-a-haystack 조회나 파일 간 코드 의존성을 결정하는 증거는, 특정 토큰-헤드-레이어 좌표 하나에 있는 작은 편차인 경우가 많다. 그리고 이런 정보는 구조상 평균에는 보이지 않는다. 균일한 깊이 공유는 복원 오차가 낮으면서도, 올바른 구간을 고르는 attention logit을 흔든다. FreqDepthKV의 기여는 이 구분을 <i>표현 가능하게</i> 만든 것이다. 깊이 축 DCT가 평균에 해당하는 공유 성분과 바로 그 편차들을 분리하므로, 편차를 평균에 묻어버리는 대신 따로 값을 매기고 보존할 수 있다.</p>
+    <figure class="fig">
+      <img src="fig/2607.06519/overview.png" alt="FreqDepthKV overview: removing redundant shared depth information while preserving sparse layer-specific token evidence">
+      <figcaption class="t-en"><b>Figure 1.</b> The core idea. Depth-redundant information shared by neighboring layers is removed, while the sparse layer-specific token evidence that controls retrieval-sensitive attention is preserved. In the reported routing pattern, most middle-layer heads end up in shared-depth mode, while heads near document boundaries are routed to residual-depth or exact mode.</figcaption>
+      <figcaption class="t-ko"><b>그림 1.</b> 핵심 아이디어. 이웃 레이어들이 공유하는 깊이 중복 정보는 제거하고, 검색에 민감한 attention을 좌우하는 희소한 레이어 고유 토큰 증거는 보존한다. 보고된 라우팅 패턴에서는 중간 레이어 헤드 대부분이 shared-depth 모드로 가고, 문서 경계 근처의 헤드는 residual-depth나 exact 모드로 라우팅된다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2607.06519</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">3.9×</div><div class="l"><span class="t-en">effective KV compression (MiniCache 3.6×)</span><span class="t-ko">유효 KV 압축률 (MiniCache 3.6배)</span></div></div>
+      <div class="stat"><div class="n">6.2 GB</div><div class="l"><span class="t-en">peak KV memory, down from 24.0 GB</span><span class="t-ko">peak KV 메모리, 24.0 GB에서 감소</span></div></div>
+      <div class="stat"><div class="n">70.4</div><div class="l"><span class="t-en">decode tokens/s (Full KV 38.2)</span><span class="t-ko">디코딩 토큰/초 (Full KV 38.2)</span></div></div>
+      <div class="stat"><div class="n">−0.4</div><div class="l"><span class="t-en">F1 gap to Full KV (63.0 vs 63.4)</span><span class="t-ko">Full KV 대비 F1 격차 (63.0 vs 63.4)</span></div></div>
+      <div class="stat"><div class="n">2.06 s</div><div class="l"><span class="t-en">time-to-first-token (Full KV 2.91 s)</span><span class="t-ko">첫 토큰까지 시간 (Full KV 2.91초)</span></div></div>
+      <div class="stat"><div class="n">128</div><div class="l"><span class="t-en">probe query positions per prompt</span><span class="t-ko">프롬프트당 프로브 쿼리 위치 수</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The main table</span><span class="t-ko">핵심 표</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (excerpt).</b> Aggregate results across long-context QA, summarization and code generation at a 32k-token prefill window. Note that the baselines sit at <i>different</i> compression ratios rather than a matched memory budget — FreqDepthKV is reported as winning every column while also compressing hardest.</caption>
+        <caption class="t-ko"><b>표 1 (발췌).</b> 32k 토큰 prefill 창에서 장문 QA·요약·코드 생성 전반의 종합 결과. 베이스라인들이 동일한 메모리 예산이 아니라 <i>서로 다른</i> 압축률에 놓여 있다는 점에 유의 — FreqDepthKV는 가장 강하게 압축하면서 동시에 모든 열에서 이긴 것으로 보고된다.</caption>
+        <thead><tr><th>Method</th><th>EM</th><th>F1</th><th>ROUGE-L</th><th>pass@1</th><th>Tokens/s</th><th>Peak KV (GB)</th><th>Comp.</th></tr></thead>
+        <tbody>
+          <tr><td>Full KV</td><td>58.7</td><td>63.4</td><td>32.8</td><td>48.6</td><td>38.2</td><td>24.0</td><td>1.0×</td></tr>
+          <tr><td>StreamingLLM</td><td>51.3</td><td>57.0</td><td>29.4</td><td>42.1</td><td>55.6</td><td>9.8</td><td>2.4×</td></tr>
+          <tr><td>H2O</td><td>53.8</td><td>58.6</td><td>30.2</td><td>43.7</td><td>57.1</td><td>9.1</td><td>2.6×</td></tr>
+          <tr><td>SnapKV</td><td>55.9</td><td>60.7</td><td>31.1</td><td>45.2</td><td>61.8</td><td>7.9</td><td>3.0×</td></tr>
+          <tr><td>PyramidKV</td><td>56.4</td><td>61.2</td><td>31.4</td><td>45.8</td><td>63.0</td><td>7.4</td><td>3.2×</td></tr>
+          <tr><td>KIVI</td><td>57.1</td><td>61.8</td><td>31.7</td><td>46.4</td><td>60.9</td><td>6.9</td><td>3.5×</td></tr>
+          <tr><td>MiniCache</td><td>56.6</td><td>61.0</td><td>31.3</td><td>45.6</td><td>65.5</td><td>6.6</td><td>3.6×</td></tr>
+          <tr><td><b>FreqDepthKV</b></td><td class="up">58.3</td><td class="up">63.0</td><td class="up">32.5</td><td class="up">48.1</td><td class="up">70.4</td><td class="up">6.2</td><td class="up">3.9×</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What the method actually does</span><span class="t-ko">이 방법이 실제로 하는 일</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">depth transform</span>
+        <h3>A DCT along the layer axis</h3>
+        <p class="t-en">For a block of B adjacent layers, the per-head caches are stacked into a B × T × d tensor and multiplied by a <i>fixed</i> orthonormal DCT basis along the depth axis. The first coefficient group becomes the low-frequency shared-depth component, stored once per block; the remaining groups encode high-frequency layer deviations. Because the basis is fixed, there is nothing to learn, nothing to fit per model, and the prefill overhead is a small matmul over a length-2 or length-4 axis. B = 4 by default, dropping to B = 2 for the first and last four layers, where inter-layer similarity is weakest.</p>
+        <p class="t-ko">인접한 B개 레이어 블록에 대해 헤드별 캐시를 B × T × d 텐서로 쌓고, 깊이 축으로 <i>고정된</i> 정규직교 DCT 기저를 곱한다. 첫 계수 그룹이 저주파 shared-depth 성분이 되어 블록당 한 번만 저장되고, 나머지 그룹이 고주파 레이어 편차를 담는다. 기저가 고정이라 학습할 것도, 모델마다 맞출 것도 없으며, prefill 오버헤드는 길이 2~4짜리 축에 대한 작은 행렬곱이다. 기본값은 B = 4이고, 레이어 간 유사도가 가장 약한 처음·마지막 4개 레이어에서는 B = 2로 낮춘다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">routing</span>
+        <h3>Cost measured in attention logits, not in norms</h3>
+        <p class="t-en">Each head picks one of three modes — SHARED (low-frequency only), RESIDUAL (shared + sparse high-frequency), EXACT (uncompressed) — by minimizing a loss that is the squared error <i>in the attention logits</i> QK̂ᵀ/√d against QKᵀ/√d, plus λ times the mode's memory cost. This is the part the ablation says matters most for correctness: replacing the logit loss with a norm-preserving objective lets the router pick cheap modes that keep the cache looking right while reordering which tokens attention selects, and both EM and pass@1 fall.</p>
+        <p class="t-ko">각 헤드는 세 모드 중 하나를 고른다 — SHARED(저주파만), RESIDUAL(공유 + 희소 고주파), EXACT(비압축). 선택 기준은 QK̂ᵀ/√d와 QKᵀ/√d 사이의 <i>attention logit 상의</i> 제곱 오차에 λ 곱하기 모드의 메모리 비용을 더한 손실을 최소화하는 것이다. 어블레이션이 정확도 측면에서 가장 중요하다고 말하는 지점이 바로 여기다. logit 손실을 norm 보존 목적함수로 바꾸면, 라우터는 캐시를 겉보기에는 멀쩡하게 유지하면서 attention이 고르는 토큰 순서는 바꿔놓는 값싼 모드를 택하게 되고, EM과 pass@1이 함께 떨어진다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">sparsity</span>
+        <h3>Residuals only where they would move the ranking</h3>
+        <p class="t-en">For heads in RESIDUAL mode, every token is scored by the maximum logit perturbation it would cause if its high-frequency coefficients were dropped, and only the top r·T tokens keep them. So the stored cache is dense in the low frequencies and sparse in the high ones. Deleting this mechanism gives the fastest, smallest variant in the whole paper (5.8 GB, 4.1×, 72.6 tok/s) — and costs 1.6 EM and 2.3 pass@1. That trade is the paper's clearest single result.</p>
+        <p class="t-ko">RESIDUAL 모드 헤드에서는 각 토큰이, 고주파 계수를 버렸을 때 유발할 최대 logit 교란으로 점수화되고, 상위 r·T개 토큰만 그 계수를 유지한다. 즉 저장되는 캐시는 저주파에서는 조밀하고 고주파에서는 희소하다. 이 메커니즘을 빼면 논문 전체에서 가장 빠르고 작은 변형이 나오지만(5.8 GB, 4.1배, 72.6 tok/s), EM 1.6점과 pass@1 2.3점을 잃는다. 이 트레이드오프가 논문에서 가장 선명한 단일 결과다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">budget</span>
+        <h3>λ is tuned until the footprint hits the target</h3>
+        <p class="t-en">The memory budget is not enforced per head but globally: λ is swept until the estimated peak KV footprint matches the target (3.8× average in the reported runs). Routing is decided once after prefill and then frozen for the whole generation — cheap, but it is also the limitation the authors name first in Future Work, since a dependency that only becomes relevant mid-generation cannot promote its head to a richer mode.</p>
+        <p class="t-ko">메모리 예산은 헤드별이 아니라 전역으로 강제된다. 추정 peak KV 용량이 목표치(보고된 실험에서는 평균 3.8배)에 맞을 때까지 λ를 스윕한다. 라우팅은 prefill 직후 한 번 결정되고 생성 내내 고정된다. 값싸지만, 저자들이 Future Work에서 가장 먼저 꼽는 한계이기도 하다. 생성 도중에야 관련성이 드러나는 의존성은 자기 헤드를 더 풍부한 모드로 승격시킬 수 없기 때문이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Group layers into blocks</span><span class="t-ko">레이어를 블록으로 묶는다</span></b><span class="t-en">During prefill, partition the transformer into blocks of B adjacent layers (B = 4 in the middle, B = 2 at the first and last four) and stack each head's K and V caches along the new depth axis.</span><span class="t-ko">prefill 중에 트랜스포머를 인접한 B개 레이어 블록으로 분할하고(중간은 B = 4, 처음·마지막 4개 레이어는 B = 2), 각 헤드의 K·V 캐시를 새로운 깊이 축으로 쌓는다.</span></li>
+      <li><b><span class="t-en">Transform along depth</span><span class="t-ko">깊이 축으로 변환</span></b><span class="t-en">Apply the fixed DCT basis to get one low-frequency coefficient group (the shared-depth component) and B−1 high-frequency groups (the layer deviations). No retraining, no per-model calibration.</span><span class="t-ko">고정된 DCT 기저를 적용해 저주파 계수 그룹 하나(shared-depth 성분)와 고주파 그룹 B−1개(레이어 편차)를 얻는다. 재학습도, 모델별 calibration도 없다.</span></li>
+      <li><b><span class="t-en">Probe 128 query positions</span><span class="t-ko">128개 쿼리 위치를 프로브</span></b><span class="t-en">Sample query positions from recent tokens, document boundaries, and high-entropy attention rows, then evaluate the three candidate modes per head by how much each perturbs the attention logits at those positions.</span><span class="t-ko">최근 토큰, 문서 경계, 고엔트로피 attention 행에서 쿼리 위치를 샘플링한 뒤, 헤드마다 세 후보 모드가 그 위치들의 attention logit을 얼마나 교란하는지로 평가한다.</span></li>
+      <li><b><span class="t-en">Assign modes under a global budget</span><span class="t-ko">전역 예산 하에서 모드를 배정</span></b><span class="t-en">Sweep λ until the projected peak KV footprint hits the target ratio, take the argmin mode per head, and for RESIDUAL heads keep only the top-scoring tokens' high-frequency coefficients.</span><span class="t-ko">예상 peak KV 용량이 목표 압축률에 닿을 때까지 λ를 스윕하고, 헤드마다 argmin 모드를 취한 뒤, RESIDUAL 헤드에서는 점수 상위 토큰의 고주파 계수만 유지한다.</span></li>
+      <li><b><span class="t-en">Decode without materializing the cache</span><span class="t-ko">캐시를 실체화하지 않고 디코딩</span></b><span class="t-en">The attention kernel broadcasts the shared coefficients across the layer block and adds residuals only for indexed tokens, so the dense cache is never reconstructed in memory. The routing decision stays fixed for the rest of the generation.</span><span class="t-ko">attention 커널이 공유 계수를 레이어 블록 전체에 브로드캐스트하고 인덱싱된 토큰에 대해서만 잔차를 더하므로, 조밀한 캐시를 메모리에 복원하는 일이 없다. 라우팅 결정은 남은 생성 동안 고정된다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><b>Depth redundancy is frequency-structured, and that distinction is worth ~1.7 F1.</b> Swapping the DCT for plain adjacent-layer averaging — same memory footprint, same sharing idea — drops F1 from 63.0 to 61.3 and pass@1 from 48.1 to 46.0. The compression ratio is not what separates these methods; the choice of basis is.</p><p class="t-ko"><b>깊이 중복은 주파수 구조를 갖고 있고, 그 구분의 값어치가 F1 약 1.7점이다.</b> DCT를 단순 인접 레이어 평균으로 바꾸면 — 메모리 용량도 같고 공유 아이디어도 같은데 — F1이 63.0에서 61.3으로, pass@1이 48.1에서 46.0으로 떨어진다. 이 방법들을 가르는 건 압축률이 아니라 기저의 선택이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><b>Reconstruction error is the wrong loss for cache compression.</b> A cache can be close in L2 and still reorder which tokens attention picks. Scoring compression by its effect on attention <i>logits</i> — rather than on the cached tensors — is a design pattern that transfers directly to low-rank and quantized KV work, and the ablation shows it is worth real points on EM and pass@1.</p><p class="t-ko"><b>복원 오차는 캐시 압축에 맞지 않는 손실이다.</b> 캐시는 L2로 가까우면서도 attention이 고르는 토큰 순서를 바꿔놓을 수 있다. 캐시된 텐서가 아니라 attention <i>logit</i>에 미치는 영향으로 압축을 채점하는 것은 low-rank·양자화 KV 연구로 그대로 전이되는 설계 패턴이고, 어블레이션은 그것이 EM·pass@1에서 실제 점수 값어치를 한다고 보여준다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><b>Keep an uncompressed escape hatch.</b> Removing EXACT mode costs 0.8 F1 and 1.1 pass@1, concentrated on Needle-in-a-Haystack and code — a handful of heads apparently need verbatim KV. Any compression scheme that is uniform across heads is leaving this on the table, and the cost of the exception is small because so few heads take it.</p><p class="t-ko"><b>비압축 탈출구를 남겨두라.</b> EXACT 모드를 제거하면 F1 0.8점, pass@1 1.1점을 잃고, 그 손실은 Needle-in-a-Haystack과 코드에 집중된다. 소수의 헤드는 KV를 원본 그대로 필요로 한다는 뜻이다. 헤드 전반에 균일한 압축 방식은 이 이득을 그냥 버리는 셈이고, 예외를 두는 비용은 그 예외를 택하는 헤드가 워낙 적어서 작다.</p></div>
+      <div class="t"><span class="ic">🛠</span><p class="t-en"><b>It composes with what you already run.</b> Depth-frequency sharing is orthogonal to token eviction (H2O, SnapKV, PyramidKV) and to quantization (KVQuant, KIVI) — and the paper's own future-work section points at the obvious next move: assign <i>different bit-widths</i> to shared coefficients, sparse residuals and exact heads, turning this into a joint depth-frequency-and-precision allocation problem.</p><p class="t-ko"><b>이미 쓰고 있는 것들과 결합된다.</b> depth-frequency 공유는 토큰 제거(H2O·SnapKV·PyramidKV)와도, 양자화(KVQuant·KIVI)와도 직교한다. 그리고 논문의 future work 절이 다음 수순을 그대로 가리킨다. 공유 계수·희소 잔차·exact 헤드에 <i>서로 다른 비트폭</i>을 배정해, 이를 깊이-주파수와 정밀도의 결합 할당 문제로 만드는 것이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the paper never names the model it evaluated. Section 4 says only "the same base long-context decoder with a 32k-token prefill window" — no family, no parameter count, no hardware, no number of runs. Every headline number in Table 1 therefore sits on a single unnamed backbone at a single context length, and since throughput and peak-memory claims depend entirely on model width, depth and head count, they cannot be checked or reproduced as reported. Two further gaps compound this. First, the results are <i>aggregates only</i> — the text repeatedly attributes the gains to Needle-in-a-Haystack, Qasper and code completion, but no per-dataset table appears, so the reader cannot verify where the 2.0 F1 over MiniCache comes from or whether it is concentrated in one benchmark. Second, the baselines are compared at their own tuned budgets (2.4×–3.6×), not at a matched memory budget, and FreqDepthKV wins <i>every single column</i> — accuracy, throughput, TTFT, memory, and compression ratio — against all eight. A clean sweep that includes strictly more compression is exactly the pattern a budget-selection artifact would produce, and with no seeds, no variance, and a group email as the only contact, there is nothing in the paper that lets you rule it out.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 이 논문은 평가에 쓴 모델을 끝내 밝히지 않는다. 4절은 "32k 토큰 prefill 창을 쓰는 동일한 base long-context decoder"라고만 말한다 — 계열도, 파라미터 수도, 하드웨어도, 실행 횟수도 없다. 따라서 표 1의 모든 간판 숫자가 이름 없는 단일 백본·단일 컨텍스트 길이 위에 놓여 있고, 처리량과 peak 메모리 주장은 모델 폭·깊이·헤드 수에 전적으로 의존하므로 보고된 대로는 검증도 재현도 불가능하다. 여기에 두 가지 공백이 겹친다. 첫째, 결과가 <i>종합값뿐</i>이다. 본문은 이득이 Needle-in-a-Haystack·Qasper·코드 완성에서 나온다고 반복해 말하지만 데이터셋별 표는 없다. 그래서 MiniCache 대비 F1 2.0점이 어디서 왔는지, 한 벤치마크에 몰린 것은 아닌지 독자가 확인할 수 없다. 둘째, 베이스라인들은 각자 튜닝된 예산(2.4~3.6배)에서 비교되며 동일 메모리 예산이 아니다. 그런데 FreqDepthKV는 여덟 개 베이스라인 전부를 상대로 <i>모든 열</i>에서 이긴다 — 정확도·처리량·TTFT·메모리·압축률까지. 더 강한 압축까지 포함한 전 항목 석권은 예산 선택의 산물이 만들어낼 법한 패턴 그 자체인데, seed도 분산도 없고 연락처는 그룹 이메일 하나뿐이라, 그 가능성을 배제할 근거가 논문 안에 없다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2607.06519">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2607.06519">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2607.06519">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2607.06519">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is drained, so this came from the fallback search, where it had the most community traction of any unread candidate. It also fills a gap: this archive has covered the sequence axis (CommitKV, arXiv:2608.07855) and the rank axis (PuzzleKV, arXiv:2608.23843; DynaCalKV, arXiv:2607.24331) but not the depth axis, and FreqDepthKV is the paper that makes depth sharing selective instead of uniform. Preprint, no venue claimed</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-30.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 소진되어 폴백 검색에서 골랐고, 미열람 후보 중 커뮤니티 반응이 가장 높았다. 빈 축을 메우기도 한다. 이 아카이브는 시퀀스 축(CommitKV, arXiv:2608.07855)과 랭크 축(PuzzleKV, arXiv:2608.23843; DynaCalKV, arXiv:2607.24331)은 다뤘지만 깊이 축은 다루지 않았고, FreqDepthKV는 깊이 공유를 균일이 아닌 선택적으로 만든 논문이다. 프리프린트로 학회 accept 주장 없음</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-30.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
