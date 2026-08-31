@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · AgentSpec</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Efficient Inference · Speculative Decoding</span><span class="t-ko">Efficient Inference · Speculative Decoding</span></span>
+      <span>2026.08.31</span>
+    </div>
+    <h1>AgentSpec<br>
+      <span class="glow t-en">— speculative decoding that stops losing to plain decoding at batch size 256</span>
+      <span class="glow t-ko">— 배치 256에서 그냥 디코딩에 지지 않는 speculative decoding</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Xin Wang</b> <span class="t-en">+ 6, incl. Fan Yang, Mi Zhang (senior author)</span><span class="t-ko">외 6인, Fan Yang · Mi Zhang(교신급 시니어 저자) 포함</span></span>
+      <span>🏛 Ohio State University · Microsoft Research · University of Michigan</span>
+      <span>🗓 2026-08-25</span>
+      <span>🏆 EMNLP 2026</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.24004">arXiv:2608.24004</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">At the batch sizes production servers actually run (vLLM default, <b>256</b>), speculative decoding does not speed LLM agents up — it slows them down. EAGLE-3 lands at <b>×0.85</b> and NGram at <b>×0.66</b> against plain autoregressive decoding on a code-generation agent. AgentSpec diagnoses two causes: draft tokens get rejected at <b>53–89%</b> because one agent query spans semantically different blocks (thinking, code, tool calls) and the draft cache retrieves across all of them; and the spare token budget is handed out uniformly instead of to the requests likely to accept it. The fix needs no draft model: a pushdown automaton tracks which semantic block each request is inside, drafts are retrieved <i>only</i> from the same block of the same query, and per-request draft length is scaled by how redundant that request's own history is. Rejection falls to <b>26.4%</b>, verification time drops <b>21%</b>, and goodput reaches <b>×2.02</b> over autoregressive decoding on GPT-OSS-20B. The interesting part is what Table 6 says about the interface this all requires.</p>
+    <p class="t-ko">실제 프로덕션 서버가 돌리는 배치 크기(vLLM 기본값 <b>256</b>)에서 speculative decoding은 LLM 에이전트를 빠르게 만들지 않는다. 오히려 느리게 만든다. 코드 생성 에이전트에서 EAGLE-3는 평범한 autoregressive 디코딩 대비 <b>×0.85</b>, NGram은 <b>×0.66</b>에 그친다. AgentSpec은 두 가지 원인을 짚는다. 첫째, 에이전트의 한 질의가 의미적으로 다른 블록들(사고, 코드, 툴 호출)에 걸쳐 있는데 draft 캐시는 그 전부를 뒤지기 때문에 draft 토큰이 <b>53~89%</b> 거절된다. 둘째, 남는 토큰 예산이 수락 가능성이 높은 요청에 가는 대신 균일하게 뿌려진다. 해법에 draft 모델은 필요 없다. 푸시다운 오토마타가 각 요청이 지금 어느 의미 블록 안에 있는지 추적하고, draft는 <i>같은 질의의 같은 블록</i>에서만 가져오며, 요청별 draft 길이는 그 요청 자신의 생성 이력이 얼마나 중복적인지에 비례해 배분된다. 거절률은 <b>26.4%</b>로 떨어지고, 검증 시간은 <b>21%</b> 줄며, GPT-OSS-20B에서 goodput은 autoregressive 대비 <b>×2.02</b>에 도달한다. 흥미로운 대목은 이 모든 것이 요구하는 인터페이스에 대해 Table 6이 말하는 내용이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Almost every efficiency paper in this archive shrinks something — the weights, the cache, the rank. This one shrinks nothing and changes no output: speculative decoding is lossless by construction, because the target model verifies every drafted token. The question it asks is narrower and more uncomfortable: why does that free lunch turn into a tax the moment you serve at a realistic batch size?</p>
+    <p class="lead t-ko">이 아카이브의 효율화 논문은 거의 전부 무언가를 줄인다. 가중치, 캐시, 랭크. 이 논문은 아무것도 줄이지 않고 출력도 바꾸지 않는다. speculative decoding은 타깃 모델이 draft된 모든 토큰을 검증하므로 구조상 무손실이다. 대신 이 논문이 던지는 질문은 더 좁고 더 불편하다. 현실적인 배치 크기로 서빙하는 순간 그 공짜 점심이 왜 세금으로 바뀌는가?</p>
+    <p class="t-en">The mechanism is arithmetic. Speculative decoding trades verification compute for latency: the target model checks <i>k</i> drafted tokens in one forward pass instead of producing one. At batch size 1 the GPU is memory-bound and that extra compute is genuinely free. At batch size 256 the FFN layers are compute-bound, so every rejected draft token is verification work that bought nothing — and the paper's measurements show three of four state-of-the-art methods ending up <i>below</i> ×1.00 on agent workloads. The agent setting makes this worse than ordinary chat, because rejection rates there are unusually high.</p>
+    <p class="t-ko">메커니즘은 산술이다. speculative decoding은 검증 연산을 지연시간과 맞바꾼다. 타깃 모델이 토큰 하나를 생성하는 대신 draft된 <i>k</i>개를 한 번의 forward pass로 검증한다. 배치 1에서는 GPU가 메모리 바운드라 그 추가 연산이 실제로 공짜다. 배치 256에서는 FFN 레이어가 연산 바운드가 되므로, 거절된 draft 토큰 하나하나가 아무것도 얻지 못한 검증 작업이 된다. 그리고 논문의 측정에서 최신 기법 네 개 중 셋이 에이전트 워크로드에서 ×1.00 <i>아래</i>로 떨어진다. 에이전트 환경은 일반 대화보다 상황이 더 나쁜데, 거기서는 거절률이 유난히 높기 때문이다.</p>
+    <p class="t-en">The reason for the high rejection is the paper's actual observation, and it is a structural one rather than a modeling one. A single agent query is not one generation — it is a chain of requests that pass through reasoning, then a code block, then a tool call, then an interpretation of the tool's output. Draft-model-free methods like NGram and SuffixDecoding retrieve candidate continuations from the <i>global</i> generation history. The paper measures where repeated token spans actually live (Figure 5) and finds they overwhelmingly recur within the same semantic block of the same query; cross-block and cross-query repetition is rare. So the global history is mostly a source of confidently wrong drafts. That is a claim about the shape of agent workloads, not about any particular model, which is why the fix carries over across four model families.</p>
+    <p class="t-ko">거절률이 높은 이유가 이 논문의 실제 관찰이며, 그것은 모델링이 아니라 구조에 관한 것이다. 에이전트의 한 질의는 하나의 생성이 아니다. 추론을 거쳐 코드 블록으로, 다시 툴 호출로, 그리고 툴 출력의 해석으로 이어지는 요청들의 사슬이다. NGram이나 SuffixDecoding 같은 draft 모델 없는 기법들은 후보 연속열을 <i>전역</i> 생성 이력에서 가져온다. 논문은 반복되는 토큰 구간이 실제로 어디에 있는지 측정하고(Figure 5), 그것이 압도적으로 같은 질의의 같은 의미 블록 안에서 재등장하며 블록 간·질의 간 반복은 드물다는 것을 확인한다. 즉 전역 이력은 대체로 확신에 찬 오답 draft의 공급원이다. 이는 특정 모델이 아니라 에이전트 워크로드의 형태에 관한 주장이고, 그래서 이 해법이 네 개의 모델 계열에 걸쳐 이전된다.</p>
+    <figure class="fig">
+      <img src="fig/2608.24004/AgentSpec.png" alt="AgentSpec overview: (a) structure-isolated drafting with a pushdown automaton over semantic blocks, and (b) redundancy-aware budget allocation across a batch of requests">
+      <figcaption class="t-en"><b>Figure 4.</b> Overview of AgentSpec. <b>(a) Structure-isolated drafting</b>: the agent's declared block grammar (CFG) drives a pushdown automaton that consumes newly generated tokens — converted to characters through a cached token-to-chars trie rather than the tokenizer — to decide which semantic block the request is currently inside, and drafts are pulled only from that block's slice of the history cache. <b>(b) Redundancy-aware budget allocation</b>: each of the <i>k</i> requests in the batch gets a redundancy score, and the batch token allocator sets per-request draft lengths in proportion to those scores before a single verification pass.</figcaption>
+      <figcaption class="t-ko"><b>그림 4.</b> AgentSpec 개요. <b>(a) 구조 격리 드래프팅</b>: 에이전트가 선언한 블록 문법(CFG)이 푸시다운 오토마타를 구동하고, 이 오토마타가 새로 생성된 토큰을 — 토크나이저 대신 캐시된 token-to-chars 트라이로 문자열로 변환해 — 소비하면서 요청이 지금 어느 의미 블록 안에 있는지 판단한다. draft는 그 블록에 해당하는 이력 캐시 조각에서만 가져온다. <b>(b) 중복도 기반 예산 배분</b>: 배치 안의 <i>k</i>개 요청 각각에 중복도 점수가 매겨지고, 배치 토큰 할당기가 그 점수에 비례해 요청별 draft 길이를 정한 뒤 한 번의 검증 패스로 넘긴다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.24004</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">26.4%</div><div class="l"><span class="t-en">draft rejection rate, vs 53.3% (EAGLE-3) / 65.9% (SuffixDecoding) / 88.7% (NGram)</span><span class="t-ko">draft 거절률. EAGLE-3 53.3% / SuffixDecoding 65.9% / NGram 88.7% 대비</span></div></div>
+      <div class="stat"><div class="n">×2.02</div><div class="l"><span class="t-en">best speedup over plain autoregressive decoding (GPT-OSS-20B, Code Gen, A100)</span><span class="t-ko">평범한 autoregressive 디코딩 대비 최대 속도 향상 (GPT-OSS-20B, Code Gen, A100)</span></div></div>
+      <div class="stat"><div class="n">×0.44–×1.02</div><div class="l"><span class="t-en">where all four baselines land on GPT-OSS-20B agent workloads — mostly slower than no speculation at all</span><span class="t-ko">GPT-OSS-20B 에이전트 워크로드에서 베이스라인 4종이 위치한 구간. 대부분 speculation을 아예 안 쓰느니만 못하다</span></div></div>
+      <div class="stat"><div class="n">256</div><div class="l"><span class="t-en">vLLM max batch size used throughout — the regime where prior methods break</span><span class="t-ko">전 실험에 사용된 vLLM 최대 배치 크기. 기존 기법들이 무너지는 구간이다</span></div></div>
+      <div class="stat"><div class="n">↓21%</div><div class="l"><span class="t-en">verification time (26.11 min vs 33.12 for SuffixDecoding) — the dominant term in the speedup</span><span class="t-ko">검증 시간 감소 (26.11분 vs SuffixDecoding 33.12분). 속도 향상의 지배적 항이다</span></div></div>
+      <div class="stat"><div class="n">×1.47</div><div class="l"><span class="t-en">P90 end-to-end agent tail-latency reduction (19.48 → 13.13 min)</span><span class="t-ko">P90 종단간 에이전트 꼬리 지연 감소 (19.48 → 13.13분)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The main result</span><span class="t-ko">핵심 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 (GPT-OSS-20B rows).</b> Goodput in tokens/sec, with speedup over autoregressive decoding in parentheses, on four agentic workloads at max batch size 256 on one A100 80G. This is the model where the gap is widest; the Qwen-3-8B and DeepSeek-Distill-LLaMA-8B blocks in the paper show the same ordering with smaller margins (AgentSpec ×1.07–×1.59). Note that three of four baselines are below ×1.00 on most columns — running them costs more than not speculating.</caption>
+        <caption class="t-ko"><b>표 2 (GPT-OSS-20B 부분).</b> 최대 배치 256, A100 80G 한 장에서 네 개 에이전트 워크로드의 goodput(tokens/sec)과 괄호 안 autoregressive 대비 속도 향상. 격차가 가장 큰 모델이며, 논문의 Qwen-3-8B·DeepSeek-Distill-LLaMA-8B 블록도 폭은 작지만 같은 순서를 보인다(AgentSpec ×1.07~×1.59). 베이스라인 네 개 중 셋이 대부분의 열에서 ×1.00 아래라는 점에 주목. 그것들을 켜는 것이 speculation을 안 하느니만 못하다.</caption>
+        <thead><tr><th>Method</th><th>Deep Research</th><th>Code Gen</th><th>GAIA</th><th>SWE-Bench</th></tr></thead>
+        <tbody>
+          <tr><td>Normal (no speculation)</td><td>201.43 (×1.00)</td><td>289.26 (×1.00)</td><td>247.67 (×1.00)</td><td>351.22 (×1.00)</td></tr>
+          <tr><td>EAGLE-3</td><td>125.71 (×0.62)</td><td>161.34 (×0.56)</td><td>112.16 (×0.45)</td><td>198.81 (×0.57)</td></tr>
+          <tr><td>NGram</td><td>158.91 (×0.79)</td><td>175.19 (×0.61)</td><td>109.22 (×0.44)</td><td>253.36 (×0.72)</td></tr>
+          <tr><td>SuffixDecoding</td><td>196.54 (×0.98)</td><td>295.85 (×1.02)</td><td>187.79 (×0.76)</td><td>319.73 (×0.91)</td></tr>
+          <tr><td><b>AgentSpec</b></td><td class="up">297.54 (×1.48)</td><td class="up">584.43 (×2.02)</td><td class="up">295.76 (×1.19)</td><td class="up">595.20 (×1.69)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two ideas</span><span class="t-ko">두 개의 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">DRAFTING</span>
+        <h3>Structure-isolated drafting</h3>
+        <p class="t-en">The agent app hands the server a structure identifier <i>S<sub>i</sub></i> = {agent id, query id, block tags} — block tags being start/end string pairs like <code>```python</code>…<code>```</code> or <code>&lt;tool_call&gt;</code>…<code>&lt;/tool_call&gt;</code>. The server keeps one lightweight pushdown automaton per (agent, query) and feeds it every new token, so it always knows the active block. Drafts are then retrieved only from <i>H(agent, query, block)</i>, never from global history. The engineering catch is that block tags are strings while generation emits subword tokens, and calling the tokenizer per decode step is prohibitive in vLLM; AgentSpec borrows XGrammar's trick and keeps a cached token-to-string map so the conversion is O(1) amortized.</p>
+        <p class="t-ko">에이전트 앱이 서버에 구조 식별자 <i>S<sub>i</sub></i> = {에이전트 id, 질의 id, 블록 태그}를 넘긴다. 블록 태그는 <code>```python</code>…<code>```</code>이나 <code>&lt;tool_call&gt;</code>…<code>&lt;/tool_call&gt;</code> 같은 시작/끝 문자열 쌍이다. 서버는 (에이전트, 질의)마다 가벼운 푸시다운 오토마타를 하나씩 두고 새 토큰을 모두 먹여, 현재 활성 블록을 항상 알고 있다. 이후 draft는 전역 이력이 아니라 오직 <i>H(에이전트, 질의, 블록)</i>에서만 가져온다. 공학적 난점은 블록 태그는 문자열인데 생성은 서브워드 토큰으로 나오고, vLLM에서 디코딩 스텝마다 토크나이저를 부르는 건 감당이 안 된다는 점이다. AgentSpec은 XGrammar의 수법을 빌려 토큰→문자열 매핑을 캐시해 변환을 amortized O(1)로 만든다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">BUDGET</span>
+        <h3>Redundancy-aware budget allocation</h3>
+        <p class="t-en">Instead of a fixed speculation length, the batch gets a total budget <i>B<sub>t</sub></i> = ⌊α / bz⌋ that shrinks as batch size grows — encoding the fact that headroom disappears once the FFN is compute-bound. That budget is split by a redundancy score <i>g(c,n) = (c/n)·p(n)</i>, where <i>n</i> is how many historical continuations matched and <i>c</i> how many of them agree on the same prefix; <i>p(n)</i> is a saturation term that discounts a 1-of-1 "consensus". The paper validates the premise separately (Figure 6): higher redundancy really does predict higher acceptance, and the correlation tightens as <i>n</i> grows. Each request gets <i>L<sub>i</sub></i> = max(|CT<sub>i</sub>*|, B<sub>t</sub>·g<sub>i</sub>/Σg<sub>j</sub>), so even a low-scoring request still drafts its single most confident prefix.</p>
+        <p class="t-ko">고정된 speculation 길이 대신, 배치 전체가 <i>B<sub>t</sub></i> = ⌊α / bz⌋라는 총예산을 받는다. 배치가 커질수록 줄어드는 형태로, FFN이 연산 바운드가 되면 여유가 사라진다는 사실을 식에 새겨 넣은 것이다. 이 예산은 중복도 점수 <i>g(c,n) = (c/n)·p(n)</i>로 쪼갠다. <i>n</i>은 이력에서 매칭된 연속열 개수, <i>c</i>는 그중 같은 prefix에 동의한 개수이며, <i>p(n)</i>은 1개 중 1개짜리 "합의"를 깎아내리는 포화 항이다. 논문은 이 전제를 따로 검증한다(Figure 6). 중복도가 높으면 실제로 수락률이 높고, <i>n</i>이 커질수록 상관이 뚜렷해진다. 각 요청은 <i>L<sub>i</sub></i> = max(|CT<sub>i</sub>*|, B<sub>t</sub>·g<sub>i</sub>/Σg<sub>j</sub>)를 받으므로, 점수가 낮은 요청도 가장 확신하는 prefix 하나는 draft한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">The agent declares its grammar. </span><span class="t-ko">에이전트가 자기 문법을 선언한다. </span></b><span class="t-en">Three extra fields are added to the vLLM request — <code>agent_id</code>, <code>query_id</code>, and <code>structure</code>, the last being the paired delimiters of the blocks this agent emits. No retraining, no draft model, no change to the served weights.</span><span class="t-ko">vLLM 요청에 세 필드가 추가된다. <code>agent_id</code>, <code>query_id</code>, 그리고 이 에이전트가 내보내는 블록들의 구분자 쌍인 <code>structure</code>. 재학습도, draft 모델도, 서빙 가중치 변경도 없다.</span></li>
+      <li><b><span class="t-en">A PDA tracks the active block. </span><span class="t-ko">PDA가 활성 블록을 추적한다. </span></b><span class="t-en">Each newly decoded token is converted to characters through the cached trie and pushed into that request's automaton, whose state names the semantic block currently being generated — reasoning, code, tool call, math.</span><span class="t-ko">새로 디코딩된 토큰은 캐시된 트라이를 거쳐 문자열로 변환되어 해당 요청의 오토마타로 들어가고, 그 상태가 지금 생성 중인 의미 블록을 지목한다. 추론, 코드, 툴 호출, 수식.</span></li>
+      <li><b><span class="t-en">Drafts come from that block only. </span><span class="t-ko">draft는 그 블록에서만 나온다. </span></b><span class="t-en">The history cache is partitioned by (agent, query, block); candidate continuations are read from the matching partition, and if it is empty the request simply drafts nothing this step rather than guessing from elsewhere.</span><span class="t-ko">이력 캐시는 (에이전트, 질의, 블록)으로 분할되어 있고, 후보 연속열은 일치하는 분할에서만 읽는다. 비어 있으면 다른 데서 추측하는 대신 이번 스텝은 그냥 draft를 만들지 않는다.</span></li>
+      <li><b><span class="t-en">Budget is scored and split. </span><span class="t-ko">예산에 점수를 매겨 나눈다. </span></b><span class="t-en">Before verification the server computes <i>g<sub>i</sub></i> for every request in the batch from consensus among its retrieved candidates, derives the batch budget from the current batch size, and sets each draft length proportionally.</span><span class="t-ko">검증 직전 서버는 배치의 모든 요청에 대해, 검색된 후보들 사이의 합의로부터 <i>g<sub>i</sub></i>를 계산하고, 현재 배치 크기에서 배치 예산을 도출한 뒤 각 draft 길이를 비례 배분한다.</span></li>
+      <li><b><span class="t-en">One verification pass, unchanged semantics. </span><span class="t-ko">검증은 한 번, 의미는 그대로. </span></b><span class="t-en">The target model verifies the whole batch's drafts together. Because verification is the standard speculative-decoding acceptance test, the output distribution is untouched — all the gain is in how few tokens get thrown away. Measured overhead of the new machinery is under 2 ms per step.</span><span class="t-ko">타깃 모델이 배치 전체의 draft를 한꺼번에 검증한다. 검증이 표준 speculative decoding 수락 검사 그대로이므로 출력 분포는 건드려지지 않는다. 이득은 전부 버려지는 토큰이 얼마나 적은가에서 나온다. 새로 추가된 기계장치의 실측 오버헤드는 스텝당 2ms 미만이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The headline is not "AgentSpec is 2× faster" — it is that <b>the published speculative-decoding numbers you have been reading do not survive batch 256</b>. EAGLE-3 at ×0.45 on GAIA is the finding worth carrying around; if you have been assuming speculative decoding is a free win in your serving stack, measure it at your actual batch size before believing it.</p><p class="t-ko">헤드라인은 "AgentSpec이 2배 빠르다"가 아니다. <b>지금까지 읽어온 speculative decoding 수치들이 배치 256에서 살아남지 못한다</b>는 것이다. GAIA에서 EAGLE-3가 ×0.45라는 사실이 들고 다닐 만한 발견이다. 자기 서빙 스택에서 speculative decoding이 공짜 이득이라고 가정해왔다면, 믿기 전에 실제 배치 크기에서 재보라.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The transferable idea is <b>partitioning the draft cache by workload structure</b>, not the PDA itself. Any setting where one session emits heterogeneous segments — RAG with retrieved-passage blocks, structured JSON generation, multi-turn tool loops — has the same "confidently wrong draft from the wrong segment" failure, and the same cheap fix.</p><p class="t-ko">이전 가능한 아이디어는 PDA 자체가 아니라 <b>워크로드 구조로 draft 캐시를 분할한다</b>는 것이다. 한 세션이 이질적인 구간들을 내보내는 환경이라면 — 검색된 문단 블록이 있는 RAG, 구조화된 JSON 생성, 멀티턴 툴 루프 — 똑같이 "엉뚱한 구간에서 온 확신에 찬 오답 draft" 실패를 겪고, 똑같이 값싼 해법이 통한다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">It composes with everything this archive has been reading. AgentSpec touches the <i>decoding schedule</i>, so it is orthogonal to KV-cache compression (CommitKV, PuzzleKV, AnchorKV) and to low-rank weight compression — and unlike those, it is exactly lossless. A serving stack could run all three layers at once, which also means nobody has yet measured what happens when a compressed cache changes the redundancy statistics AgentSpec's budget allocator depends on.</p><p class="t-ko">이 아카이브가 읽어온 것들과 조합된다. AgentSpec은 <i>디코딩 스케줄</i>을 건드리므로 KV 캐시 압축(CommitKV, PuzzleKV, AnchorKV)이나 저랭크 가중치 압축과 직교하고, 그것들과 달리 정확히 무손실이다. 서빙 스택은 세 층을 동시에 돌릴 수 있다. 그리고 이는 압축된 캐시가 AgentSpec의 예산 할당기가 의존하는 중복도 통계를 바꿔놓을 때 무슨 일이 생기는지 아직 아무도 재보지 않았다는 뜻이기도 하다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the paper's own ablation quietly undercuts its main interface contribution. AgentSpec requires agent applications to declare their block grammar to the server — the PDA, the token-to-string trie, the three new vLLM parameters all exist to consume it. Table 6 reports <b>AgentSpec (N)</b>, the variant that runs <i>without</i> any semantic-structure input: it gets <b>661.08 vs 661.43</b> tok/s on Deep Research (a 0.05% difference) and <b>809.12 vs 828.10</b> on Code Generation (2.3%). So the declared block structure — the deployment cost every adopter has to pay, and the thing the method is named for — buys roughly 2% on one workload and nothing measurable on the other, while plain (agent, query) isolation appears to capture nearly all of the gain. The paper presents (N) only as evidence of robustness and never draws the comparison. Two smaller cracks point the same way: α and g<sub>min</sub>, the only two hyperparameters, are never given numerical values anywhere in the paper or appendix, and Eq. (1) defines the saturation term as <i>1 − e<sup>1−n</sup></i> while Algorithm 2 line 12 writes <i>1 − e<sup>−n</sup></i> — a discrepancy that changes what a single-candidate match scores. Finally, no task accuracy is reported anywhere (no USACO pass rate, no SWE-Bench resolve rate); losslessness is argued from the verification rule rather than demonstrated, which is conventional but leaves an implementation bug in the PDA path unfalsifiable by the presented evidence.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 논문 자신의 ablation이 주된 인터페이스 기여를 조용히 무너뜨린다. AgentSpec은 에이전트 앱이 블록 문법을 서버에 선언할 것을 요구한다. PDA도, 토큰→문자열 트라이도, 새로 추가한 vLLM 파라미터 세 개도 전부 그것을 소비하려고 존재한다. 그런데 Table 6은 의미 구조 입력 <i>없이</i> 돌아가는 변형 <b>AgentSpec (N)</b>을 보고한다. Deep Research에서 <b>661.08 vs 661.43</b> tok/s(0.05% 차이), Code Generation에서 <b>809.12 vs 828.10</b>(2.3%). 즉 선언된 블록 구조는 — 도입하는 모든 사람이 치러야 할 배포 비용이자 기법의 이름이 유래한 바로 그것은 — 한 워크로드에서 2% 남짓, 다른 하나에서는 측정 가능한 수준의 이득을 못 만든다. 반면 단순한 (에이전트, 질의) 격리만으로 이득의 거의 전부가 잡히는 것으로 보인다. 논문은 (N)을 견고성의 증거로만 제시할 뿐 이 비교를 끝까지 하지 않는다. 같은 방향을 가리키는 작은 균열이 둘 더 있다. 유일한 하이퍼파라미터인 α와 g<sub>min</sub>의 수치가 본문에도 부록에도 전혀 없고, 식 (1)은 포화 항을 <i>1 − e<sup>1−n</sup></i>로 정의하는데 Algorithm 2의 12행은 <i>1 − e<sup>−n</sup></i>로 적는다. 후보가 하나뿐일 때의 점수가 달라지는 불일치다. 마지막으로 어디에서도 태스크 정확도가 보고되지 않는다(USACO 통과율도, SWE-Bench 해결률도 없다). 무손실성은 검증 규칙으로 논증될 뿐 실증되지 않는데, 관행적이긴 하나 PDA 경로의 구현 버그를 제시된 증거로는 반증할 수 없게 만든다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.24004">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.24004">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.24004">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.24004">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>venue: EMNLP 2026. The 2026-08 wishlist queue is fully drained, so this came from the fallback search, where it was one of two confirmed conference accepts among the unread candidates. It also breaks a five-day run of KV-cache compression cards (XKV, PuzzleKV, CommitKV, LowRankArena, FreqDepthKV) by attacking inference cost from the one axis none of them touch — the decoding schedule — and it is the rare efficiency paper here that changes no weights, no cache, and no output</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-08-31.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>venue: EMNLP 2026. 2026-08 위시리스트 큐가 완전히 소진되어 폴백 검색에서 골랐고, 미열람 후보 중 학회 accept가 확인된 두 편 가운데 하나다. KV 캐시 압축 카드가 닷새 연속(XKV, PuzzleKV, CommitKV, LowRankArena, FreqDepthKV) 이어진 흐름을 끊기도 한다. 그 어느 것도 건드리지 않는 축, 즉 디코딩 스케줄에서 추론 비용을 공략하며, 가중치도 캐시도 출력도 바꾸지 않는 이곳에서는 드문 효율화 논문이다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-08-31.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
