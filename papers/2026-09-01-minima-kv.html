@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Minima-KV</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache</span><span class="t-ko">Model Compression · KV Cache</span></span>
+      <span>2026.09.01</span>
+    </div>
+    <h1>Minima-KV: Retention-Preserving KV Cache Compression with Mixed-Format Paged Attention<br>
+      <span class="glow t-en">— demote old KV pages to 3 bits instead of evicting them, and never lose a page</span>
+      <span class="glow t-ko">— 오래된 KV 페이지를 버리는 대신 3비트로 강등한다, 페이지는 하나도 잃지 않는다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Sergii Kozyrev</b> <span class="t-en">&amp; Davyd Maiboroda</span><span class="t-ko">&amp; Davyd Maiboroda</span></span>
+      <span>🏛 Minima AI, Inc.</span>
+      <span>🗓 2026-08-24</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.23834">arXiv:2608.23834</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Minima-KV runs the paged KV cache as a <b>fidelity hierarchy instead of an eviction queue</b>: Recent and Anchor pages stay in FP8, old non-anchor pages are demoted to packed 3-bit (TQ3), and a mixed-format kernel reads both physical formats under one global softmax — so every live-request page stays addressable and nothing is ever deleted. On Qwen3.6-27B it reports 18.3 KiB of attention KV per live token (3.50× vs BF16), a direct-decode canary at 3.625× active-KV compression and 0.9821× throughput, and quality within one point of dense control. Just as notable as the system is the paper's <b>claim ledger</b>, which states out loud which of its own headline numbers the surviving evidence does not actually support.</p>
+    <p class="t-ko">Minima-KV는 페이지 단위 KV 캐시를 <b>축출(eviction) 큐가 아니라 정밀도 계층</b>으로 운영한다. Recent·Anchor 페이지는 FP8로 두고, 오래된 비(非)앵커 페이지는 3비트 패킹(TQ3)으로 강등하며, 혼합 포맷 커널이 두 물리 포맷을 하나의 global softmax 아래에서 함께 읽는다. 그래서 살아 있는 요청의 모든 페이지가 계속 주소지정 가능하고, 무엇도 삭제되지 않는다. Qwen3.6-27B에서 활성 토큰당 어텐션 KV 18.3 KiB(BF16 대비 3.50×), 직접 디코드 카나리 기준 3.625× 활성 KV 압축·0.9821× 처리량, 그리고 dense 대조군과 1%p 이내의 품질을 보고한다. 시스템만큼 눈에 띄는 것은 이 논문의 <b>claim ledger</b>인데, 자기 대표 수치 중 어떤 것이 남아 있는 증거로 뒷받침되지 <b>않는지</b>를 직접 밝힌다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">KV compression usually forces a bad trade: quantize everything uniformly and spend equal bits on unequal tokens, or evict the unimportant tokens and be wrong when attention later moves back to them.</p>
+    <p class="lead t-ko">KV 압축은 보통 나쁜 거래를 강요한다. 전부 균일하게 양자화해 중요도가 다른 토큰에 같은 비트를 쓰거나, 덜 중요한 토큰을 축출했다가 나중에 어텐션이 그쪽으로 돌아오면 틀리거나.</p>
+    <p class="t-en">Minima-KV takes the third option and makes it a runtime property rather than an algorithm: <b>demotion replaces deletion</b>. A page that ages out of the recent window does not disappear — it is re-encoded at three bits and stays addressable, and if attention returns to it the controller can promote it back to FP8. That closes the failure mode of eviction methods (H2O, SnapKV, Scissorhands) without paying uniform-quantization's flat bit cost, and it does so inside a production paged runtime with an ownership protocol, CUDA-graph-compatible decode, and prefix-cache reuse — the parts that usually break when a compression paper meets a real server.</p>
+    <p class="t-ko">Minima-KV는 세 번째 선택지를 택하되 이를 알고리즘이 아니라 런타임의 성질로 만든다. <b>삭제 대신 강등</b>이다. recent 윈도에서 밀려난 페이지는 사라지지 않는다. 3비트로 재부호화되어 계속 주소지정 가능한 상태로 남고, 어텐션이 다시 그쪽을 찾으면 컨트롤러가 FP8로 승격시킬 수 있다. 이로써 축출 계열(H2O, SnapKV, Scissorhands)의 실패 모드를 닫으면서도 균일 양자화의 평평한 비트 비용을 치르지 않는다. 게다가 이 모든 것을 소유권 프로토콜, CUDA 그래프 호환 디코드, prefix 캐시 재사용을 갖춘 프로덕션 페이지 런타임 안에서 한다 — 압축 논문이 실제 서버를 만났을 때 대개 부러지는 바로 그 부분들이다.</p>
+    <figure class="fig">
+      <img src="fig/2608.23834/Minima-KV_Figure1.png" alt="Minima-KV three-tier data path: prefill and paged allocation feed an age/structure controller with optional scoring, which routes pages either to Recent+Anchor FP8 or to Stale packed TQ3; both formats are read by format-specific decode paths and combined in an online-softmax state merge, with all logical pages retained.">
+      <figcaption class="t-en"><b>Figure 1.</b> The three-tier data path. After prefill and paged allocation, a controller keyed on page age and prompt structure (attention scoring optional) routes each page to one of two <i>physical</i> formats — <b>Recent + Anchor in FP8</b> (including attention sinks) or <b>Stale in packed TQ3</b>. Both are read by format-specific decode kernels and combined in a single online-softmax state merge. The dashed box is the whole point: all logical pages are retained, and a Stale page can be promoted back into FP8.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 3계층 데이터 경로. prefill과 페이지 할당 이후, 페이지 나이와 프롬프트 구조를 기준으로 하는 컨트롤러(어텐션 스코어링은 선택)가 각 페이지를 두 가지 <i>물리</i> 포맷 중 하나로 보낸다 — <b>Recent + Anchor는 FP8</b>(어텐션 싱크 포함), <b>Stale은 패킹된 TQ3</b>. 둘 다 포맷별 디코드 커널이 읽고, 하나의 online-softmax 상태 병합에서 합쳐진다. 점선 상자가 핵심이다. 모든 논리 페이지가 보존되며, Stale 페이지는 다시 FP8로 승격될 수 있다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.23834</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">18.3 KiB</div><div class="l"><span class="t-en">attention KV per live token, vs 64.0 (BF16) and 32.0 (FP8) — owner-reported aggregate</span><span class="t-ko">활성 토큰당 어텐션 KV, BF16 64.0 · FP8 32.0 대비 — 운영자 보고 집계치</span></div></div>
+      <div class="stat"><div class="n">3.50×</div><div class="l"><span class="t-en">footprint reduction vs BF16 (1.75× vs FP8) implied by that aggregate</span><span class="t-ko">그 집계치가 함의하는 BF16 대비 용량 절감(FP8 대비 1.75×)</span></div></div>
+      <div class="stat"><div class="n">3.625×</div><div class="l"><span class="t-en">active-KV compression measured in the direct fused-decode canary</span><span class="t-ko">직접 융합 디코드 카나리에서 측정된 활성 KV 압축률</span></div></div>
+      <div class="stat"><div class="n">0.9821×</div><div class="l"><span class="t-en">within-pair decode throughput vs its dense control (29.270 vs 29.804 tok/s)</span><span class="t-ko">동일 쌍 내 디코드 처리량 / dense 대조군(29.270 vs 29.804 tok/s)</span></div></div>
+      <div class="stat"><div class="n">−0.9 pp</div><div class="l"><span class="t-en">worst measured quality drop (4K RULER NIAH); 16K NIAH is exact parity</span><span class="t-ko">측정된 최악의 품질 하락(4K RULER NIAH). 16K NIAH는 완전 동률</span></div></div>
+      <div class="stat"><div class="n">0 / 32</div><div class="l"><span class="t-en">request-layer fallbacks — 16/16 attention layers routed, no dense shadow kept</span><span class="t-ko">요청-레이어 폴백 — 16/16 어텐션 레이어 라우팅, dense shadow 미보유</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Quality against its dense control</span><span class="t-ko">dense 대조군 대비 품질</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> Paired quality results for the materializing FP8/TQ3 profile on Qwen3.6-27B. RULER values are task-macro scores over eight NIAH tasks (32 examples per task). LongBench v2 uses the same 503 paired questions at each length; the 16K row reports exact arm counts, while 32K and 64K report measured paired deltas only. No confidence intervals or predeclared parity margins are available.</caption>
+        <caption class="t-ko"><b>Table 3.</b> Qwen3.6-27B에서 materializing FP8/TQ3 프로파일의 페어링된 품질 결과. RULER 값은 8개 NIAH 태스크(태스크당 32예제)의 task-macro 점수다. LongBench v2는 각 길이에서 동일한 503개 페어링 문항을 쓰며, 16K 행만 실제 정답 수를 보고하고 32K·64K는 측정된 페어 델타만 보고한다. 신뢰구간이나 사전 선언된 동등성 마진은 없다.</caption>
+        <thead><tr><th>Evaluation</th><th>n</th><th>Dense control</th><th>Minima-KV</th><th>Delta</th></tr></thead>
+        <tbody>
+          <tr><td>RULER NIAH 4K</td><td>256</td><td>97.27%</td><td>93.75%</td><td>−0.9 pp</td></tr>
+          <tr><td>RULER NIAH 8K</td><td>256</td><td>99.80%</td><td class="up">100.00%</td><td class="up">+0.20 pp</td></tr>
+          <tr><td>RULER NIAH 16K</td><td>256</td><td>100.00%</td><td class="up">100.00%</td><td class="up">0.00 pp</td></tr>
+          <tr><td>LongBench v2 (cap 16K)</td><td>503</td><td>190 (37.77%)</td><td>186 (36.98%)</td><td>−0.80 pp</td></tr>
+          <tr><td>LongBench v2 32K</td><td>503</td><td colspan="2">paired delta record only</td><td>−0.60 pp</td></tr>
+          <tr><td>LongBench v2 64K</td><td>503</td><td colspan="2">paired delta record only</td><td>−0.40 pp</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in four moves</span><span class="t-ko">네 수로 보는 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">tier</span>
+        <h3>Recent · Anchor · Stale</h3>
+        <p class="t-en">Each physical page carries a state <i>z ∈ {R, A, S}</i>. <b>Recent</b> is the FP8 sliding window that protects local reasoning. <b>Anchor</b> is a protected FP8 budget for old-but-globally-important pages: system instructions, attention sinks, retrieved evidence, document and code structure. <b>Stale</b> is everything else, old and unprotected, packed at three bits.</p>
+        <p class="t-ko">각 물리 페이지는 상태 <i>z ∈ {R, A, S}</i>를 갖는다. <b>Recent</b>는 국소 추론을 보호하는 FP8 슬라이딩 윈도다. <b>Anchor</b>는 오래됐지만 전역적으로 중요한 페이지를 위한 보호된 FP8 예산이다 — 시스템 지시문, 어텐션 싱크, 검색된 근거, 문서·코드 구조. <b>Stale</b>은 그 나머지, 즉 오래됐고 보호되지 않은 페이지로 3비트로 패킹된다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">codec</span>
+        <h3>TQ3: rotated 3-bit, unpacked in the kernel</h3>
+        <p class="t-en">Stale pages use a three-bit rotated scalar quantizer in the spirit of TurboQuant, with packed codes, scales and metadata stored beside the page. Critically the decode kernel unpacks <b>while loading tiles</b>, so there is no cache-sized dequantization buffer — the compression is physical, not a view over a dense copy.</p>
+        <p class="t-ko">Stale 페이지는 TurboQuant 계열의 회전(rotated) 3비트 스칼라 양자화기를 쓰고, 패킹된 코드·스케일·메타데이터를 페이지 옆에 둔다. 결정적으로 디코드 커널이 <b>타일을 로드하면서</b> 언패킹하므로 캐시 크기의 역양자화 버퍼가 없다. 압축이 dense 사본 위의 뷰가 아니라 물리적으로 실재한다는 뜻이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">kernel</span>
+        <h3>Two formats, one softmax</h3>
+        <p class="t-en">FP8 and TQ3 partitions are decoded by separate kernels that each emit online-softmax state <i>(m<sub>j</sub>, ℓ<sub>j</sub>, Ō<sub>j</sub>)</i>. These merge under one global normalization, which is what lets page attention mass from different physical formats be compared on the same scale — and lets the runtime drop the dense shadow entirely.</p>
+        <p class="t-ko">FP8과 TQ3 파티션은 각각 별도 커널이 디코드하며 online-softmax 상태 <i>(m<sub>j</sub>, ℓ<sub>j</sub>, Ō<sub>j</sub>)</i>를 내놓는다. 이들이 하나의 전역 정규화 아래에서 병합되고, 덕분에 서로 다른 물리 포맷의 페이지 어텐션 질량을 같은 척도에서 비교할 수 있으며 런타임이 dense shadow를 완전히 없앨 수 있다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">safety</span>
+        <h3>Copy before publish, release last</h3>
+        <p class="t-en">Every tier change follows an ownership protocol: allocate and fill the destination format, record conversion completion, atomically publish the new format tag and physical id, and only then release the source — after all readers and the conversion event have cleared. A page returns to the free list only when its last request, cache, reader and conversion reference is gone. This is what makes "no live page is ever lost" a runtime guarantee rather than a policy claim.</p>
+        <p class="t-ko">모든 계층 전환은 소유권 프로토콜을 따른다. 목적지 포맷을 할당·채우고, 변환 완료를 기록하고, 새 포맷 태그와 물리 id를 원자적으로 게시한 뒤, <i>그다음에야</i> 원본을 해제한다 — 모든 리더와 변환 이벤트가 정리된 후에. 페이지는 마지막 요청·캐시·리더·변환 참조가 모두 사라진 뒤에만 free list로 돌아간다. "살아 있는 페이지는 절대 잃지 않는다"가 정책 주장이 아니라 런타임 보장이 되는 지점이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Append in FP8.</span><span class="t-ko">FP8로 추가한다.</span></b><span class="t-en"> New KV goes into a request-owned Recent page at 8 bits; no compression work is spent on the pages most likely to be read heavily over the next few steps.</span><span class="t-ko"> 새 KV는 요청이 소유한 Recent 페이지에 8비트로 들어간다. 앞으로 몇 스텝 동안 가장 많이 읽힐 페이지에는 압축 비용을 쓰지 않는다.</span></li>
+      <li><b><span class="t-en">Score pages on a common scale.</span><span class="t-ko">공통 척도로 페이지를 채점한다.</span></b><span class="t-en"> Optionally, per-page attention mass is normalized by the same global softmax used for the output, then smoothed with an EWMA — so scores from FP8 and TQ3 partitions are comparable. (This mechanism is off in every profile they report.)</span><span class="t-ko"> 선택적으로, 페이지별 어텐션 질량을 출력과 동일한 global softmax로 정규화한 뒤 EWMA로 평활한다. 그래야 FP8 파티션과 TQ3 파티션의 점수를 비교할 수 있다. (다만 보고된 모든 프로파일에서 이 기능은 꺼져 있다.)</span></li>
+      <li><b><span class="t-en">Retier at checkpoints.</span><span class="t-ko">체크포인트에서 계층을 재배치한다.</span></b><span class="t-en"> Eligible old pages are ranked to fill the Anchor budget; those that fall out of it are demoted to TQ3 rather than dropped. A Stale page that re-enters the protected budget is materialized and promoted back into a freshly allocated FP8 page.</span><span class="t-ko"> 자격 있는 오래된 페이지들을 순위 매겨 Anchor 예산을 채우고, 거기서 밀려난 페이지는 버려지는 대신 TQ3로 강등된다. 다시 보호 예산에 들어온 Stale 페이지는 materialize되어 새로 할당된 FP8 페이지로 승격된다.</span></li>
+      <li><b><span class="t-en">Decode both formats, merge once.</span><span class="t-ko">두 포맷을 디코드하고 한 번에 병합한다.</span></b><span class="t-en"> Format-specific kernels run under CUDA-graph replay and their partial outputs are combined in a single stable global-softmax merge — 16/16 attention layers routed with zero request-layer fallbacks in the reported canary.</span><span class="t-ko"> 포맷별 커널이 CUDA 그래프 리플레이 아래에서 돌고, 부분 출력들이 하나의 안정적인 global-softmax 병합으로 합쳐진다. 보고된 카나리에서 16/16 어텐션 레이어가 라우팅되었고 요청-레이어 폴백은 0이었다.</span></li>
+      <li><b><span class="t-en">Reuse warm prefixes.</span><span class="t-ko">warm prefix를 재사용한다.</span></b><span class="t-en"> Only immutable full pages may bind to a prefix hash, so the compressed cache also serves prefix reuse: a separate warm-prefix run reports 4.342× physical KV compression at 1.021× the throughput of dense-FP8 automatic prefix caching, with 32/32 exact outputs.</span><span class="t-ko"> 불변인 완성 페이지만 prefix 해시에 바인딩될 수 있어서, 압축된 캐시가 prefix 재사용도 담당한다. 별도의 warm-prefix 실행은 dense-FP8 자동 prefix 캐싱 대비 처리량 1.021×에서 물리 KV 압축 4.342×, 정확 출력 32/32를 보고한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><b>Demotion is a strictly safer primitive than eviction</b>, and it is cheap: three bits per stale scalar buys back the entire "attention shifted to a token I threw away" failure mode. If you are building a cache policy, the retention/fidelity split is the design axis worth copying from this paper.</p><p class="t-ko"><b>강등은 축출보다 엄격히 더 안전한 원시연산</b>이고, 비용도 싸다. stale 스칼라당 3비트로 "버린 토큰으로 어텐션이 옮겨갔다"는 실패 모드 전체를 되산다. 캐시 정책을 설계한다면, 이 논문에서 가져갈 만한 설계 축은 보존/정밀도의 분리다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><b>The global-softmax merge is the enabling trick.</b> Once partial attention states from different physical formats normalize on one scale, mixed-precision paging stops needing a dense shadow — and the same normalization gives you comparable page scores for free.</p><p class="t-ko"><b>global-softmax 병합이 이것을 가능케 하는 트릭이다.</b> 서로 다른 물리 포맷의 부분 어텐션 상태가 하나의 척도에서 정규화되는 순간, 혼합 정밀도 페이징에 dense shadow가 더는 필요 없다. 게다가 같은 정규화가 비교 가능한 페이지 점수까지 덤으로 준다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><b>Read the claim ledger, not the abstract.</b> This paper separates its evidence into named profiles and states which claims each one does <i>not</i> establish — an evidence-reporting style worth stealing even if you never touch KV caches.</p><p class="t-ko"><b>초록이 아니라 claim ledger를 읽어라.</b> 이 논문은 증거를 이름 붙인 프로파일로 분리하고, 각각이 무엇을 뒷받침하지 <i>않는지</i>까지 명시한다. KV 캐시를 평생 안 건드릴 사람에게도 훔칠 만한 증거 보고 방식이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> no single configuration here establishes compression <i>and</i> speed <i>and</i> quality at once, and the paper says so. The headline 18.3 KiB/token is an owner-reported workload aggregate with no per-tier byte reconciliation and no configuration manifest, so it is not a constant rate across contexts; the 3.625× and 0.9821× numbers come from one unrepeated pair whose dense control's KV dtype is not even bound by the surviving record; the quality profile that matches dense at 16K is a <i>materializing</i> profile, and the fast arithmetic settings that produce the speed number fail three of eight 16K NIAH tasks. Add a proprietary, unreleased implementation, one model and one GPU, and attention scoring disabled everywhere, and what you have is an honest engineering report of a promising runtime — not a validated 3.5× free lunch.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 여기서 압축과 속도와 품질을 <i>동시에</i> 입증하는 단일 설정은 없고, 논문도 그렇게 말한다. 대표 수치 18.3 KiB/token은 계층별 바이트 대사(對査)도 설정 매니페스트도 없는 운영자 보고 집계치라 컨텍스트 전반의 상수 압축률이 아니다. 3.625×와 0.9821×는 반복되지 않은 단 한 쌍에서 나왔고, 그 dense 대조군의 KV dtype조차 남은 기록으로 특정되지 않는다. 16K에서 dense와 동률인 품질 프로파일은 <i>materializing</i> 프로파일이며, 속도 수치를 만든 fast arithmetic 설정은 8개 16K NIAH 태스크 중 3개를 통과하지 못한다. 여기에 비공개·미배포 구현, 모델 1종·GPU 1종, 전 구간 어텐션 스코어링 비활성까지 더하면, 이것은 유망한 런타임에 대한 정직한 엔지니어링 보고서이지 검증된 3.5× 공짜 점심이 아니다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.23834">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.23834">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.23834">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.23834">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is fully drained, so this came from the fallback search. It is the newest unread candidate on the Model Compression axis and it approaches the KV cache from an angle the recent run of cards has not covered: not low-rank factorization (PuzzleKV, LowRankArena, FreqDepthKV) and not lifecycle eviction (CommitKV), but mixed-precision retention inside a real paged serving runtime. The claim ledger is the second reason — it is a useful model for how to report efficiency results</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-01.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 완전히 소진되어 폴백 검색에서 골랐다. Model Compression 축에서 가장 최신의 미열람 후보이며, 최근 카드들이 다루지 않은 각도로 KV 캐시에 접근한다. 저랭크 분해(PuzzleKV, LowRankArena, FreqDepthKV)도 아니고 생애주기 축출(CommitKV)도 아닌, 실제 페이지 서빙 런타임 안에서의 혼합 정밀도 보존이다. claim ledger가 두 번째 이유다 — 효율화 결과를 어떻게 보고해야 하는지에 대한 쓸모 있는 본보기다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-01.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
