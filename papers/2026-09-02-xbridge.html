@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · XBridge</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent · Latent Communication</span><span class="t-ko">Multi-Agent · Latent Communication</span></span>
+      <span>2026.09.02</span>
+    </div>
+    <h1>XBridge<br>
+      <span class="glow t-en">— a latent bridge forgets names, so send the names too</span>
+      <span class="glow t-ko">— 잠재 브리지는 이름을 잊는다, 그러니 이름도 함께 보내라</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Wooseong Yang</b> <span class="t-en">et al. · corresponding: Philip S. Yu, Junhyun Lee</span><span class="t-ko">외 · 교신저자: Philip S. Yu, Junhyun Lee</span></span>
+      <span>🏛 UIC · Capital One · HUFS</span>
+      <span>🗓 2026-08-12</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.11676">arXiv:2608.11676</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">When two LLM agents from <i>different</i> families try to talk in latent space instead of text, a learned continuous bridge carries the gist but drops the proper nouns — the paper names this <b>rare-token compression collapse</b>, and measures it at ~30% F1. XBridge fixes it with two channels instead of one: a training-free token remapping that hands the receiver the sender's context words in its own vocabulary, plus four gated cross-attention modules that let the receiver <i>query</i> the sender's hidden states. Both LLMs stay frozen; only a 264M bridge is trained, on 587 samples in under 10 minutes. A controlled swap experiment separates their jobs cleanly: the discrete channel decides <b>which</b> entity comes out, the latent channel decides <b>how</b> the receiver reasons about it.</p>
+    <p class="t-ko"><i>서로 다른</i> 계열의 LLM 에이전트 둘이 텍스트 대신 잠재 공간에서 대화하려 하면, 학습된 연속 브리지는 요지는 전달하지만 고유명사를 흘린다. 논문은 이를 <b>rare-token compression collapse</b>라 명명하고 F1 약 30%로 측정한다. XBridge는 채널을 하나가 아니라 둘로 나눠 이를 해결한다. 송신자의 문맥 토큰을 수신자 어휘로 옮기는 학습 불필요 매핑, 그리고 수신자가 송신자의 은닉 상태를 직접 <i>질의</i>하게 하는 게이트 교차어텐션 4개다. 두 LLM은 모두 동결되고, 264M 브리지만 587개 샘플로 10분 안에 학습된다. 통제된 치환 실험은 둘의 역할을 깔끔히 분리한다. 이산 채널은 <b>어떤</b> 개체가 출력될지를, 잠재 채널은 수신자가 그것을 <b>어떻게</b> 추론할지를 정한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Heterogeneous multi-agent systems are attractive precisely because the agents disagree — different families bring different inductive biases, so they stop degenerating into majority voting. But that same diversity is what makes them unable to talk without falling back on text.</p>
+    <p class="lead t-ko">이종(異種) 멀티에이전트 시스템이 매력적인 이유는 바로 에이전트들이 서로 다르기 때문이다. 계열이 다르면 귀납 편향도 달라 다수결로 퇴화하지 않는다. 그런데 바로 그 다양성 때문에 텍스트 없이는 서로 대화할 수 없다.</p>
+    <p class="t-en">Latent communication has been the obvious escape hatch: skip the sender's autoregressive decoding, ship continuous state instead. The catch is that nearly every working method assumes architectural homogeneity — KV-cache sharing needs matching attention layouts, hidden-state injection needs matching dimensions and tokenizers. Cross-family, you are left with a learned projection, and this paper's contribution is to show precisely how that projection fails. It is not a general blurring. Context survives; <i>identity</i> does not. The receiver reconstructs that someone directed a film in 2010 and loses which someone. That is a specific, diagnosable failure with a specific fix, and the fix turns out not to be a better projection.</p>
+    <p class="t-ko">잠재 통신은 명백한 탈출구였다. 송신자의 자기회귀 디코딩을 건너뛰고 연속 상태를 그대로 보내는 것이다. 문제는 작동하는 방법 대부분이 구조적 동질성을 전제한다는 데 있다. KV 캐시 공유는 동일한 어텐션 레이아웃을, 은닉 상태 주입은 동일한 차원과 토크나이저를 요구한다. 계열이 다르면 남는 건 학습된 사영뿐이고, 이 논문의 기여는 그 사영이 <i>어떻게</i> 실패하는지를 정확히 짚은 것이다. 전면적인 흐려짐이 아니다. 문맥은 살아남고 <i>정체성</i>이 죽는다. 수신자는 누군가가 2010년에 어떤 영화를 감독했다는 것은 복원하지만, 그 누군가가 누구인지는 잃는다. 진단 가능한 구체적 실패이고 구체적 해법이 있으며, 그 해법은 더 나은 사영이 아니었다.</p>
+    <figure class="fig">
+      <img src="fig/2608.11676/fig_main_3.png" alt="XBridge overview: a frozen sender's single forward pass feeds both a Lexical Anchor Mapping channel and a Latent Enrichment Bridge into a frozen receiver.">
+      <figcaption class="t-en"><b>Figure 3.</b> The whole protocol on one page. The sender (left, frozen ❄) runs <i>one</i> forward pass over the context — no decoding — and emits two things. Bottom: its context tokens go through the cross-vocabulary map φ (direct ID lookup where the surface string exists in both vocabularies, string re-tokenization fallback otherwise: "199" becomes [1, 9, 9]) and are embedded with the receiver's <i>own</i> frozen embedding table, then prepended to the question. Top: its last-layer hidden states become keys and values for four cross-attention modules (🔥 the only trained part) inserted into the receiver at layers 6, 13, 20, 27 of 28 — the receiver's own hidden state supplies the query, and the result re-enters through a tanh gate. Note the direction of the arrows into the bridge: the receiver pulls, the sender never pushes activations into the receiver's residual stream.</figcaption>
+      <figcaption class="t-ko"><b>그림 3.</b> 프로토콜 전체가 한 장에. 송신자(왼쪽, 동결 ❄)는 문맥에 대해 순전파를 <i>한 번</i>만 돌리고(디코딩 없음) 두 가지를 내보낸다. 아래: 문맥 토큰이 교차어휘 매핑 φ를 거친다(표면 문자열이 양쪽 어휘에 다 있으면 ID 직접 조회, 아니면 문자열 재토크나이즈 폴백 — "199"는 [1, 9, 9]가 된다). 그리고 수신자 <i>자신의</i> 동결된 임베딩 테이블로 임베딩되어 질문 앞에 붙는다. 위: 마지막 층 은닉 상태가 교차어텐션 4개(🔥 학습되는 유일한 부분)의 key·value가 되고, 이 모듈들은 수신자의 28개 층 중 6·13·20·27층에 삽입된다. query는 수신자 자신의 은닉 상태가 공급하며, 결과는 tanh 게이트를 통해 되돌아온다. 브리지로 들어가는 화살표 방향에 주목하라. 수신자가 당겨 가는 것이지, 송신자가 수신자의 잔차 스트림에 활성값을 밀어넣지 않는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.11676</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">30.3%</div><div class="l"><span class="t-en">F1 of the latent bridge <b>alone</b>, without lexical anchors — the collapse, vs 78.8% with both channels (HotpotQA, Llama→Qwen)</span><span class="t-ko">어휘 앵커 없이 잠재 브리지 <b>단독</b> F1 — 붕괴 지점. 두 채널 모두면 78.8% (HotpotQA, Llama→Qwen)</span></div></div>
+      <div class="stat"><div class="n">+21.4 pp</div><div class="l"><span class="t-en">average F1 gain over text communication across 7 tasks (Llama→Qwen; +14.3 and +20.9 for the other two pairs)</span><span class="t-ko">7개 태스크 평균 텍스트 통신 대비 F1 향상 (Llama→Qwen; 나머지 두 쌍은 +14.3, +20.9)</span></div></div>
+      <div class="stat"><div class="n">11×</div><div class="l"><span class="t-en">lower latency than text communication — 0.15 s vs 1.70 s per sample, by deleting the sender's decode step</span><span class="t-ko">텍스트 통신 대비 지연 감소 — 샘플당 0.15초 대 1.70초. 송신자 디코딩 단계를 없앤 결과</span></div></div>
+      <div class="stat"><div class="n">264M</div><div class="l"><span class="t-en">trainable bridge parameters — 3.8% of the receiver; both LLMs stay frozen</span><span class="t-ko">학습되는 브리지 파라미터 — 수신자의 3.8%. 두 LLM은 모두 동결</span></div></div>
+      <div class="stat"><div class="n">587</div><div class="l"><span class="t-en">training samples (~100 per task), under 10 min on one GPU — and it beats a 42K-sample unbalanced bridge by 3.9 pp</span><span class="t-ko">학습 샘플 수(태스크당 약 100개), GPU 한 장 10분 미만 — 42K 샘플 불균형 브리지를 3.9 pp 앞선다</span></div></div>
+      <div class="stat"><div class="n">63.2 vs 55.2</div><div class="l"><span class="t-en">XBridge average vs FullComm, the "skyline" where the receiver just reads the whole context itself</span><span class="t-ko">XBridge 평균 대 FullComm — 수신자가 전체 문맥을 직접 읽는 "스카이라인"</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The main result</span><span class="t-ko">핵심 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (Llama-3.1-8B → Qwen2.5-7B block).</b> F1 %, four selected tasks plus the 7-task average. Omitted columns: Tipsheets (NoComm 66.5 / FullComm 98.5 / NLComm 96.3 / XBridge 99.8), QASPER (7.1 / 31.3 / 33.7 / 47.5), MFldQA (17.3 / 48.2 / 24.8 / <b>44.2</b> — the one task where XBridge loses to the skyline). NoComm and FullComm are reference points, not competing protocols: the first is the receiver answering from the question alone, the second is the receiver reading the raw context directly. The row worth staring at is FullComm vs XBridge — read the critical note below before reading that gap as a win.</caption>
+        <caption class="t-ko"><b>표 1 (Llama-3.1-8B → Qwen2.5-7B 부분).</b> F1 %, 선별한 4개 태스크와 7개 태스크 평균. 생략된 열: Tipsheets (NoComm 66.5 / FullComm 98.5 / NLComm 96.3 / XBridge 99.8), QASPER (7.1 / 31.3 / 33.7 / 47.5), MFldQA (17.3 / 48.2 / 24.8 / <b>44.2</b> — XBridge가 스카이라인에 지는 유일한 태스크). NoComm과 FullComm은 경쟁 프로토콜이 아니라 기준점이다. 전자는 수신자가 질문만 보고 답하는 경우, 후자는 수신자가 원문맥을 직접 읽는 경우다. 주목할 행은 FullComm 대 XBridge인데, 그 격차를 승리로 읽기 전에 아래 비판 노트를 먼저 볼 것.</caption>
+        <thead><tr><th>Method</th><th>Countries</th><th>HotpotQA</th><th>MuSiQue</th><th>2Wiki</th><th>Avg (7 tasks)</th></tr></thead>
+        <tbody>
+          <tr><td>NoComm <span class="t-en">(question only)</span><span class="t-ko">(질문만)</span></td><td>0.0</td><td>24.6</td><td>10.6</td><td>19.3</td><td>20.8</td></tr>
+          <tr><td>FullComm <span class="t-en">(reads full context)</span><span class="t-ko">(전체 문맥 직독)</span></td><td>50.8</td><td>78.4</td><td>31.5</td><td>47.6</td><td>55.2</td></tr>
+          <tr><td>NLComm<sub>hetero</sub> <span class="t-en">(128-token summary)</span><span class="t-ko">(128토큰 요약)</span></td><td>22.6</td><td>68.5</td><td>32.5</td><td>14.2</td><td>41.8</td></tr>
+          <tr><td><b>XBridge</b></td><td class="up">72.5</td><td class="up">78.8</td><td class="up">48.2</td><td class="up">51.1</td><td class="up">63.2</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-en">The Countries column is the one that carries the paper's real argument. The context says where a person is standing — "Eve is at the Uppland Runic Inscription 896" — and the question asks which country. The answer, "Sweden", <b>appears nowhere in the context</b>. A receiver reading the raw text scores 50.8; a receiver that also gets the sender's hidden states scores 72.5. That gap is the sender's landmark-to-country inference arriving as a latent, having never been written down.</p>
+    <p class="t-ko">논문의 진짜 논지를 지고 있는 열은 Countries다. 문맥은 인물이 서 있는 장소를 말해준다 — "Eve is at the Uppland Runic Inscription 896" — 그리고 질문은 어느 나라인지 묻는다. 정답 "Sweden"은 <b>문맥 어디에도 없다</b>. 원문을 읽는 수신자는 50.8을 받고, 송신자의 은닉 상태까지 받는 수신자는 72.5를 받는다. 그 격차가 바로 송신자의 랜드마크→국가 추론이 한 번도 문자로 적히지 않은 채 잠재 상태로 도착한 것이다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The two channels</span><span class="t-ko">두 개의 채널</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">LAM</span>
+        <h3>Lexical Anchor Mapping</h3>
+        <p class="t-en">The discrete channel, and the one that needs no training at all. A map φ: V<sub>S</sub> → V<sub>R</sub>* is precomputed once per tokenizer pair. Tokens whose surface string exists in both vocabularies are a direct ID-to-ID lookup; the rest are decoded to a string and re-tokenized with the receiver's tokenizer, expanding in place. It is lossless on surface content and costs under 1 ms. Crucially the mapped IDs go through the receiver's <i>own</i> frozen embedding table, so the transferred context lands in exactly the space the receiver's pretrained self-attention already knows how to read. The tokenizer gap is real but survivable: Llama→Qwen mismatches are almost entirely multi-digit numbers, while Mistral's 32K SentencePiece vocabulary sends common words through the fallback ("Angeles" → [An, ge, les]).</p>
+        <p class="t-ko">이산 채널이며, 학습이 전혀 필요 없는 쪽이다. 매핑 φ: V<sub>S</sub> → V<sub>R</sub>*를 토크나이저 쌍마다 한 번 미리 계산한다. 표면 문자열이 양쪽 어휘에 모두 있는 토큰은 ID 직접 조회로, 나머지는 문자열로 디코딩한 뒤 수신자 토크나이저로 재토크나이즈해 그 자리에서 확장한다. 표면 내용에 대해 무손실이며 1 ms 미만이 든다. 결정적으로 매핑된 ID는 수신자 <i>자신의</i> 동결 임베딩 테이블을 통과하므로, 전달된 문맥은 수신자의 사전학습된 셀프어텐션이 이미 읽을 줄 아는 바로 그 공간에 안착한다. 토크나이저 격차는 실재하지만 견딜 만하다. Llama→Qwen 불일치는 거의 전부 여러 자리 숫자이고, Mistral의 32K SentencePiece 어휘는 흔한 단어도 폴백으로 보낸다("Angeles" → [An, ge, les]).</p>
+      </div>
+      <div class="m">
+        <span class="tag">LEB</span>
+        <h3>Latent Enrichment Bridge</h3>
+        <p class="t-en">The continuous channel, and the only trained component. Four gated cross-attention modules (~66M each) sit at layers 6, 13, 20, 27 of the receiver's 28, following Flamingo's insertion density. The receiver's hidden state at that layer becomes the query; the sender's last-layer states become keys and values, with the projection matrices doing double duty as the d<sub>S</sub>→d<sub>R</sub> translation. The output re-enters through <code>h′ = h + tanh(α)·A</code> with α initialized to 1.0 rather than Flamingo's zero — with a 10-minute training budget the bridge cannot afford to discover itself. Four modules is the sweet spot: two (74.6 F1) underfit, seven (75.8) overfit the 587 samples.</p>
+        <p class="t-ko">연속 채널이며, 학습되는 유일한 구성요소다. 게이트 교차어텐션 4개(각 약 66M)가 수신자 28개 층 중 6·13·20·27층에 배치되는데, Flamingo의 삽입 밀도를 따른 것이다. 해당 층의 수신자 은닉 상태가 query가 되고, 송신자의 마지막 층 상태가 key·value가 되며, 사영 행렬이 d<sub>S</sub>→d<sub>R</sub> 변환까지 겸한다. 출력은 <code>h′ = h + tanh(α)·A</code>로 되돌아오는데, α는 Flamingo의 0이 아니라 1.0으로 초기화된다. 10분 학습 예산으로는 브리지가 스스로를 발견할 여유가 없기 때문이다. 모듈 4개가 최적점이다. 2개(74.6 F1)는 과소적합, 7개(75.8)는 587 샘플에 과적합한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Integration</span>
+        <h3><span class="t-en">Grounding without a fusion layer</span><span class="t-ko">융합 층 없는 접지</span></h3>
+        <p class="t-en">There is no module that combines the two channels. LAM's anchors enter as ordinary input embeddings and propagate through the receiver's own self-attention, which means that by layer 6 the receiver's hidden state <i>already encodes which entities are present and where</i> — and that hidden state is what LEB uses as its query. The grounding is emergent from ordering, not engineered. This is why the ablation is so lopsided: LEB on its own adds +5.7 pp over no communication, but LEB on top of LAM adds +22.3 pp. Anchors are not a nice-to-have alongside the bridge; they are the precondition that makes the bridge's queries specific enough to retrieve anything.</p>
+        <p class="t-ko">두 채널을 합치는 모듈은 없다. LAM의 앵커는 평범한 입력 임베딩으로 들어가 수신자 자신의 셀프어텐션을 타고 전파되며, 그 결과 6층쯤이면 수신자의 은닉 상태에는 <i>이미 어떤 개체가 어디에 있는지가 부호화되어 있다</i>. 그리고 그 은닉 상태가 바로 LEB의 query가 된다. 접지는 설계된 것이 아니라 순서에서 창발한다. 절제 실험이 그토록 비대칭인 이유가 이것이다. LEB 단독은 무통신 대비 +5.7 pp를 더하지만, LAM 위의 LEB는 +22.3 pp를 더한다. 앵커는 브리지 곁에 있으면 좋은 무엇이 아니라, 브리지의 query가 무언가를 검색할 만큼 구체적이 되게 하는 전제조건이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">One sender forward pass, no decoding. </span><span class="t-ko">송신자 순전파 1회, 디코딩 없음. </span></b><span class="t-en">The sender sees the context document only and runs a single forward pass (~0.05 s), emitting last-layer hidden states H<sub>S</sub> and its own context token IDs c<sub>S</sub>. This is where the 11× latency saving comes from — the text baseline spends 1.7 s autoregressively writing a 128-token summary.</span><span class="t-ko">송신자는 문맥 문서만 보고 순전파를 한 번(약 0.05초) 돌려 마지막 층 은닉 상태 H<sub>S</sub>와 자신의 문맥 토큰 ID c<sub>S</sub>를 내보낸다. 11× 지연 절감이 여기서 나온다. 텍스트 베이스라인은 128토큰 요약을 자기회귀로 쓰는 데 1.7초를 쓴다.</span></li>
+      <li><b><span class="t-en">Remap the tokens into the receiver's vocabulary. </span><span class="t-ko">토큰을 수신자 어휘로 재매핑. </span></b><span class="t-en">φ converts c<sub>S</sub> to receiver token IDs by direct lookup or string fallback, the receiver's frozen embedding table turns them into e<sub>ctx</sub>, and these are prepended to the question: x<sub>R</sub> = [e<sub>ctx</sub>; E<sub>R</sub>(Q)].</span><span class="t-ko">φ가 직접 조회 또는 문자열 폴백으로 c<sub>S</sub>를 수신자 토큰 ID로 변환하고, 수신자의 동결 임베딩 테이블이 이를 e<sub>ctx</sub>로 만들며, 이것이 질문 앞에 붙는다: x<sub>R</sub> = [e<sub>ctx</sub>; E<sub>R</sub>(Q)].</span></li>
+      <li><b><span class="t-en">Let the receiver query, never inject. </span><span class="t-ko">수신자가 질의하게 하되, 주입하지 않는다. </span></b><span class="t-en">At each of the four insertion layers, cross-attention pulls from H<sub>S</sub> conditioned on what the receiver currently needs. The paper's argument for this direction is distributional: a projection P only guarantees PH<sub>S</sub> has the right <i>shape</i>, not that it matches the receiver's native hidden-state distribution, so prepending or KV-replacing puts out-of-distribution vectors into the pipeline.</span><span class="t-ko">네 개의 삽입 층 각각에서, 교차어텐션이 수신자가 지금 필요로 하는 바에 조건화되어 H<sub>S</sub>로부터 끌어온다. 이 방향에 대한 논문의 논거는 분포적이다. 사영 P는 PH<sub>S</sub>의 <i>모양</i>만 보장할 뿐 수신자의 고유 은닉 상태 분포와 일치함을 보장하지 않으므로, 앞에 붙이거나 KV를 교체하면 분포 밖 벡터가 파이프라인에 들어간다.</span></li>
+      <li><b><span class="t-en">Train only the bridge, on a deliberately balanced set. </span><span class="t-ko">브리지만, 의도적으로 균형 잡힌 집합으로 학습. </span></b><span class="t-en">Standard next-token loss on answer tokens, sender outputs precomputed and cached. Data composition matters more than volume: 587 balanced samples (63.2 avg) beat 42K unbalanced ones (59.3), and a HotpotQA-only bridge collapses to 27.7 on Countries.</span><span class="t-ko">정답 토큰에 대한 표준 다음토큰 손실, 송신자 출력은 미리 계산해 캐시한다. 데이터 구성이 양보다 중요하다. 균형 잡힌 587 샘플(평균 63.2)이 불균형 42K(59.3)를 이기고, HotpotQA만으로 학습한 브리지는 Countries에서 27.7로 무너진다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The experiment that earns the claim</span><span class="t-ko">주장을 뒷받침하는 실험</span></h2>
+    <p class="t-en">Ablations show both channels are needed; they do not show the channels do <i>different</i> things. So the authors swap entities: in 100 HotpotQA samples they replace the answer entity throughout the context with an unrelated one of the same type ("Christopher Nolan" → "Bong Joon Ho"), then feed the original or the swapped version to each channel independently. Swapping LEB alone changes nothing — conditions A and D are output-for-output identical (45 original, 0 swapped). Swapping LAM flips the answer regardless of what LEB received (37 swapped in both B and C). LAM decides <b>who</b>; LEB decides <b>how</b>. It is the cleanest kind of evidence for a role-separation claim, and it also reveals the thing the headline number hides: 55–59 of the 100 outputs name <i>neither</i> entity, and the paper reads the result by comparing directions within the minority that named one.</p>
+    <p class="t-ko">절제 실험은 두 채널이 모두 필요함을 보이지만, 두 채널이 <i>다른</i> 일을 한다는 것까지 보이지는 않는다. 그래서 저자들은 개체를 치환한다. HotpotQA 100개 샘플에서 정답 개체를 문맥 전체에 걸쳐 같은 유형의 무관한 개체로 바꾸고("Christopher Nolan" → "Bong Joon Ho"), 원본 또는 치환본을 각 채널에 독립적으로 넣는다. LEB만 바꾸면 아무것도 달라지지 않는다. 조건 A와 D는 출력이 완전히 동일하다(원본 45, 치환 0). LAM을 바꾸면 LEB가 무엇을 받았든 답이 뒤집힌다(B와 C 모두 치환 37). LAM이 <b>누구</b>를, LEB가 <b>어떻게</b>를 정한다. 역할 분리 주장에 대해 가장 깔끔한 종류의 증거다. 동시에 대표 수치가 감추는 것도 드러난다. 100개 출력 중 55~59개는 <i>어느 쪽</i> 개체도 말하지 않으며, 논문은 한쪽을 말한 소수 안에서 방향을 비교해 결과를 읽는다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en"><b>The bottleneck in latent communication is discrete, not continuous.</b> Everyone has been trying to widen the pipe. This paper shows the pipe was never the problem for context — it was the problem for identity, and identity is cheap to send separately as tokens. That decomposition is portable to any cross-model transfer problem where rare symbols matter.</p><p class="t-ko"><b>잠재 통신의 병목은 연속이 아니라 이산이다.</b> 다들 관을 넓히려 애써왔다. 이 논문은 관이 문맥에 대해서는 애초에 문제가 아니었음을 보인다. 문제는 정체성이었고, 정체성은 토큰으로 따로 보내면 값싸다. 이 분해는 희소 기호가 중요한 모든 교차모델 전송 문제로 이식 가능하다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en"><b>A latent can carry an inference that was never written down.</b> Countries is the existence proof: the answer is absent from the context, FullComm gets 50.8, and the sender's hidden states push it to 72.5. This is the one thing text communication structurally cannot do — a summary can only relay what the sender chose to verbalize.</p><p class="t-ko"><b>잠재 상태는 한 번도 적히지 않은 추론을 실어나를 수 있다.</b> Countries가 존재 증명이다. 정답은 문맥에 없고, FullComm은 50.8을 받으며, 송신자의 은닉 상태가 이를 72.5로 밀어올린다. 텍스트 통신이 구조적으로 할 수 없는 유일한 일이다. 요약은 송신자가 언어화하기로 선택한 것만 전달할 수 있다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en"><b>Order can substitute for architecture.</b> There is no fusion module — grounding works because anchors enter early enough to shape the queries the bridge later issues. Worth remembering whenever you are tempted to add a combiner: sometimes the cheaper fix is to make one signal arrive before the other.</p><p class="t-ko"><b>순서가 구조를 대신할 수 있다.</b> 융합 모듈이 없다. 접지가 작동하는 이유는 앵커가 브리지가 나중에 던질 query를 형성할 만큼 충분히 일찍 들어오기 때문이다. 결합기를 붙이고 싶을 때마다 기억할 만하다. 더 싼 해법은 때때로 한 신호가 다른 신호보다 먼저 도착하게 하는 것이다.</p></div>
+      <div class="t"><span class="ic">⚖️</span><p class="t-en"><b>Read "beats the skyline" as "was fitted to these seven tasks."</b> The +8 pp over FullComm is the number everyone will quote, and it is the number that depends most on the bridge having seen ~100 training samples from every task it is evaluated on. The paper's own Table 10 shows what happens when it hasn't.</p><p class="t-ko"><b>"스카이라인을 넘었다"는 "이 일곱 태스크에 맞춰졌다"로 읽어라.</b> FullComm 대비 +8 pp가 모두가 인용할 수치이고, 동시에 브리지가 평가받는 모든 태스크에서 약 100개 학습 샘플을 봤다는 사실에 가장 크게 의존하는 수치다. 그렇지 않을 때 무슨 일이 일어나는지는 논문 자신의 표 10이 보여준다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the framing does more work than the mechanism. XBridge is presented as a <i>communication protocol</i> beating text communication by 11× in latency, but LAM transmits the sender's <b>entire context</b>, token for token — so the honest peer is FullComm, not a 128-token summary, and against FullComm the score is +8.0 pp at 1.15× the latency (0.15 s vs 0.13 s), not 11× faster than anything. The bandwidth story is worse and goes unmeasured: the paper reports no message size anywhere, yet on its own setup a 7K-token document means shipping ~7K remapped token IDs <i>plus</i> H<sub>S</sub> at 4096 dims — on the order of tens of MB in fp16, against a few hundred bytes of text summary. For agents in one process this is free; for agents across a network it inverts the efficiency claim entirely. Second, the comparison is not like-for-like on training: the 264M bridge is fit on ~100 samples from each of the seven evaluation tasks while <i>every</i> baseline is training-free, and there is no held-out task anywhere in the paper — Table 10 shows a HotpotQA-only bridge falling to 27.7 on Countries and 36.2 on QASPER, which is the paper telling us, in its own data, that this does not transfer to unseen task types. Third, the chosen configuration is not the best one: Appendix A.2 reports NLComm text + LEB at <b>81.0</b> F1, above XBridge's own 78.8, so LAM is the faster anchor format rather than the stronger one — a reasonable engineering choice, but the main table never shows a baseline with LEB attached. Add no seeds, no error bars and no variance anywhere across seven benchmarks; one scale (7–8B) and three model pairs; and a protocol that is, by its own Limitations, one-directional, single-exchange, and two-agent. The entity grounding diagnosis is genuinely good science and the perturbation experiment is careful. The efficiency claim around it is not yet supported.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 메커니즘보다 프레이밍이 더 많은 일을 하고 있다. XBridge는 텍스트 통신을 지연 11×로 이기는 <i>통신 프로토콜</i>로 제시되지만, LAM은 송신자의 <b>문맥 전체</b>를 토큰 하나까지 전송한다. 따라서 정직한 비교 상대는 128토큰 요약이 아니라 FullComm이고, FullComm 대비 성적은 지연 1.15배(0.15초 대 0.13초)에 +8.0 pp이지 무엇보다 11× 빠른 것이 아니다. 대역폭 이야기는 더 나쁘고 측정되지도 않았다. 논문은 메시지 크기를 어디에도 보고하지 않지만, 논문 자신의 설정에서 7K 토큰 문서란 재매핑된 토큰 ID 약 7K개에 <i>더해</i> 4096차원 H<sub>S</sub>를 보낸다는 뜻이다. fp16이면 수십 MB 규모이고, 상대는 수백 바이트짜리 텍스트 요약이다. 한 프로세스 안의 에이전트라면 공짜지만, 네트워크 너머의 에이전트라면 효율 주장이 통째로 뒤집힌다. 둘째, 학습 조건이 대등하지 않다. 264M 브리지는 평가에 쓰이는 일곱 태스크 각각에서 약 100개 샘플로 적합되는 반면 <i>모든</i> 베이스라인은 학습이 없고, 논문 어디에도 홀드아웃 태스크가 없다. 표 10은 HotpotQA만으로 학습한 브리지가 Countries 27.7, QASPER 36.2로 떨어짐을 보여주는데, 이는 미지의 태스크 유형으로는 전이되지 않는다고 논문이 자기 데이터로 말하고 있는 것이다. 셋째, 채택된 설정이 최선의 설정이 아니다. 부록 A.2는 NLComm 텍스트 + LEB가 F1 <b>81.0</b>으로 XBridge 자신의 78.8을 넘는다고 보고한다. 즉 LAM은 더 강한 앵커 형식이 아니라 더 빠른 앵커 형식이다. 합당한 공학적 선택이지만, 본문 표는 LEB를 붙인 베이스라인을 한 번도 보여주지 않는다. 여기에 일곱 벤치마크 전체에 걸쳐 시드도 오차막대도 분산도 없고, 규모는 하나(7~8B)에 모델 쌍은 셋뿐이며, 프로토콜 자체가 스스로의 Limitations대로 단방향·1회 교환·2 에이전트다. entity grounding 진단은 진짜 좋은 과학이고 치환 실험은 세심하다. 그 주위를 감싼 효율 주장은 아직 뒷받침되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.11676">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.11676">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.11676">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.11676">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the wishlist queue is drained, so this came from the fallback search, and it deliberately breaks a streak: the last seven cards were all KV cache and low-rank compression, while Multi-Agent Latent Communication — one of the four standing axes — has gone unserved. Among the unread candidates it was the strongest real paper (the alternatives were a PhD thesis, a plain preprint, and a non-archival workshop SVD paper). It also closes a loop: its reference [1] is LatentMAS (arXiv:2511.20639), the first paper in this archive's must-read list, and XBridge is what happens when you ask why that line of work assumes everyone runs the same architecture</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-02.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트 큐가 소진되어 폴백 검색에서 골랐고, 의도적으로 흐름을 끊었다. 최근 일곱 장의 카드가 전부 KV 캐시와 저랭크 압축이었던 반면, 상시 4축 중 하나인 Multi-Agent Latent Communication은 계속 비어 있었다. 미열람 후보 중 가장 실속 있는 논문이었다(대안은 박사학위논문, 평범한 프리프린트, 비아카이브 워크숍 SVD 논문이었다). 고리도 하나 닫힌다. 이 논문의 참고문헌 [1]이 이 아카이브 머스트리드 목록의 첫 논문인 LatentMAS(arXiv:2511.20639)이고, XBridge는 그 계열이 왜 모두가 같은 구조를 쓴다고 전제하는지 물었을 때 나오는 답이다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-02.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
