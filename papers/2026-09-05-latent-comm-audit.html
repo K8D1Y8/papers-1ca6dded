@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · When Does Latent Communication Pay? A Causal Audit of Relayed KV Caches in Multi-Agent LLMs</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent · Latent Communication</span><span class="t-ko">Multi-Agent · Latent Communication</span></span>
+      <span>2026.09.05</span>
+    </div>
+    <h1>When Does Latent Communication Pay? A Causal Audit of Relayed KV Caches in Multi-Agent LLMs<br>
+      <span class="glow t-en">— swap each agent's cache for a stranger's; the benchmark gain barely notices</span>
+      <span class="glow t-ko">— 각 에이전트의 캐시를 남의 것으로 바꿔치기해도 벤치마크 점수는 거의 꿈쩍하지 않는다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Jiaming Cheng</b> <span class="t-en">, Subhransu Das, Rajiv Ramnath</span><span class="t-ko">, Subhransu Das, Rajiv Ramnath</span></span>
+      <span>🏛 Independent Researcher · The Ohio State University</span>
+      <span>🗓 2026-08-05</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.04893">arXiv:2608.04893</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Multi-agent LLM systems that relay KV caches instead of text credit their gains to the “latent thoughts” they transmit. That credit is a causal claim about <i>which</i> example's cache arrives, and this paper tests it directly: replace the true cache with a <b>deranged</b> one — another example's cache from the same batch, identical geometry, identical distribution, only the pairing broken — and measure what changes. On standard benchmarks, almost nothing does: seven of nine cells are statistically <i>equivalent</i> to a mismatched cache within ±2.8 points. But when the receiver is engineered to genuinely need the sender's private information, the same contrast jumps to +90.7. The channel can carry example-specific content; on benchmarks, that is usually not what is paying.</p>
+    <p class="t-ko">텍스트 대신 KV 캐시를 넘기는 멀티에이전트 LLM 시스템들은 성능 향상의 공을 자기들이 전달한 “잠재 생각(latent thoughts)”에 돌린다. 그런데 그 공로 배분은 <i>어느</i> 예제의 캐시가 도착했는지에 관한 인과 주장이고, 이 논문은 그걸 직접 시험한다. 진짜 캐시를 <b>deranged</b> 캐시 — 같은 배치 안 다른 예제의 캐시로, 기하 구조도 분포도 똑같고 오직 짝만 어긋난 것 — 로 바꿔치기하고 무엇이 달라지는지 잰다. 표준 벤치마크에서는 거의 아무것도 달라지지 않는다. 9개 셀 중 7개가 짝이 틀린 캐시와 ±2.8점 이내에서 통계적으로 <i>동등</i>하다. 반면 수신자가 송신자의 비공개 정보를 정말로 필요로 하도록 설계하면 같은 대비가 +90.7까지 치솟는다. 채널은 예제별 내용을 실어 나를 <i>수</i> 있다. 다만 벤치마크에서 값을 치르고 있는 것은 대개 그게 아니다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">A benchmark delta tells you the channel helped. It does not tell you the channel <i>communicated</i>.</p>
+    <p class="lead t-ko">벤치마크 점수 차이는 채널이 도움이 됐다는 것만 말해준다. 채널이 <i>소통했다</i>는 것은 말해주지 않는다.</p>
+    <p class="t-en">Latent communication is not free. It usually demands checkpoint-compatible sender and receiver (or a trained cross-model projector), and it destroys the human-readable transcript that makes a multi-agent system debuggable. Those costs are justified by a specific promise: the relayed cache carries example-specific content the receiver actually uses. But a benchmark gain is compatible with a much cheaper story — that prepending <i>any</i> well-formed cache perturbs the receiver in a generically helpful way. The two are indistinguishable until you intervene on content while holding everything else fixed, which is exactly what nobody had done to the released systems. This audit does it, and the answer splits: the interface effect and the content effect are both real, they are separable, and on standard benchmarks the second one is the smaller of the two.</p>
+    <p class="t-ko">잠재 통신은 공짜가 아니다. 보통 송신자와 수신자가 같은 체크포인트여야 하고(아니면 학습된 크로스모델 프로젝터가 필요하고), 멀티에이전트 시스템을 디버깅 가능하게 만들어주던 사람이 읽을 수 있는 기록도 사라진다. 이 비용은 특정한 약속으로 정당화된다. 전달된 캐시가 수신자가 실제로 쓰는 예제별 내용을 담고 있다는 약속이다. 하지만 벤치마크 향상은 훨씬 값싼 설명과도 양립한다. <i>아무</i> 잘 만들어진 캐시나 앞에 붙이기만 해도 수신자가 일반적으로 유익한 방향으로 흔들린다는 설명 말이다. 다른 모든 걸 고정한 채 내용에만 개입하기 전까지 이 둘은 구별되지 않고, 정확히 그것이 출시된 시스템들에 대해 아무도 하지 않은 일이었다. 이 감사는 그걸 하고, 답은 둘로 갈린다. 인터페이스 효과와 내용 효과는 둘 다 실재하고, 분리 가능하며, 표준 벤치마크에서는 후자가 더 작다.</p>
+    <figure class="fig">
+      <img src="fig/2608.04893/fig2-dissociation.svg" alt="Per-seed and seed-mean true-minus-deranged accuracy contrasts, spanning +61 to +94 points in the calibrated regime and clustering near zero in the natural regime">
+      <figcaption class="t-en"><b>Figure 2.</b> One estimand, two regimes. True-minus-deranged seed means (diamonds; per-seed contrasts as circles) span +61 to +94 points where the receiver needs sender-private content, and cluster near zero on standard benchmarks where the receiver could have solved the task alone.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 하나의 추정량, 두 개의 체제. true−deranged의 시드 평균(다이아몬드, 시드별 값은 원)은 수신자가 송신자의 비공개 정보를 필요로 하는 곳에서 +61~+94점에 이르지만, 수신자가 혼자서도 풀 수 있었던 표준 벤치마크에서는 0 근처에 몰린다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.04893</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+90.7</div><div class="l"><span class="t-en">pairing effect (pts) when the receiver truly needs the sender's private content — Qwen3-4B, calibrated regime</span><span class="t-ko">수신자가 송신자의 비공개 정보를 정말 필요로 할 때의 페어링 효과(점) — Qwen3-4B, 보정 체제</span></div></div>
+      <div class="stat"><div class="n">±2.8</div><div class="l"><span class="t-en">equivalence margin (pts); 7 of 9 natural-regime cells fall inside it under Holm-corrected TOST</span><span class="t-ko">동등성 마진(점). 자연 체제 9개 셀 중 7개가 Holm 보정 TOST에서 이 안에 들어온다</span></div></div>
+      <div class="stat"><div class="n">14.7 : 0.4</div><div class="l"><span class="t-en">MedQA — cost of <i>zeroing</i> the relay vs cost of <i>mismatching</i> it. A cache effect is not a pairing effect</span><span class="t-ko">MedQA — 릴레이를 <i>0으로 만들 때</i>의 손실 대 <i>짝을 어긋내기만</i> 할 때의 손실. 캐시 효과는 페어링 효과가 아니다</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">delivered channels audited under one test — spanning ceiling, partial, and no detected transfer</span><span class="t-ko">동일한 시험을 적용한 출시 채널 수 — 천장, 부분, 미검출로 갈렸다</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The channel works — when it has to</span><span class="t-ko">채널은 작동한다 — 작동해야만 할 때</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Calibrated (receiver-necessity) cells: correct answers out of 500 per arm, seeds 42/43/44. Every arm delivers a cache of identical geometry to the same receiver under the same prompt — only content changes. <b>Intact</b> = sender ran, but its private information was swapped for an answer-irrelevant one; <b>T−D</b> = seed-mean true-minus-deranged pairing contrast, in points.</caption>
+        <caption class="t-ko"><b>Table 1.</b> 보정(수신자 필요성) 조건: arm별 500문항 중 정답 수, 시드 42/43/44. 모든 arm은 같은 수신자에게 같은 프롬프트로 기하 구조가 동일한 캐시를 전달하며, 달라지는 것은 내용뿐이다. <b>Intact</b> = 송신자는 돌았지만 비공개 정보만 정답과 무관한 것으로 바꾼 조건. <b>T−D</b> = true−deranged 페어링 대비의 시드 평균(점).</caption>
+        <thead><tr><th>Family</th><th>True</th><th>Intact</th><th>Deranged</th><th>Zero</th><th>T−D</th></tr></thead>
+        <tbody>
+          <tr><td>Qwen3-4B</td><td>498/499/498</td><td>116/105/120</td><td>42/55/37</td><td>20/17/18</td><td class="up">+90.7</td></tr>
+          <tr><td>Qwen3-8B</td><td>500/500/500</td><td>126/122/117</td><td>53/60/53</td><td>8/11/8</td><td class="up">+88.9</td></tr>
+          <tr><td>Qwen3-14B</td><td>500/500/499</td><td>110/114/117</td><td>62/68/75</td><td>47/43/50</td><td class="up">+86.3</td></tr>
+          <tr><td>Mistral-Nemo-12B</td><td>425/431/420</td><td>108/125/129</td><td>115/124/123</td><td>0/0/0</td><td class="up">+60.9</td></tr>
+          <tr><td>phi-4</td><td>499/500/500</td><td>110/125/118</td><td>64/63/67</td><td>0/0/0</td><td class="up">+87.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">Fix everything but one thing</span><span class="t-ko">한 가지만 빼고 전부 고정</span></div>
+          <div class="sub"><span class="t-en">same receiver, same prompt, same cache shape and dtype</span><span class="t-ko">같은 수신자, 같은 프롬프트, 같은 캐시 모양과 dtype</span></div>
+          <div class="latent">only <i>which</i> cache lands where changes</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">Derange, don't destroy</span><span class="t-ko">부수지 말고 어긋내라</span></div>
+          <div class="sub"><span class="t-en">a fixed-point-free permutation keeps the marginal cache distribution intact</span><span class="t-ko">고정점 없는 순열이라 캐시의 주변 분포는 그대로 유지된다</span></div>
+          <div class="latent">π(i) ≠ i · same multiset of caches</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Read it in two regimes</span><span class="t-ko">두 체제에서 읽어라</span></div>
+          <div class="sub"><span class="t-en">where the receiver must have the sender's secret, and where it need not</span><span class="t-ko">수신자가 송신자의 비밀을 반드시 가져야 하는 곳, 그리고 그럴 필요 없는 곳</span></div>
+          <div class="latent">τ<sub>TD</sub> = acc(true) − acc(deranged)</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">Bound the null, don't shrug at it</span><span class="t-ko">귀무를 어깨 으쓱하고 넘기지 말고 경계를 지어라</span></div>
+          <div class="sub"><span class="t-en">TOST against a margin borrowed from the audited system's own claimed gain</span><span class="t-ko">감사 대상 시스템이 스스로 주장한 향상폭에서 빌려온 마진에 대한 TOST</span></div>
+          <div class="latent">±2.8 pt · Holm-corrected · 5 seeds</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>The second box is the whole paper.</b> Zeroing a cache tests “well-formed cache vs. garbage.” Deranging one tests “this example's content vs. another's” — which is the claim the phrase <i>latent thoughts</i> actually makes. On MedQA those two questions get answers of 14.7 points and 0.4 points respectively, from the same system, on the same examples.</div>
+      <div class="cap t-ko"><b>두 번째 상자가 이 논문의 전부다.</b> 캐시를 0으로 만드는 건 “잘 만들어진 캐시 대 쓰레기”를 시험한다. 어긋내는 건 “이 예제의 내용 대 다른 예제의 내용”을 시험하고, <i>잠재 생각</i>이라는 표현이 실제로 하는 주장은 바로 후자다. MedQA에서 이 두 질문은 같은 시스템, 같은 예제에서 각각 14.7점과 0.4점이라는 답을 받는다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea: intervene on content, not on the channel</span><span class="t-ko">아이디어: 채널이 아니라 내용에 개입하라</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">the estimand</span>
+        <h3>True minus deranged</h3>
+        <p class="t-en">The pairing effect τ<sub>TD</sub> is the accuracy gap between a receiver given its own example's cache and one given a batch-mate's. Because the deranged arm ships the same multiset of caches — merely re-paired — any gap cannot be blamed on malformedness or distribution shift. It isolates exactly the quantity the “latent thoughts” attribution needs, and nothing else.</p>
+        <p class="t-ko">페어링 효과 τ<sub>TD</sub>는 자기 예제의 캐시를 받은 수신자와 같은 배치 동료의 캐시를 받은 수신자 사이의 정확도 차이다. deranged arm은 동일한 캐시 다중집합을 그대로 보내고 짝만 다시 맺기 때문에, 어떤 차이도 캐시가 망가졌다거나 분포가 달라졌다는 탓으로 돌릴 수 없다. “잠재 생각” 주장이 필요로 하는 바로 그 양만을, 다른 것 없이 분리해낸다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">the controls</span>
+        <h3>Zero, random, intact-no-private</h3>
+        <p class="t-en">Three more arms decompose the rest. <b>Zero</b> and moment-matched <b>random</b> caches confirm the intervention point is causally wired to the receiver at all — random collapses accuracy to ≤2/500, so a null elsewhere is not a dead instrument. <b>Intact-no-private</b> lets the sender compute normally but strips the answer-relevant secret, separating the value of sender computation from the value of sender knowledge.</p>
+        <p class="t-ko">나머지는 세 개의 arm이 분해한다. <b>Zero</b>와 모멘트를 맞춘 <b>random</b> 캐시는 개입 지점이 애초에 수신자와 인과적으로 연결돼 있음을 확인해준다. random은 정확도를 500분의 2 이하로 무너뜨리므로, 다른 곳에서 나온 귀무 결과가 죽은 계측기 탓이 아니게 된다. <b>Intact-no-private</b>는 송신자를 정상적으로 돌리되 정답과 관련된 비밀만 걷어내, 송신자 계산의 가치와 송신자 지식의 가치를 갈라놓는다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">the instrument</span>
+        <h3>Manufactured receiver necessity</h3>
+        <p class="t-en">A null is ambiguous: the channel may have failed, or the receiver may simply not have needed the content. So the audit builds a regime where necessity is guaranteed — procedurally generated entity-attribute registries, resampled per evaluation, absent from any training corpus. If the pairing effect is at ceiling there and near zero on GSM8K, the channel is fine and the benchmark was the redundant part.</p>
+        <p class="t-ko">귀무 결과는 중의적이다. 채널이 실패했을 수도 있고, 수신자가 애초에 그 내용을 필요로 하지 않았을 수도 있다. 그래서 감사는 필요성이 보장되는 체제를 만든다. 절차적으로 생성되고 평가마다 새로 뽑히는, 어떤 학습 코퍼스에도 없는 개체-속성 레지스트리다. 페어링 효과가 거기서 천장이고 GSM8K에서 0에 가깝다면, 채널은 멀쩡하고 중복이었던 쪽은 벤치마크다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Intervene at the relay boundary. </span><span class="t-ko">릴레이 경계에서 개입한다. </span></b><span class="t-en">In LatentMAS the sender's layer-wise KV cache is prepended to the receiver's. The audit replaces that tensor in flight, leaving layer count, sequence length and dtype untouched, so any accuracy difference is attributable to content alone.</span><span class="t-ko">LatentMAS에서는 송신자의 레이어별 KV 캐시가 수신자 캐시 앞에 붙는다. 감사는 그 텐서를 중간에서 갈아끼우되 레이어 수, 시퀀스 길이, dtype은 건드리지 않는다. 그래서 정확도 차이는 오직 내용 탓이 된다.</span></li>
+      <li><b><span class="t-en">Derange within the batch. </span><span class="t-ko">배치 안에서 어긋낸다. </span></b><span class="t-en">A fixed-point-free permutation over a 25×20 batch geometry guarantees no example receives its own cache while the delivered distribution is unchanged. n=500 per arm per seed, three to five seeds, with the seed as the unit of inference.</span><span class="t-ko">25×20 배치 기하 위의 고정점 없는 순열은 어떤 예제도 자기 캐시를 받지 않도록 보장하면서 전달되는 분포는 그대로 둔다. arm·시드당 n=500, 시드는 3~5개, 추론 단위는 시드다.</span></li>
+      <li><b><span class="t-en">Calibrate the instrument first. </span><span class="t-ko">계측기부터 보정한다. </span></b><span class="t-en">Run the battery where the receiver provably cannot answer without the sender's registry. True hits 100% on Qwen3-8B against ~23–25% for answer-irrelevant relays, and deranged receivers answer with the <i>donor's</i> registry 64.2–64.8% of the time — they are demonstrably reading the cache.</span><span class="t-ko">수신자가 송신자의 레지스트리 없이는 증명 가능하게 답할 수 없는 조건에서 전체 arm을 돌린다. Qwen3-8B에서 true는 100%, 정답과 무관한 릴레이는 약 23~25%다. 그리고 deranged 수신자는 64.2~64.8%의 비율로 <i>기증자</i>의 레지스트리로 답한다. 캐시를 읽고 있다는 게 증명되는 셈이다.</span></li>
+      <li><b><span class="t-en">Then test for equivalence, not significance. </span><span class="t-ko">그다음 유의성이 아니라 동등성을 검정한다. </span></b><span class="t-en">On GSM8K, ARC-Challenge and MedQA, two one-sided tests bound τ<sub>TD</sub> inside ±2.8 points — a margin anchored to the audited system's own reported aggregate gain, so the null is a quantitative bound on the claim rather than a failure to reject.</span><span class="t-ko">GSM8K, ARC-Challenge, MedQA에서 two one-sided test로 τ<sub>TD</sub>를 ±2.8점 이내로 묶는다. 이 마진은 감사 대상 시스템이 스스로 보고한 총 향상폭에 앵커돼 있어서, 귀무 결과가 기각 실패가 아니라 그 주장에 대한 정량적 경계가 된다.</span></li>
+      <li><b><span class="t-en">Port the same test to other channels. </span><span class="t-ko">같은 시험을 다른 채널로 이식한다. </span></b><span class="t-en">Under identical receiver necessity, C2C's released cross-model projector shows sign-mixed pairing contrasts (+2.0/+0.6/−1.8) despite a large total cache effect, while KVComm's 11-layer relay recovers a real but modest +10.8/+7.2/+9.0 — roughly a tenth of the native relay's ceiling.</span><span class="t-ko">동일한 수신자 필요성 아래에서, C2C의 출시된 크로스모델 프로젝터는 총 캐시 효과가 큰데도 페어링 대비가 부호마저 섞인다(+2.0/+0.6/−1.8). 반면 KVComm의 11개 레이어 릴레이는 실재하지만 소박한 +10.8/+7.2/+9.0을 회복한다. 네이티브 릴레이 천장의 대략 10분의 1이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Spend latent bandwidth where information asymmetry is <i>real</i>. If your receiver could have answered alone, you are buying an interface effect at the price of debuggability and checkpoint coupling — and you could likely get the same effect from a cheaper prefix.</p><p class="t-ko">정보 비대칭이 <i>실제로</i> 존재하는 곳에 잠재 대역폭을 써라. 수신자가 혼자서도 답할 수 있었다면, 디버깅 가능성과 체크포인트 결합이라는 값을 치르고 인터페이스 효과를 사는 셈이다. 게다가 그 효과는 더 싼 prefix로도 얻을 수 있을 공산이 크다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">“Our agents exchange latent thoughts” is a causal claim, and a benchmark delta does not establish it. Three released systems pass the benchmark test and then split three ways — ceiling, partial, undetected — on the question of whether example-specific content moves at all.</p><p class="t-ko">“우리 에이전트들은 잠재 생각을 주고받는다”는 인과 주장이고, 벤치마크 점수 차이는 그걸 입증하지 못한다. 출시된 세 시스템은 벤치마크 시험을 통과한 뒤, 예제별 내용이 애초에 이동하기는 하느냐는 질문에서 천장·부분·미검출 셋으로 갈라진다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">The mismatched-content control belongs in every latent-communication paper, and equivalence testing belongs with it. Reporting “no significant difference” is not the same as bounding the effect inside a margin you committed to in advance.</p><p class="t-ko">짝이 어긋난 내용 대조군은 모든 잠재 통신 논문에 들어가야 하고, 동등성 검정도 함께 가야 한다. “유의한 차이 없음”을 보고하는 것은 미리 약속한 마진 안으로 효과를 묶어내는 것과 같지 않다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the calibrated instrument is a synthetic entity-attribute registry — a lookup-shaped task, which is close to the easiest possible thing for a cache to carry. A ceiling there licenses “the channel can move <i>facts</i>,” not “the channel can move reasoning,” yet the systems under audit claim the latter. The bound also is not universal: both Mistral-Nemo cells fail to establish equivalence (Holm p = .0665), so the paper's own headline holds cleanly for one model family. And the ±2.8-point margin is borrowed from LatentMAS's self-reported aggregate gain, which makes “equivalent” a verdict relative to a number the audited authors chose — a defensible anchor, but one that would move if the original claim had been stated differently.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 보정 계측기는 합성 개체-속성 레지스트리, 즉 조회(lookup) 형태의 과제다. 캐시가 실어 나르기에 사실상 가장 쉬운 축에 든다. 거기서의 천장은 “채널이 <i>사실</i>을 옮길 수 있다”는 것까지만 허락하지 “채널이 추론을 옮길 수 있다”를 허락하지 않는데, 감사 대상 시스템들이 주장하는 건 후자다. 경계 역시 보편적이지 않다. Mistral-Nemo의 두 셀은 동등성 확립에 실패했고(Holm p = .0665), 따라서 논문의 대표 주장이 깔끔하게 성립하는 건 한 모델 계열에서다. 게다가 ±2.8점 마진은 LatentMAS가 스스로 보고한 총 향상폭에서 빌려온 것이라, “동등하다”는 판정은 감사 대상 저자들이 고른 숫자에 상대적인 판정이 된다. 방어 가능한 앵커이긴 하지만, 원래 주장이 다르게 서술됐다면 함께 움직였을 앵커다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.04893">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.04893">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.04893">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.04893">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the wishlist is drained, so this came from the fallback search, where it was the highest-engagement unread candidate on latent communication. It earns today's slot because it audits the exact paper this archive opened its full-review shelf with (LatentMAS, 2511.20639) plus two more systems, and because it is the rare paper whose contribution is a <i>control</i> rather than a method — the mismatched-cache arm that the XBridge and dense-latent-communication cards would each be sharper for having run. Read it as the standard of evidence the rest of that shelf now has to meet. No venue — preprint from The Ohio State University and an independent researcher</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-05.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트가 소진되어 폴백 검색에서 골랐고, 잠재 통신 주제의 미열람 후보 중 반응이 가장 좋았다. 오늘의 자리를 차지할 자격은, 이 아카이브가 풀리뷰 서가를 열며 첫 번째로 올렸던 바로 그 논문(LatentMAS, 2511.20639)에 더해 두 시스템을 함께 감사한다는 데 있다. 그리고 기여가 방법이 아니라 <i>대조군</i>인 드문 논문이기 때문이다. XBridge 카드도, 밀집 잠재 통신 카드도 이 짝 어긋난 캐시 arm을 돌렸다면 각각 더 예리해졌을 것이다. 그 서가의 나머지가 이제 충족해야 할 증거 기준으로 읽으면 된다. 학회 없음 — 오하이오 주립대와 독립 연구자의 프리프린트</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-05.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
