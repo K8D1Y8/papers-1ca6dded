@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · CoCurve</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Structured Pruning · LLM</span><span class="t-ko">Model Compression · Structured Pruning · LLM</span></span>
+      <span>2026 · 09 · 07</span>
+    </div>
+    <h1>CoCurve<br>
+      <span class="glow t-en">— units don't die alone: pruning as a coupled-graph problem</span>
+      <span class="glow t-ko">— 유닛은 혼자 죽지 않는다: 결합 그래프 문제로서의 프루닝</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Zhiren Gong</b> <span class="t-en">et al. · corresponding: Wei Yang Bryan Lim</span><span class="t-ko">외 · 교신저자 Wei Yang Bryan Lim</span></span>
+      <span>🏛 Nanyang Technological University (NTU), Singapore</span>
+      <span>🗓 2026-07-20</span>
+      <span>📄 <a href="https://arxiv.org/abs/2607.17568">arXiv:2607.17568</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Nearly every training-free structured pruner scores each attention head and FFN channel group <b>on its own</b>, then deletes the lowest-ranked ones — implicitly assuming the damage adds up. It doesn't: transformer sublayers all read and write the same residual stream, so two individually-weak units can be jointly indispensable. CoCurve takes a second-order expansion of a token-level KL "self-distillation" risk and reads off the full interaction matrix <b>H</b>, whose off-diagonal entries are literally the extra distortion from removing two units together. The trick that makes it affordable: because logit perturbations are roughly additive, all M² edges fall out of a Gram product of just <b>M single-unit ablations</b> — no pairwise sweeps, no gradients, no labels. Pruning then becomes one greedy cost-normalized walk over a coupled graph with a shared attention/FFN budget.</p>
+    <p class="t-ko">학습 없는(training-free) 구조적 프루닝 기법은 거의 전부 어텐션 헤드와 FFN 채널 그룹의 중요도를 <b>개별적으로</b> 매긴 뒤 하위 것부터 지운다. 이는 "피해가 합산된다"는 암묵적 가정인데, 사실이 아니다. 트랜스포머의 서브레이어들은 같은 residual stream을 함께 읽고 쓰기 때문에, 개별적으로는 약해 보이는 두 유닛이 함께 놓고 보면 없어서는 안 될 수 있다. CoCurve는 토큰 단위 KL "자기증류" 리스크를 2차로 전개해 상호작용 행렬 <b>H</b>를 얻는데, 그 비대각 성분이 곧 "두 유닛을 같이 제거했을 때 추가로 생기는 왜곡"이다. 비용을 감당 가능하게 만드는 핵심 트릭: 로짓 섭동이 대략 가법적이므로, M²개의 모든 엣지가 <b>M번의 단일 유닛 ablation</b>만으로 만든 Gram 곱에서 그대로 나온다 — 쌍별 탐색도, 그래디언트도, 레이블도 필요 없다. 이후 프루닝은 어텐션·FFN이 예산을 공유하는 결합 그래프 위의 탐욕적(greedy) 선택 한 번으로 끝난다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Structured pruning is the compression family that actually gives you speed on ordinary hardware — you remove whole heads and channel groups, so the model stays dense and needs no sparse kernels. The catch is that the field has been ranking units with a scoring function that quietly assumes independence.</p>
+    <p class="lead t-ko">구조적 프루닝은 일반 하드웨어에서 실제로 속도 이득을 주는 압축 계열이다. 헤드와 채널 그룹을 통째로 제거하므로 모델이 dense하게 남고 별도의 sparse 커널이 필요 없다. 문제는 이 분야가 지금껏 "독립성"을 조용히 가정한 점수 함수로 유닛의 순위를 매겨 왔다는 것이다.</p>
+    <p class="t-en">This paper's contribution is less a new heuristic than a change of object. Prior interaction-aware attempts reached for proxies like activation correlation — but correlation is not pruning dependence; it can be driven by activation scale or by two units co-firing on common tokens. CoCurve instead derives the interaction <i>from the pruning objective itself</i>. Define the risk as the KL divergence between the frozen full model and its masked copy on unlabeled calibration text. At zero pruning the student is the teacher, so both the value and the gradient vanish — the expansion is <b>purely quadratic</b>, and the Hessian's diagonal recovers classical OBD saliency while the off-diagonal is a quantity nobody had been measuring: the co-pruning curvature. The payoff shows up exactly where it should — on the fragile generative tasks (code) that most pruning papers quietly omit, and at aggressive ratios where every independent-scoring method falls off a cliff.</p>
+    <p class="t-ko">이 논문의 기여는 새로운 휴리스틱이라기보다 <i>대상 자체의 교체</i>다. 기존의 상호작용 고려 시도들은 활성값 상관관계 같은 대리 지표에 의존했지만, 상관관계는 프루닝 의존성이 아니다. 활성값의 스케일이나 흔한 토큰에서 두 유닛이 함께 발화하는 것만으로도 커질 수 있다. CoCurve는 대신 상호작용을 <i>프루닝 목적함수 자체에서</i> 유도한다. 리스크를 "고정된 원본 모델과 마스킹된 사본 사이의 KL 발산"으로 정의하면, 프루닝이 0일 때 학생=교사이므로 함숫값과 그래디언트가 동시에 사라진다. 따라서 전개식이 <b>순수한 2차 형식</b>이 되고, 헤시안의 대각 성분은 고전적 OBD 중요도를 그대로 복원하는 한편 비대각 성분은 아무도 측정하지 않던 양, 즉 co-pruning curvature가 된다. 그 효과는 정확히 나와야 할 곳에서 나타난다 — 대부분의 프루닝 논문이 슬쩍 빼놓는 취약한 생성 과제(코드), 그리고 모든 독립 스코어링 기법이 절벽처럼 무너지는 고압축 구간이다.</p>
+    <figure class="fig">
+      <img src="fig/2607.17568/fig_overview.png" alt="Four-panel overview of the CoCurve pipeline: ablate each unit once, build the interaction matrix H as a Gram product, co-prune the coupled graph greedily, then physically remove units.">
+      <figcaption class="t-en"><b>Figure 1.</b> The whole method in four moves. (a) Mask one unit at a time and record the token-logit shift — M forward passes, no labels, no gradients. (b) Whiten those shifts and take a Gram product: all M² edges at once, with the diagonal as OBD saliency and the off-diagonal as the co-pruning edge. (c) Greedily co-prune the resulting graph, where node size is saliency and edge width is |H<sub>uv</sub>| — a "bridge" unit with low saliency but strong edges gets kept. (d) Physically remove the chosen units for real speedup, not masking. The dashed routes are the two optional gates: a calibration-only trust region that sets λ, and the closed-form FFN rescaling compensation.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 방법 전체를 네 단계로. (a) 유닛을 하나씩 마스킹하며 토큰-로짓 변화를 기록한다 — M번의 순전파, 레이블도 그래디언트도 없음. (b) 그 변화들을 백색화(whitening)한 뒤 Gram 곱을 취하면 M²개의 엣지가 한 번에 나온다. 대각은 OBD 중요도, 비대각은 co-pruning 엣지다. (c) 이렇게 얻은 그래프를 탐욕적으로 함께 프루닝한다. 노드 크기는 중요도, 엣지 두께는 |H<sub>uv</sub>|이며, 중요도는 낮지만 엣지가 굵은 "브리지" 유닛은 살아남는다. (d) 선택된 유닛을 실제로 제거해 마스킹이 아닌 진짜 속도 이득을 얻는다. 점선 경로는 선택적 게이트 두 가지 — λ를 정하는 캘리브레이션 전용 신뢰 영역과, 닫힌 형식의 FFN 재스케일링 보상이다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2607.17568</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">12.91</div><div class="l"><span class="t-en">WikiText-2 PPL at 20% pruning (dense 6.40, best baseline 13.23)</span><span class="t-ko">20% 프루닝 시 WikiText-2 PPL (dense 6.40, 최고 베이스라인 13.23)</span></div></div>
+      <div class="stat"><div class="n">4.9×</div><div class="l"><span class="t-en">lower perplexity than the strongest baseline at 30% on a 24B model (20.3 vs 99.1)</span><span class="t-ko">24B 모델 30% 프루닝에서 최강 베이스라인 대비 낮은 PPL (20.3 vs 99.1)</span></div></div>
+      <div class="stat"><div class="n">M</div><div class="l"><span class="t-en">single-unit ablations to recover all M² interaction edges — no pairwise sweep</span><span class="t-ko">M²개 상호작용 엣지 전부를 얻는 데 필요한 단일 유닛 ablation 횟수 — 쌍별 탐색 없음</span></div></div>
+      <div class="stat"><div class="n">.110</div><div class="l"><span class="t-en">MBPP pass@1 at 20%, where five of nine baselines sit at ≤.006</span><span class="t-ko">20% 프루닝 시 MBPP pass@1. 9개 베이스라인 중 5개는 ≤.006</span></div></div>
+      <div class="stat"><div class="n">87</div><div class="l"><span class="t-en">low-saliency "bridge" units whose forced removal costs 10.5 MMLU points vs a matched control</span><span class="t-ko">강제 제거 시 매칭된 대조군 대비 MMLU 10.5점을 잃는 저중요도 "브리지" 유닛 수</span></div></div>
+      <div class="stat"><div class="n">12.9 h</div><div class="l"><span class="t-en">one-time matrix build for Llama-3.1-8B on a single A6000</span><span class="t-ko">단일 A6000에서 Llama-3.1-8B용 행렬 구축에 드는 1회성 시간</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The headline table</span><span class="t-ko">핵심 표</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (abridged).</b> Llama-3.1-8B-Instruct at 20% structured pruning, all methods training-free under one shared harness. "Cmn." is the 7-task commonsense average. Note the shape of the win: CoCurve's perplexity edge over LLM-Pruner is real but narrow (12.91 vs 13.23), while the gap on code — the task class where independent scoring collapses outright — is proportionally much larger.</caption>
+        <caption class="t-ko"><b>Table 1 (요약).</b> Llama-3.1-8B-Instruct, 20% 구조적 프루닝. 모든 기법이 동일한 harness 위의 training-free 방식이다. "Cmn."은 7개 상식 과제 평균. 승리의 <i>양상</i>에 주목할 것 — LLM-Pruner 대비 perplexity 우위는 실재하지만 폭이 좁고(12.91 vs 13.23), 독립 스코어링이 아예 붕괴하는 과제군인 코드에서의 격차는 비율상 훨씬 크다.</caption>
+        <thead><tr><th>Method</th><th>Wiki ↓</th><th>C4 ↓</th><th>Cmn. ↑</th><th>MMLU ↑</th><th>HEval ↑</th><th>MBPP ↑</th></tr></thead>
+        <tbody>
+          <tr><td>Dense (0%)</td><td>6.40</td><td>10.67</td><td>.699</td><td>.478</td><td>.610</td><td>.556</td></tr>
+          <tr><td>Wanda-sp</td><td>20.02</td><td>30.09</td><td>.569</td><td>.356</td><td>.049</td><td>.002</td></tr>
+          <tr><td>SlimGPT</td><td>19.24</td><td>29.19</td><td>.554</td><td>.351</td><td>.000</td><td>.004</td></tr>
+          <tr><td>SlimLLM</td><td>17.36</td><td>29.36</td><td>.574</td><td>.372</td><td>.037</td><td>.002</td></tr>
+          <tr><td>2SSP</td><td>16.29</td><td>29.00</td><td>.580</td><td>.379</td><td>.043</td><td>.100</td></tr>
+          <tr><td>LLM-Pruner</td><td>13.23</td><td>21.98</td><td>.586</td><td>.368</td><td>.061</td><td>.066</td></tr>
+          <tr><td>CoCurve (ours)</td><td class="up">12.91</td><td class="up">21.52</td><td class="up">.610</td><td class="up">.389</td><td class="up">.073</td><td class="up">.110</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three ideas doing the work</span><span class="t-ko">핵심을 떠받치는 세 가지 아이디어</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">objective</span>
+        <h3>Curvature, not correlation</h3>
+        <p class="t-en">Because the masked model equals the full model at s=0, the KL risk has zero value <i>and</i> zero gradient there, so the second-order expansion is exactly ½sᵀHs with nothing left over. That makes H the honest object: H<sub>uu</sub> is per-unit saliency, H<sub>uv</sub> is the extra distortion from removing u and v jointly. Positive means they compound; negative means their perturbations partly cancel and you can afford both.</p>
+        <p class="t-ko">s=0에서 마스킹된 모델이 원본과 같으므로 KL 리스크의 값과 그래디언트가 동시에 0이 되고, 2차 전개는 잔여항 없이 정확히 ½sᵀHs가 된다. 덕분에 H가 정직한 대상이 된다. H<sub>uu</sub>는 유닛별 중요도, H<sub>uv</sub>는 u와 v를 함께 제거할 때 추가로 생기는 왜곡이다. 양수면 피해가 가중되고, 음수면 섭동이 부분적으로 상쇄되어 둘 다 지워도 된다는 뜻이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">tractability</span>
+        <h3>M ablations buy M² edges</h3>
+        <p class="t-en">The move that makes this practical. Assume logit shifts are additive across units, whiten each single-unit shift into a probability-weighted mean-centred feature on the teacher's shared top-r logit coordinates, and the Fisher inner product collapses into an ordinary dot product. The full M×M matrix is then just a Gram product of M ablation features — quadratic information at linear cost.</p>
+        <p class="t-ko">이 방법을 실용적으로 만드는 핵심 수. 유닛별 로짓 변화가 가법적이라 가정하고, 각 단일 유닛의 변화를 교사 모델이 공유하는 top-r 로짓 좌표 위에서 확률 가중·평균 중심화된 특징으로 백색화하면, Fisher 내적이 평범한 내적으로 무너진다. 그러면 M×M 전체 행렬은 M개 ablation 특징의 Gram 곱에 불과하다 — 선형 비용으로 2차 정보를 얻는 셈이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">honesty</span>
+        <h3>A trust region that admits its own limits</h3>
+        <p class="t-en">A quadratic expansion is local, and the authors don't pretend otherwise. An interaction strength λ ∈ [0,1] scales the edge term — λ=1 is the full model, λ=0 degenerates to plain OBD. Proposition 1 predicts the optimal λ should <i>fall</i> as the pruning ratio rises, and the empirical sweeps agree. Better still, λ is set a priori from a calibration-only statistic (mean off-diagonal FFN correlation), not tuned on the test set.</p>
+        <p class="t-ko">2차 전개는 국소적이며, 저자들도 이를 숨기지 않는다. 상호작용 강도 λ ∈ [0,1]이 엣지 항의 크기를 조절한다 — λ=1이면 전체 모델, λ=0이면 순수 OBD로 퇴화한다. Proposition 1은 프루닝 비율이 커질수록 최적 λ가 <i>작아져야</i> 한다고 예측하고, 실험적 스윕도 이에 부합한다. 더 나은 점은 λ를 테스트셋으로 튜닝하지 않고 캘리브레이션만으로 얻는 통계량(FFN 비대각 상관 평균)에서 사전에 정한다는 것이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Ablate once per unit. </span><span class="t-ko">유닛마다 한 번씩 ablation. </span></b><span class="t-en">Run the calibration set through the frozen model, then again with each single unit masked, recording only the top-r token-logit shift. M forward passes total — no labels, no backward pass, and embarrassingly parallel.</span><span class="t-ko">고정된 모델에 캘리브레이션 데이터를 한 번 통과시키고, 이어 각 유닛을 하나씩 마스킹하며 top-r 토큰-로짓 변화만 기록한다. 총 M번의 순전파이며, 레이블도 역전파도 없고 완전 병렬화가 가능하다.</span></li>
+      <li><b><span class="t-en">Whiten and Gram. </span><span class="t-ko">백색화 후 Gram. </span></b><span class="t-en">Convert each shift to its Fisher-whitened form and take D̄ᵀD̄. Out comes the entire interaction matrix, diagonal and off-diagonal together, without ever ablating a pair.</span><span class="t-ko">각 변화를 Fisher 백색화 형태로 바꾼 뒤 D̄ᵀD̄를 계산한다. 쌍을 한 번도 ablation하지 않고도 대각·비대각을 포함한 상호작용 행렬 전체가 나온다.</span></li>
+      <li><b><span class="t-en">Set λ from redundancy, then walk the graph. </span><span class="t-ko">중복도로 λ를 정하고 그래프를 훑는다. </span></b><span class="t-en">Read the FFN redundancy statistic off H to pick λ, then greedily remove the unit minimising the cost-normalised marginal risk (½H<sub>uu</sub> + Σ<sub>v∈S</sub>H<sub>uv</sub>)/c<sub>u</sub>, updating a running accumulator in O(M) per step. Attention and FFN draw from <i>one shared budget</i>, so the per-type split is decided by the objective rather than fixed by hand.</span><span class="t-ko">H에서 FFN 중복도 통계량을 읽어 λ를 고른 뒤, 비용 정규화된 한계 위험 (½H<sub>uu</sub> + Σ<sub>v∈S</sub>H<sub>uv</sub>)/c<sub>u</sub>를 최소화하는 유닛을 탐욕적으로 제거한다. 누적항은 매 단계 O(M)으로 갱신된다. 어텐션과 FFN은 <i>하나의 공유 예산</i>에서 가져가므로 타입별 배분이 사람이 아니라 목적함수에 의해 결정된다.</span></li>
+      <li><b><span class="t-en">Optionally compensate, then physically remove. </span><span class="t-ko">필요하면 보상하고, 물리적으로 제거. </span></b><span class="t-en">At aggressive ratios, solve one small ridge system on the already-computed H blocks to rescale the surviving FFN groups — closed form, no weight inverse, no gradients. Then delete the units for real: 0.83× parameters and peak memory on the 8B, and 1.15× prefill / 1.09× decode throughput.</span><span class="t-ko">고압축 구간에서는 이미 계산된 H 블록으로 작은 릿지 시스템 하나를 풀어 살아남은 FFN 그룹을 재스케일한다 — 닫힌 형식이며 가중치 역행렬도 그래디언트도 필요 없다. 이후 유닛을 실제로 삭제한다. 8B 기준 파라미터·최대 메모리 0.83배, prefill 1.15배 / decode 1.09배 처리량이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The ablation that earns the paper</span><span class="t-ko">이 논문을 정당화하는 실험</span></h2>
+    <p class="t-en">Two results are worth more than the leaderboard. First, an ablation that <i>keeps</i> within-module edges (attn–attn, FFN–FFN) but zeroes the cross-module attn↔FFN block performs <b>worse than the pure diagonal method</b> — a partial edge model is not a weaker version of the full one, it is an incoherent geometry. Second, a matched-pair causal test: the 87 low-saliency units with the highest connectivity, versus a control matched on saliency, type and cost, both completed by the identical greedy fill to the same realised ratio (0.2007). Forcing out the bridge units costs 10.5 MMLU points and takes MBPP from .075 to <b>zero</b>. Notably, perplexity moves the <i>other</i> way (21.2 vs 23.3) — the authors flag this as expected for a node-first proxy, which is also a quiet warning that perplexity is the wrong instrument for this question.</p>
+    <p class="t-ko">리더보드보다 값진 결과가 둘 있다. 첫째, 모듈 <i>내부</i> 엣지(attn–attn, FFN–FFN)는 유지하고 모듈 간 attn↔FFN 블록만 0으로 만든 ablation은 <b>순수 대각 기법보다도 나쁘다</b>. 부분적인 엣지 모델은 완전한 모델의 약한 버전이 아니라 아예 일관성이 깨진 기하 구조라는 뜻이다. 둘째, 매칭 쌍 인과 검정: 연결도가 가장 높은 저중요도 유닛 87개와, 중요도·타입·비용을 맞춘 대조군을 두고 동일한 탐욕적 채우기로 같은 실현 비율(0.2007)까지 완성했다. 브리지 유닛을 강제로 제거하면 MMLU가 10.5점 떨어지고 MBPP는 .075에서 <b>0</b>이 된다. 주목할 점은 perplexity는 <i>반대로</i> 움직인다는 것이다(21.2 vs 23.3). 저자들은 노드 우선 대리 지표에서는 예상된 현상이라고 밝히는데, 이는 동시에 perplexity가 이 질문에 잘못된 계측기라는 조용한 경고이기도 하다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The Gram trick generalises well beyond pruning. Any time you need pairwise interaction structure over a set of interventions and each intervention's effect is roughly additive in some linear readout, you can buy M² relationships for M probes. Worth stealing for expert selection in MoE, layer-skipping policies, or rank allocation across projections.</p><p class="t-ko">Gram 트릭은 프루닝을 훨씬 넘어 일반화된다. 어떤 개입 집합에 대해 쌍별 상호작용 구조가 필요하고 각 개입의 효과가 어떤 선형 판독값에서 대략 가법적이라면, M번의 탐침으로 M²개의 관계를 살 수 있다. MoE의 전문가 선택, 레이어 스키핑 정책, 프로젝션 간 랭크 배분에 훔쳐 쓸 만하다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">"Bridge units" deserve a name in the compression vocabulary: individually dispensable, collectively load-bearing. Any method that ranks-then-cuts will keep deleting them, and perplexity will not tell you it happened — only capability benchmarks will.</p><p class="t-ko">"브리지 유닛"은 압축 어휘에 이름을 가질 자격이 있다. 개별적으로는 없어도 되지만 집합적으로는 하중을 지탱하는 유닛이다. 순위를 매겨 자르는 방식의 어떤 기법이든 이들을 계속 지우게 되며, perplexity는 그 사실을 알려주지 않는다 — 능력 벤치마크만이 알려준다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Include code and math in your pruning evaluation. This paper's entire margin lives in the tasks most structured-pruning papers omit; on WikiText alone CoCurve would look like a 2% improvement rather than a qualitative one.</p><p class="t-ko">프루닝 평가에 코드와 수학을 포함하라. 이 논문의 마진 전체가 대부분의 구조적 프루닝 논문이 빼놓는 과제군에 존재한다. WikiText만 보면 CoCurve는 질적 차이가 아니라 2% 개선처럼 보일 것이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> "Training-free" is doing a lot of load-bearing work here — the matrix build takes <b>12.9 hours on an A6000</b> for an 8B model and 19 hours for the 24B, which is not obviously cheaper than the light fine-tuning the method positions itself against, and the paper never runs that comparison on a cost axis. The generality claim is also softer than the abstract suggests: at 40% pruning CoCurve <i>loses</i> to the best baseline on both Mistral (48.3 vs 40.6) and Llama-3.2-3B (325.7 vs 163.6), and Falcon3 needs a hand-different λ=0.5. So the honest summary is "wins clearly at moderate ratios on low-redundancy models, degrades gracefully elsewhere" — which the appendix says, but the headline does not.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 여기서 "training-free"라는 표현은 상당한 무게를 감당하고 있다. 행렬 구축에 8B 모델은 <b>A6000에서 12.9시간</b>, 24B는 19시간이 걸리는데, 이는 이 방법이 대비 대상으로 삼는 가벼운 파인튜닝보다 확실히 저렴하다고 보기 어렵고, 논문은 그 비교를 비용 축에서 한 번도 수행하지 않는다. 일반성 주장 역시 초록이 시사하는 것보다 약하다. 40% 프루닝에서 CoCurve는 Mistral(48.3 vs 40.6)과 Llama-3.2-3B(325.7 vs 163.6) 양쪽에서 최고 베이스라인에 <i>진다</i>. Falcon3는 λ=0.5라는 별도 값이 필요하다. 정직한 요약은 "중복도가 낮은 모델의 중간 압축 구간에서 확실히 이기고, 그 밖에서는 완만하게 열화된다"이며, 부록은 이를 말하지만 헤드라인은 말하지 않는다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2607.17568">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2607.17568">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2607.17568">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2607.17568">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the wishlist is drained and the first fallback search returned thirteen papers that were all already in the archive, so this came from a second pass deliberately steered away from KV caches. That turned out to be the right move: the last two weeks here have been almost entirely KV-cache compression, and this is the axis the archive had been neglecting — weight-side structured pruning, where the compressed model is genuinely smaller rather than just cheaper to attend over. It also rhymes with the recent run of papers that audit a field's default assumption rather than adding to it: the causal audit of relayed KV caches, the online-compaction paper on agents that never have a finished context, and now a paper arguing that every training-free pruner has been summing damages that do not add. No venue — preprint (cs.LG) from NTU Singapore</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-07.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>위시리스트가 소진됐고 첫 폴백 검색이 반환한 13편이 전부 이미 아카이브에 있어서, 두 번째 검색은 의도적으로 KV 캐시를 피해 돌렸다. 결과적으로 옳은 선택이었다. 지난 2주가 거의 전부 KV 캐시 압축이었고, 이 논문이 다루는 축이야말로 아카이브가 소홀히 해온 쪽 — 가중치 측 구조적 프루닝, 즉 어텐션 비용만 싸지는 게 아니라 모델 자체가 실제로 작아지는 압축이다. 또한 최근의 흐름, 즉 분야에 하나를 더 얹기보다 그 분야의 기본 가정을 감사하는 논문들과도 운을 맞춘다 — 릴레이된 KV 캐시의 인과 감사, 완결된 컨텍스트를 가질 일이 없는 에이전트를 다룬 온라인 압축 논문, 그리고 이제 모든 training-free 프루너가 합산되지 않는 피해를 합산해 왔다고 주장하는 이 논문. 학회 없음 — NTU 싱가포르의 프리프린트(cs.LG)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-07.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
