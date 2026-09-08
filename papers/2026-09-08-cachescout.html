@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · CacheScout: Learning Agent Execution for KV-Cache Management</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent Serving · KV Cache</span><span class="t-ko">Multi-Agent Serving · KV Cache</span></span>
+      <span>2026.09.08</span>
+    </div>
+    <h1>CacheScout: Learning Agent Execution for KV-Cache Management in Agentic Serving<br>
+      <span class="glow t-en">— the cache should keep what will be used, not what was just used</span>
+      <span class="glow t-ko">— 캐시는 방금 쓴 것이 아니라 다시 쓸 것을 남겨야 한다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Rui Zhang</b> <span class="t-en">· Chaeeun Kim · Shaoting Feng · Kuntai Du · Yuhan Liu · Yi Zhong · Cheng-Wei Ching · Junchen Jiang · <b>Liting Hu</b></span><span class="t-ko">· Chaeeun Kim · Shaoting Feng · Kuntai Du · Yuhan Liu · Yi Zhong · Cheng-Wei Ching · Junchen Jiang · <b>Liting Hu</b></span></span>
+      <span>🏛 UC Santa Cruz · U. Washington · U. Chicago</span>
+      <span>🗓 2026-07-16</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.14624">arXiv:2608.14624</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">In a multi-agent LLM system every agent invocation reopens with the same <i>anchor</i> — system prompt, tool definitions, few-shot examples — which is 53–62% of all prompt tokens. vLLM evicts those blocks by LRU precisely while the agent waits its turn, then re-prefills them. CacheScout inserts a ~2,300-line runtime layer that learns the agent-to-agent transition matrix online as a first-order Markov chain, converts it into a survival score per cached block, and evicts by <i>predicted next use</i> instead of last use. Result: +10–18pp cache hit rate, −18–45% TTFT, +19–57% peak throughput, at under 6 μs and 25 KB of overhead. No offline training, no declared workflow graph, no change to the serving critical path.</p>
+    <p class="t-ko">멀티에이전트 LLM 시스템에서 모든 에이전트 호출은 동일한 <i>앵커</i> — 시스템 프롬프트, 툴 정의, few-shot 예제 — 로 시작하며, 이는 전체 프롬프트 토큰의 53~62%를 차지한다. vLLM은 하필 그 에이전트가 차례를 기다리는 동안 LRU로 그 블록들을 축출하고, 다시 호출되면 처음부터 prefill한다. CacheScout는 약 2,300줄의 런타임 레이어를 끼워 넣어 에이전트 간 전이 행렬을 1차 마르코프 체인으로 온라인 학습하고, 이를 캐시 블록별 생존 점수로 변환해 마지막 사용 시점이 아니라 <i>예측된 다음 사용</i>을 기준으로 축출한다. 결과는 캐시 적중률 +10~18%p, TTFT −18~45%, 최대 처리량 +19~57%이며 오버헤드는 6 μs·25 KB 미만이다. 오프라인 학습도, 선언된 워크플로 그래프도, 서빙 크리티컬 패스 변경도 없다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Every KV-cache paper in this archive for the past month has asked how to make the cache <i>smaller</i>. This one asks a question that comes logically first: given the cache you already have, are you even keeping the right bytes?</p>
+    <p class="lead t-ko">지난 한 달 동안 이 아카이브의 모든 KV 캐시 논문은 캐시를 어떻게 <i>더 작게</i> 만들 것인가를 물었다. 이 논문은 논리적으로 그보다 앞서는 질문을 던진다. 이미 가진 캐시에서, 당신은 과연 맞는 바이트를 남기고 있는가?</p>
+    <p class="t-en">Production LLM serving is converging on multi-agent workflows — a planner dispatches to a Travel Agent, a Hotel Agent, a Coder, a Reviewer — and every one of those agents reopens with a prompt prefix that never changes across invocations or even across users. The authors call it the <b>agent anchor</b>, and they measure it: anchor blocks are reused 49–173 times on average versus 12–15 for session history, a 4–13× gap. Yet vLLM, SGLang and TensorRT-LLM all manage KV blocks as anonymous content hashes ranked by recency. The engine knows a block was touched; it does not know <i>who</i> touched it. So while the Hotel Agent and Restaurant Agent run, the Travel Agent's anchor ages out — and it is evicted at the exact moment it is most certain to be needed again.</p>
+    <p class="t-ko">프로덕션 LLM 서빙은 멀티에이전트 워크플로로 수렴하고 있다. 플래너가 Travel Agent, Hotel Agent, Coder, Reviewer로 작업을 분배하고, 이 에이전트들은 매번 호출·심지어 사용자가 바뀌어도 절대 변하지 않는 프롬프트 프리픽스로 시작한다. 저자들은 이를 <b>에이전트 앵커</b>라 부르고 직접 측정한다. 앵커 블록은 평균 49~173회 재사용되는 반면 세션 히스토리는 12~15회로, 4~13배 차이가 난다. 그럼에도 vLLM, SGLang, TensorRT-LLM은 KV 블록을 최근성으로 정렬된 익명 콘텐츠 해시로 관리한다. 엔진은 블록이 접근됐다는 사실은 알지만 <i>누가</i> 접근했는지는 모른다. 그래서 Hotel Agent와 Restaurant Agent가 도는 동안 Travel Agent의 앵커는 나이를 먹고, 다시 필요해질 것이 가장 확실한 바로 그 순간에 축출된다.</p>
+    <figure class="fig">
+      <img src="fig/2608.14624/system-arch.png" alt="CacheScout architecture: a runtime layer between the agent framework and the serving engine, containing a Transition Learner, a Survival Scorer, and a Background Prefetch Coordinator.">
+      <figcaption class="t-en"><b>Figure 6.</b> CacheScout sits <i>between</i> the agent framework and the serving engine, never inside either. ① every dispatch updates an online transition matrix; ② the Survival Scorer thresholds that matrix into a sparse execution graph and runs one BFS from the current agent, turning hop distance into a survival score (Hotel 0.91, Restaurant 0.74, Travel 0.42) that ④ orders eviction in the GPU KV pool; ③⑤ the Prefetch Coordinator warms the predicted next anchor between requests.</figcaption>
+      <figcaption class="t-ko"><b>Figure 6.</b> CacheScout는 에이전트 프레임워크와 서빙 엔진 <i>사이</i>에 위치하며, 둘 중 어느 쪽 내부에도 들어가지 않는다. ① 모든 디스패치가 온라인 전이 행렬을 갱신하고, ② Survival Scorer가 그 행렬을 임계값으로 잘라 희소 실행 그래프를 만든 뒤 현재 에이전트에서 BFS를 한 번 돌려 홉 거리를 생존 점수(Hotel 0.91, Restaurant 0.74, Travel 0.42)로 바꾸며, ④ 이 점수가 GPU KV 풀의 축출 순서를 결정한다. ③⑤ Prefetch Coordinator는 요청 사이의 유휴 시간에 예측된 다음 앵커를 미리 데운다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.14624</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">53–62%</div><div class="l"><span class="t-en">of all prompt tokens are recurring fixed context</span><span class="t-ko">전체 프롬프트 토큰 중 반복되는 고정 컨텍스트</span></div></div>
+      <div class="stat"><div class="n">+10–18pp</div><div class="l"><span class="t-en">KV hit rate over vLLM (reaching 81–85%)</span><span class="t-ko">vLLM 대비 KV 적중률 (81~85% 도달)</span></div></div>
+      <div class="stat"><div class="n">−18–45%</div><div class="l"><span class="t-en">mean TTFT across four workloads</span><span class="t-ko">4개 워크로드 평균 TTFT</span></div></div>
+      <div class="stat"><div class="n">+19–57%</div><div class="l"><span class="t-en">peak serving throughput</span><span class="t-ko">최대 서빙 처리량</span></div></div>
+      <div class="stat"><div class="n">R = 0.57</div><div class="l"><span class="t-en">entropy of the next agent removed by knowing the current one, under LLM-selected routing</span><span class="t-ko">LLM이 다음 에이전트를 고르는 환경에서, 현재 에이전트만 알아도 사라지는 다음 에이전트의 불확실성</span></div></div>
+      <div class="stat"><div class="n">&lt;6 μs / 25 KB</div><div class="l"><span class="t-en">P99 hot-path prediction · total coordinator state at 24 agents</span><span class="t-ko">P99 핫패스 예측 시간 · 에이전트 24개 기준 코디네이터 전체 상태 크기</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Per-workload results</span><span class="t-ko">워크로드별 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table A.</b> Assembled from Figures 2, 3a and 8 of the paper. The pattern worth noticing: SWE-bench has the <i>highest</i> anchor share and by far the highest anchor reuse, yet the <i>smallest</i> hit-rate gain — because its long prompts mean each avoided miss is worth much more, which is why it also shows the largest TTFT win.</caption>
+        <caption class="t-ko"><b>표 A.</b> 논문의 Figure 2, 3a, 8에서 취합. 눈여겨볼 패턴: SWE-bench는 앵커 비중이 <i>가장 높고</i> 앵커 재사용도 압도적으로 높지만 적중률 개선은 <i>가장 작다</i>. 프롬프트가 길어 회피한 미스 하나의 가치가 훨씬 크기 때문이며, 그래서 TTFT 개선폭은 오히려 가장 크다.</caption>
+        <thead><tr><th>Workload</th><th>Fixed-context share</th><th>Anchor reuse vs history</th><th>KV hit rate vs vLLM</th><th>Mean TTFT</th></tr></thead>
+        <tbody>
+          <tr><td>GSM8K</td><td>54%</td><td>4×</td><td class="up">+18pp</td><td class="up">−26%</td></tr>
+          <tr><td>MT-Bench</td><td>53%</td><td>4×</td><td class="up">+18pp</td><td class="up">−18%</td></tr>
+          <tr><td>GAIA</td><td>53%</td><td>5×</td><td class="up">+18pp</td><td class="up">−27%</td></tr>
+          <tr><td>SWE-bench</td><td>62%</td><td>13×</td><td class="up">+10pp</td><td class="up">−45%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The measurement that forces the design</span><span class="t-ko">설계를 강제한 측정</span></h2>
+    <p class="t-en">The obvious objection to a learned transition model is: why learn it at runtime when frameworks like AutoGen and LangGraph already know the workflow? Figure 5 is the answer, and it is the most persuasive page of the paper. The <i>same six agents</i> were run under four coordination topologies, and the resulting transition matrices have nothing in common. Pipeline is a deterministic chain (R = 1.00). Debate collapses onto a Coder↔Reviewer exchange periodically adjudicated by a judge (R = 0.78). SelectorGroupChat — the production case, where an LLM picks the next agent at runtime — is still concentrated on a handful of high-probability edges (R = 0.57), and a plain online counter hits 76–86% top-1 accuracy within <b>50 dispatches</b>. Only Random is structureless (R = 0.12). So execution structure is not a property of the agent set that could be declared ahead of time; it is a property of the coordination behaviour, and it only exists at runtime.</p>
+    <p class="t-ko">학습된 전이 모델에 대한 뻔한 반론은 이것이다. AutoGen이나 LangGraph 같은 프레임워크가 이미 워크플로를 아는데 왜 런타임에 학습하는가? Figure 5가 그 답이며, 논문에서 가장 설득력 있는 한 페이지다. <i>동일한 6개 에이전트</i>를 네 가지 조율 토폴로지로 돌렸더니 전이 행렬들은 서로 아무 공통점이 없었다. Pipeline은 결정론적 체인(R = 1.00)이다. Debate는 심판이 주기적으로 개입하는 Coder↔Reviewer 교환으로 수렴한다(R = 0.78). SelectorGroupChat — LLM이 런타임에 다음 에이전트를 고르는 프로덕션 사례 — 도 여전히 소수의 고확률 엣지에 집중되어 있고(R = 0.57), 단순한 온라인 카운터가 <b>50번의 디스패치</b> 안에 top-1 정확도 76~86%에 도달한다. 구조가 없는 것은 Random뿐이다(R = 0.12). 즉 실행 구조는 미리 선언할 수 있는 에이전트 집합의 속성이 아니라 조율 행동의 속성이며, 오직 런타임에만 존재한다.</p>
+    <figure class="fig">
+      <img src="fig/2608.14624/topology_transitions.png" alt="Four transition matrices P(next|current) for Pipeline, Debate, Selector and Random topologies over the same six agents, with entropy reductions R of 1.00, 0.78, 0.57 and 0.12.">
+      <figcaption class="t-en"><b>Figure 5.</b> P(next | current) learned from four coordination topologies over the identical six-agent framework (P·A·C·T·R·D). Same agents, four unrelated matrices — the case that a transition model cannot be specified offline.</figcaption>
+      <figcaption class="t-ko"><b>Figure 5.</b> 동일한 6개 에이전트 프레임워크(P·A·C·T·R·D) 위에서 네 가지 조율 토폴로지로부터 학습된 P(next | current). 같은 에이전트, 서로 무관한 네 개의 행렬 — 전이 모델을 오프라인에 명세할 수 없다는 근거다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.14624</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The three moving parts</span><span class="t-ko">움직이는 세 부품</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">learn</span>
+        <h3>Transition Learner</h3>
+        <p class="t-en">A first-order Markov chain over agents, maintained as a raw count matrix C<sub>ij</sub> with Laplace-style smoothing. The clever part is identification without cooperation: the agent is recovered by <b>fingerprinting the request's own prefix block hashes</b> at prefix-match time, so a fingerprint change <i>is</i> the dispatch signal. The framework is never asked, never modified, never even aware.</p>
+        <p class="t-ko">에이전트 위의 1차 마르코프 체인으로, 라플라스 방식 스무딩을 적용한 원시 카운트 행렬 C<sub>ij</sub>로 유지된다. 영리한 부분은 협조 없이 식별한다는 점이다. 프리픽스 매칭 시점에 <b>요청 자신의 프리픽스 블록 해시를 지문화</b>해 에이전트를 복원하므로, 지문이 바뀌는 것 자체가 디스패치 신호다. 프레임워크에 묻지도, 프레임워크를 수정하지도, 심지어 프레임워크가 알지도 못한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">rank</span>
+        <h3>Survival Scorer</h3>
+        <p class="t-en">True survival probability — will anchor <i>a</i> reappear within K steps — requires summing over all paths, so it is approximated: threshold the matrix at τ into a sparse graph, one BFS from the current agent, survival = 1 − min(hops, E<sub>max</sub>)/E<sub>max</sub>. Then the eviction score is <b>(survival + δ) · (e<sup>−λ·age</sup> + δ) · |b|</b>, readable as the expected prefill work destroyed by evicting this block. The product is what makes it safe: flatten the survival term and it degrades into LRU on its own.</p>
+        <p class="t-ko">진짜 생존 확률 — 앵커 <i>a</i>가 K 스텝 안에 다시 나타날 확률 — 은 모든 경로를 합산해야 하므로 근사한다. 행렬을 τ로 잘라 희소 그래프를 만들고, 현재 에이전트에서 BFS를 한 번 돌린 뒤 생존도 = 1 − min(홉, E<sub>max</sub>)/E<sub>max</sub>로 둔다. 축출 점수는 <b>(생존도 + δ) · (e<sup>−λ·age</sup> + δ) · |b|</b>이며, 이 블록을 버릴 때 파괴되는 prefill 작업량의 기댓값으로 읽힌다. 곱 형태가 안전장치다. 생존도 항이 평평해지면 정책은 스스로 LRU로 되돌아간다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">act</span>
+        <h3>Background Prefetch + gate</h3>
+        <p class="t-en">Instead of writing KV blocks into the engine — which would mean patching the memory allocator and losing portability — the coordinator simply <b>issues a normal inference request containing only the predicted anchor, with max_tokens=1</b>, and lets the engine's own prefill pipeline build the blocks. Warmups are excluded from transition learning, rate-limited, and gated on R ≥ R<sub>min</sub> so an unpredictable workload never burns GPU on speculation.</p>
+        <p class="t-ko">KV 블록을 엔진에 직접 써넣는 대신 — 그러려면 메모리 할당자를 패치해야 하고 이식성을 잃는다 — 코디네이터는 그저 <b>예측된 앵커만 담은 평범한 추론 요청을 max_tokens=1로 발행</b>하고, 엔진 자신의 prefill 파이프라인이 블록을 만들게 둔다. 워밍업 요청은 전이 학습에서 제외되고, 속도 제한이 걸리며, R ≥ R<sub>min</sub> 게이트를 통과해야 하므로 예측 불가능한 워크로드에서 GPU를 추측에 낭비하지 않는다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Hook three points, touch nothing else. </span><span class="t-ko">세 지점만 후킹하고 나머지는 건드리지 않는다. </span></b><span class="t-en">An 800-line patch to five vLLM files adds ObserveTouch() at prefix-match time, ScoreBlock() on the eviction path, and Warmup() between turns. The scheduler, attention kernels and allocator are untouched.</span><span class="t-ko">vLLM 파일 5개에 대한 800줄 패치가 프리픽스 매칭 시점의 ObserveTouch(), 축출 경로의 ScoreBlock(), 턴 사이의 Warmup()을 추가한다. 스케줄러·어텐션 커널·할당자는 그대로다.</span></li>
+      <li><b><span class="t-en">Learn on every touch, in O(1). </span><span class="t-ko">모든 접근마다 O(1)로 학습. </span></b><span class="t-en">Fingerprint the request, map block→agent, and if the agent changed, bump one counter and refresh P̂. Cost: ~1 μs per block touch, and the state is bounded because it is a matrix over agents, not over blocks or tokens.</span><span class="t-ko">요청을 지문화하고 블록→에이전트 매핑을 갱신한 뒤, 에이전트가 바뀌었으면 카운터 하나를 올리고 P̂를 갱신한다. 비용은 블록 접근당 약 1 μs이며, 상태는 블록이나 토큰이 아니라 에이전트에 대한 행렬이므로 크기가 유한하게 묶인다.</span></li>
+      <li><b><span class="t-en">Recompute hop distances once per dispatch, not per eviction. </span><span class="t-ko">홉 거리는 축출마다가 아니라 디스패치마다 한 번만 재계산. </span></b><span class="t-en">When the current agent changes, rebuild the sparse graph and run one BFS; the resulting hop table is cached for the whole scheduler step. That is why eviction stays under 6 μs at P99 even with 24 agents — the graph work amortises away from the hot path.</span><span class="t-ko">현재 에이전트가 바뀔 때만 희소 그래프를 재구성하고 BFS를 한 번 돌리며, 그 결과 홉 테이블은 해당 스케줄러 스텝 전체에서 재사용된다. 에이전트가 24개여도 P99 축출 지연이 6 μs 아래로 유지되는 이유가 이것이다. 그래프 계산이 핫패스 바깥으로 상각된다.</span></li>
+      <li><b><span class="t-en">Evict by score, warm in the gaps. </span><span class="t-ko">점수로 축출하고, 틈에서 데운다. </span></b><span class="t-en">On eviction, return argmin of ScoreBlock over candidates, with a tie-break preferring blocks already resident in the CPU tier. Between turns, if R ≥ R<sub>min</sub>, fire one warmup for argmax P̂(a | a<sub>t</sub>).</span><span class="t-ko">축출 시에는 후보 중 ScoreBlock의 argmin을 반환하되, 이미 CPU 티어에 존재하는 블록을 동점 시 우선 축출한다. 턴 사이에는 R ≥ R<sub>min</sub>이면 argmax P̂(a | a<sub>t</sub>)에 대해 워밍업을 한 번 발행한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The ablation that reframes the paper</span><span class="t-ko">논문을 다시 읽게 만드는 ablation</span></h2>
+    <p class="t-en">Split the two mechanisms and the story changes shape. Predictive eviction alone buys <b>+18–22pp</b> hit rate — more than the full system's headline +10–18pp. Background prefetch alone buys <b>at most one percentage point</b>, and the authors are unusually candid about why: "the median turn carries no warmable agent prefix, and the blocks a warmup recomputes are evicted by LRU before the predicted agent arrives." Prefetch is inert without eviction because it has nowhere safe to put what it fetched. Together, though, warmup <i>re-activates</i> anchors that survival scoring then protects, and GAIA's per-turn latency drops a further 28% (347 → 251 ms). The honest reading is that this is a paper about a better eviction score, with a prefetcher that only earns its place once the eviction policy exists to hold the door.</p>
+    <p class="t-ko">두 메커니즘을 분리하면 이야기의 모양이 바뀐다. 예측적 축출만으로 적중률이 <b>+18~22%p</b> 오르는데, 이는 전체 시스템의 대표 수치인 +10~18%p보다 크다. 백그라운드 프리페치 단독으로는 <b>많아야 1%p</b>이고, 저자들은 그 이유를 이례적으로 솔직하게 밝힌다. "중앙값 턴에는 데울 만한 에이전트 프리픽스가 없고, 워밍업이 재계산한 블록은 예측된 에이전트가 도착하기 전에 LRU로 축출된다." 프리페치는 가져온 것을 안전하게 놓아둘 곳이 없기 때문에 축출 정책 없이는 무력하다. 그러나 둘을 합치면 워밍업이 앵커를 <i>재활성화</i>하고 생존 점수가 그것을 지켜주며, GAIA의 턴당 지연이 28% 더 줄어든다(347 → 251 ms). 정직하게 읽으면 이것은 더 나은 축출 점수에 관한 논문이고, 프리페처는 문을 잡아줄 축출 정책이 존재할 때에만 제 몫을 한다.</p>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The identification trick is the most portable idea here. Recovering "which agent is this" from the request's own prefix block hashes means an agent-aware policy needs <i>zero</i> cooperation from AutoGen, LangGraph or CrewAI. Any policy that wants to reason about workload identity — routing, admission control, priority, tiering — can steal this and stay framework-agnostic.</p><p class="t-ko">여기서 가장 이식성 높은 아이디어는 식별 트릭이다. "이게 어느 에이전트인가"를 요청 자신의 프리픽스 블록 해시에서 복원한다는 것은, 에이전트 인식 정책이 AutoGen·LangGraph·CrewAI의 협조를 <i>전혀</i> 필요로 하지 않는다는 뜻이다. 워크로드 정체성을 근거로 판단하려는 어떤 정책이든 — 라우팅, 어드미션 제어, 우선순위, 티어링 — 이 방식을 훔쳐 쓰고 프레임워크 독립성을 유지할 수 있다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Multiplicative blending is the right shape for any speculative policy. The score degrades to LRU by construction when the predictor flattens, so the failure mode of the learned component is "no better than baseline" rather than "worse than baseline". That is a design pattern worth carrying into learned schedulers, learned prefetchers and learned rank allocators alike.</p><p class="t-ko">곱셈형 결합은 모든 추측적 정책이 취해야 할 형태다. 예측기가 평평해지면 점수는 구조적으로 LRU로 퇴화하므로, 학습 요소의 실패 모드가 "베이스라인보다 나쁨"이 아니라 "베이스라인과 같음"이 된다. 학습 기반 스케줄러, 프리페처, 랭크 배분기 모두에 가져갈 만한 설계 패턴이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Cache management and cache compression are orthogonal axes that the field keeps conflating. Everything in this archive's recent run — page-wise low-rank, anchor-residual, online compaction — makes each cached token cheaper. CacheScout changes which tokens survive. The two compose, and nobody has yet published the combination.</p><p class="t-ko">캐시 관리와 캐시 압축은 직교하는 두 축인데 이 분야는 계속 둘을 뒤섞는다. 최근 이 아카이브를 채운 것들 — 페이지 단위 저랭크, 앵커-잔차, 온라인 압축 — 은 캐시된 토큰 하나하나를 더 싸게 만든다. CacheScout는 어떤 토큰이 살아남을지를 바꾼다. 둘은 합성 가능하고, 그 조합은 아직 아무도 발표하지 않았다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the headline gains may be an artifact of a deliberately starved cache. The sensitivity study sweeps the GPU cache budget from <b>100 to 200 blocks</b> — and vLLM blocks are 16 tokens, so the entire KV cache is being held to <b>1,600–3,200 tokens</b> on a 96 GB Blackwell GPU whose real prefix cache would hold hundreds of thousands. At that budget the workload's own ~93-block maximum request footprint nearly fills the cache by itself, so of course LRU thrashes the anchors and of course an anchor-protecting policy wins; vanilla vLLM is pinned at 65–68% hit rate across the entire sweep, which is not what a properly sized cache looks like. The main results never state their budget, only that all systems shared it. Two smaller gaps compound this: the closest predictive baselines, <b>KVFlow (NeurIPS 2025) and PBKV</b>, are discussed in related work but never run — leaving only vLLM and a TTL-pinning system as comparators — and <i>none</i> of the five hyperparameters (τ, E<sub>max</sub>, λ, δ, R<sub>min</sub>) is ever assigned a value, let alone swept. The graceful-degradation-to-LRU claim is likewise argued from the algebra rather than measured: the Random topology (R = 0.12) appears in the motivation study and then never returns for an end-to-end run.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 수치가 의도적으로 굶긴 캐시의 산물일 수 있다. 민감도 실험은 GPU 캐시 예산을 <b>100~200 블록</b>으로 스윕하는데, vLLM 블록은 16토큰이므로 KV 캐시 전체를 96 GB Blackwell GPU 위에서 <b>1,600~3,200토큰</b>으로 묶어둔 셈이다. 실제 프리픽스 캐시라면 수십만 토큰을 담는다. 이 예산에서는 워크로드 자신의 최대 요청 풋프린트(~93블록)만으로 캐시가 거의 찬다. 그러니 LRU가 앵커를 스래싱하는 것도, 앵커 보호 정책이 이기는 것도 당연하다. 실제로 vanilla vLLM은 스윕 전 구간에서 적중률 65~68%에 고정되는데, 이는 적정 크기로 설정된 캐시의 모습이 아니다. 메인 결과는 예산 값을 끝내 밝히지 않고 "모든 시스템이 동일하게 공유했다"고만 한다. 두 가지 작은 공백이 이를 키운다. 가장 가까운 예측형 베이스라인인 <b>KVFlow(NeurIPS 2025)와 PBKV</b>는 related work에서 논의될 뿐 한 번도 실행되지 않아 비교 대상이 vLLM과 TTL 고정 방식뿐이며, 다섯 개의 하이퍼파라미터(τ, E<sub>max</sub>, λ, δ, R<sub>min</sub>)는 <i>단 하나도</i> 값이 명시되지 않았고 스윕은 물론 없다. LRU로의 우아한 퇴화 주장 역시 측정이 아니라 수식으로만 논증된다. Random 토폴로지(R = 0.12)는 동기 부여 실험에 등장한 뒤 엔드투엔드 실험에는 끝내 돌아오지 않는다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.14624">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.14624">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.14624">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.14624">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is fully drained, so this came from the fallback search, and it was the only one of thirteen returned papers not already in the archive. That scarcity turned out to be lucky: it lands on the multi-agent axis the queue had been under-serving, and it approaches the KV cache from the one direction the last month of summaries never did — not compressing the cache, but deciding what stays in it. It also pairs naturally with the 2026-09-06 online-compaction paper, which handled agents whose context never finishes; this one handles agents whose context never changes. Preprint — ACM systems template, no venue declared</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-08.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 완전히 소진되어 폴백 검색으로 넘어갔고, 반환된 13편 중 아카이브에 없던 유일한 논문이었다. 이 희소성은 결과적으로 운이 좋았다. 큐가 상대적으로 소홀히 다뤄온 멀티에이전트 축에 놓이면서, 지난 한 달의 요약들이 한 번도 택하지 않은 방향에서 KV 캐시에 접근한다 — 캐시를 압축하는 것이 아니라 무엇을 남길지 결정하는 쪽이다. 2026-09-06의 온라인 압축 논문과도 자연스럽게 짝을 이룬다. 그쪽은 컨텍스트가 끝나지 않는 에이전트를 다뤘고, 이쪽은 컨텍스트가 변하지 않는 에이전트를 다룬다. 프리프린트 — ACM 시스템 학회 템플릿이며 학회는 명시되지 않았다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-08.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
