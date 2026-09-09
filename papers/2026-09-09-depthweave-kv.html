@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · DepthWeave-KV: Token-Adaptive Cross-Layer Residual Factorization</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank · KV Cache</span><span class="t-ko">Model Compression · Low-rank · KV Cache</span></span>
+      <span>2026.09.09</span>
+    </div>
+    <h1>DepthWeave-KV: Token-Adaptive Cross-Layer Residual Factorization for Long-Context KV Cache Compression<br>
+      <span class="glow t-en">— cache fidelity is two-dimensional: which token, and how deep</span>
+      <span class="glow t-ko">— 캐시 정밀도는 2차원이다: 어느 토큰인가, 그리고 몇 층인가</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Anna Córdoba</b> <span class="t-en">· Adam Puente Tercero · Nerea Angulo Hijo · Mar Linares Tercero · Julia Barrientos · Ainhoa Miranda · Jesús Olivera</span><span class="t-ko">· Adam Puente Tercero · Nerea Angulo Hijo · Mar Linares Tercero · Julia Barrientos · Ainhoa Miranda · Jesús Olivera</span></span>
+      <span>🏛 Instituto de Investigación en Visión Artificial (IIVA)</span>
+      <span>🗓 2026-07-07</span>
+      <span>📄 <a href="https://arxiv.org/abs/2607.06523">arXiv:2607.06523</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Depth-sharing methods like MiniCache collapse neighbouring layers onto one cache state; token-eviction methods like H2O decide which tokens survive. Both pick <i>one</i> axis and apply it uniformly along the other. DepthWeave-KV refuses the choice: adjacent layers share a low-rank channel basis per attention head, and on top of that shared basis each token gets a residual whose <i>rank is routed</i> — 0 or 2 for filler continuation, 4 for structural delimiters, 8 for retrieval-critical spans. A calibration-free probe measures error after attention aggregation (not in KV space) every <i>p</i> decode steps and retunes the routing threshold mid-generation. Reported: 8.3× KV memory reduction at 62.9% average score, 0.9 points off a full cache, with 96.1% needle retrieval and 72.8 tok/s decode. The catch is that no baseline is run at a matched 8.3× budget.</p>
+    <p class="t-ko">MiniCache 같은 depth-sharing 기법은 인접 레이어를 하나의 캐시 상태로 접고, H2O 같은 eviction 기법은 어떤 토큰이 살아남을지 정한다. 둘 다 <i>한</i> 축만 고르고 나머지 축에는 균일한 예산을 적용한다. DepthWeave-KV는 그 선택을 거부한다. 인접 레이어는 어텐션 헤드별로 저랭크 채널 기저를 공유하고, 그 공유 기저 위에서 각 토큰은 <i>랭크가 라우팅된</i> 잔차를 받는다 — 이어쓰기용 토큰은 0 또는 2, 구조적 구분자는 4, 검색에 결정적인 구간은 8. 캘리브레이션이 필요 없는 프로브가 <i>p</i> 디코드 스텝마다 KV 공간이 아니라 어텐션 집계 <i>이후</i>에서 오차를 재고, 생성 도중 라우팅 임계값을 다시 맞춘다. 보고된 결과는 KV 메모리 8.3× 절감에 평균 점수 62.9%로 풀 캐시 대비 0.9점 차, needle 검색 96.1%, 디코드 72.8 tok/s. 함정은 어떤 베이스라인도 동일한 8.3× 예산에서 돌려보지 않았다는 점이다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">This archive's KV thread has spent a month asking <i>how much</i> to compress. DepthWeave-KV asks a question one level up: compression budget is not a scalar, it is a surface over (token × layer) — and almost every method flattens one of those two dimensions by accident.</p>
+    <p class="lead t-ko">이 아카이브의 KV 계열 논문들은 한 달 동안 <i>얼마나</i> 압축할 것인가를 물어왔다. DepthWeave-KV는 한 단계 위의 질문을 던진다. 압축 예산은 스칼라가 아니라 (토큰 × 레이어) 위의 곡면이며, 대부분의 기법은 그 두 차원 중 하나를 무심코 평평하게 만들어 버린다.</p>
+    <p class="t-en">The observation the paper builds on is not new — MiniCache showed depth redundancy, H2O and SnapKV showed token redundancy — but the interaction is. A token that is pure filler in a deep semantic layer may be an essential lexical anchor in a shallow one, and the same entity mention may need faithful reconstruction at layer 8 and none at layer 24. Uniform budgets along either axis therefore fail in a specific, measurable way: they preserve average perplexity while quietly destroying retrieval. The authors cite three 2025–2026 papers making exactly that complaint (Chen et al.'s <i>Pitfalls of KV Cache Compression</i>, Haverbeck et al., Bui et al.), and their own numbers reproduce it — StreamingLLM holds 55.4% average score but drops to 79.6% on needle retrieval, a 19-point collapse relative to a full cache's 98.7%.</p>
+    <p class="t-ko">논문이 딛고 선 관찰 자체는 새롭지 않다. MiniCache는 깊이 방향 중복을, H2O·SnapKV는 토큰 방향 중복을 보였다. 새로운 것은 그 둘의 <i>상호작용</i>이다. 깊은 의미 레이어에서는 순수한 filler인 토큰이 얕은 레이어에서는 핵심적인 어휘 앵커일 수 있고, 같은 개체 언급이 8층에서는 충실한 복원을 요구하면서 24층에서는 전혀 요구하지 않을 수 있다. 따라서 어느 한 축을 따라 균일한 예산을 주면 아주 구체적이고 측정 가능한 방식으로 실패한다. 평균 perplexity는 지키면서 검색 성능만 조용히 무너뜨리는 것이다. 저자들은 정확히 이 지적을 하는 2025~2026년 논문 세 편(Chen 등의 <i>Pitfalls of KV Cache Compression</i>, Haverbeck 등, Bui 등)을 인용하고, 자신들의 수치로도 이를 재현한다. StreamingLLM은 평균 점수 55.4%를 유지하지만 needle 검색에서는 79.6%로 떨어져, 풀 캐시의 98.7% 대비 19점이 무너진다.</p>
+    <figure class="fig">
+      <img src="fig/2607.06523/overview.png" alt="DepthWeave-KV overview: a long context split into lexical cue, instruction, filler continuation and retrieval evidence spans; a depth router reading attention behaviour assigns high-rank preservation or aggressive compression across shallow, middle and deep layers; shared depth bases weave across layers while token-specific residuals are spent only where needed.">
+      <figcaption class="t-en"><b>Figure 1.</b> The two axes made explicit. Along the sequence (bottom left) a long context decomposes into lexical cues, instructions, filler continuation and retrieval evidence; along depth (centre) shallow lexical, middle bridge and deep semantic layers are woven together by <i>shared low-rank bases</i> (the teal strands). Orange squares are token-specific residuals — the scarce resource. The depth router reads attention behaviour to decide where they land, and dashed online error probes feed the decision back during generation rather than fixing it at prefill.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 두 축을 명시적으로 드러낸 그림. 시퀀스 축(왼쪽 아래)에서 긴 컨텍스트는 어휘 단서·지시문·filler 이어쓰기·검색 근거로 분해되고, 깊이 축(가운데)에서는 얕은 어휘 레이어·중간 브릿지 레이어·깊은 의미 레이어가 <i>공유 저랭크 기저</i>(청록색 가닥)로 엮인다. 주황색 사각형이 토큰별 잔차, 즉 희소 자원이다. depth router가 어텐션 거동을 읽어 이 잔차를 어디에 놓을지 정하고, 점선으로 표시된 온라인 오차 프로브가 그 결정을 prefill 시점에 고정하지 않고 생성 중에 되먹임한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2607.06523</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">8.3×</div><div class="l"><span class="t-en">KV memory reduction (best among all compared methods)</span><span class="t-ko">KV 메모리 절감 (비교 대상 중 최대)</span></div></div>
+      <div class="stat"><div class="n">−0.9 pt</div><div class="l"><span class="t-en">average task score gap to a full cache (62.9 vs 63.8)</span><span class="t-ko">풀 캐시 대비 평균 점수 차 (62.9 vs 63.8)</span></div></div>
+      <div class="stat"><div class="n">96.1%</div><div class="l"><span class="t-en">Needle-in-a-Haystack accuracy, 16K–128K contexts (full cache: 98.7%)</span><span class="t-ko">Needle-in-a-Haystack 정확도, 16K~128K 컨텍스트 (풀 캐시 98.7%)</span></div></div>
+      <div class="stat"><div class="n">72.8 tok/s</div><div class="l"><span class="t-en">decode throughput at 64K context, from 42.1 with a full cache</span><span class="t-ko">64K 컨텍스트 디코드 처리량, 풀 캐시 42.1에서 상승</span></div></div>
+      <div class="stat"><div class="n">0.027</div><div class="l"><span class="t-en">attention-output reconstruction error — lowest of any compressed method</span><span class="t-ko">어텐션 출력 복원 오차 — 압축 기법 중 최저</span></div></div>
+      <div class="stat"><div class="n">3</div><div class="l"><span class="t-en">residual rank levels actually used (ρ = 0/2, 4, 8), not a binary keep/drop</span><span class="t-ko">실제로 쓰이는 잔차 랭크 단계 (ρ = 0/2, 4, 8) — 이진 유지/삭제가 아니다</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Main results at 64K context</span><span class="t-ko">64K 컨텍스트 주요 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (excerpt).</b> Selected rows from the main comparison. Note the memory column: the compressed baselines sit at 5.4–6.7×, while DepthWeave-KV reports 8.3×. It wins on quality <i>and</i> on compression simultaneously — which is exactly what makes the comparison hard to read as iso-budget.</caption>
+        <caption class="t-ko"><b>Table 1 (발췌).</b> 주요 비교표에서 선별한 행. 메모리 열을 보라. 압축 베이스라인들은 5.4~6.7×에 있는 반면 DepthWeave-KV는 8.3×를 보고한다. 품질과 압축률에서 <i>동시에</i> 이긴다는 뜻이며, 바로 그 점 때문에 이 비교를 동일 예산 비교로 읽기 어렵다.</caption>
+        <thead><tr><th>Method</th><th>Avg. Score (%)</th><th>Needle Acc. (%)</th><th>KV Mem. Red. (×)</th><th>Decode (tok/s)</th></tr></thead>
+        <tbody>
+          <tr><td>Full KV Cache</td><td>63.8</td><td>98.7</td><td>1.0</td><td>42.1</td></tr>
+          <tr><td>StreamingLLM</td><td>55.4</td><td>79.6</td><td>5.8</td><td>58.7</td></tr>
+          <tr><td>MiniCache</td><td>59.8</td><td>89.4</td><td>6.4</td><td>63.2</td></tr>
+          <tr><td>KVSharer</td><td>59.5</td><td>88.7</td><td>6.7</td><td>64.1</td></tr>
+          <tr><td>Eigen Attention</td><td>60.2</td><td>90.1</td><td>6.2</td><td>63.7</td></tr>
+          <tr><td>TailorKV</td><td>61.4</td><td>92.6</td><td>6.5</td><td>65.0</td></tr>
+          <tr><td><b>DepthWeave-KV</b></td><td class="up"><b>62.9</b></td><td class="up"><b>96.1</b></td><td class="up"><b>8.3</b></td><td class="up"><b>72.8</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in four pieces</span><span class="t-ko">아이디어를 네 조각으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">factorization</span>
+        <h3>Cross-depth residual factorization</h3>
+        <p class="t-en">Layers are partitioned into overlapping depth windows of size <i>w</i>. Within each window and head, shared bases B<sup>K</sup>, B<sup>V</sup> ∈ ℝ<sup>r<sub>b</sub>×d</sup> are kept once, and each layer reconstructs its state as a coefficient vector times the shared basis <i>plus</i> a gated residual. The distinction from MiniCache and KVSharer is precise: adjacent layers are not forced onto identical cache states, they share a channel <i>subspace</i>, and their deviations from it are restored selectively.</p>
+        <p class="t-ko">레이어를 크기 <i>w</i>의 겹치는 depth window로 나눈다. 각 window와 헤드마다 공유 기저 B<sup>K</sup>, B<sup>V</sup> ∈ ℝ<sup>r<sub>b</sub>×d</sup>를 한 번만 보관하고, 각 레이어는 자기 상태를 계수 벡터 × 공유 기저 <i>더하기</i> 게이팅된 잔차로 복원한다. MiniCache·KVSharer와의 차이는 명확하다. 인접 레이어를 동일한 캐시 상태로 강제하는 것이 아니라 채널 <i>부분공간</i>을 공유하게 하고, 거기서 벗어난 편차만 선택적으로 되살린다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">routing</span>
+        <h3>Token-conditional depth router</h3>
+        <p class="t-en">A shallow router scores each token from four online features — accumulated attention mass, maximum attention spike, delimiter/instruction-boundary indicators, and the previous interval's reconstruction error — then assigns one of three residual ranks. Crucially it runs on cache <i>metadata</i> only, so it costs no extra forward pass through the base LLM. The adaptive threshold τ<sub>m</sub> is what holds the memory budget.</p>
+        <p class="t-ko">얕은 라우터가 네 가지 온라인 특징 — 누적 어텐션 질량, 최대 어텐션 스파이크, 구분자/지시문 경계 표시, 직전 구간의 복원 오차 — 로 각 토큰에 점수를 매기고 세 단계 잔차 랭크 중 하나를 부여한다. 결정적으로 캐시 <i>메타데이터</i>만 보고 동작하므로 베이스 LLM을 한 번 더 통과시키는 비용이 들지 않는다. 메모리 예산을 지켜주는 것은 적응적 임계값 τ<sub>m</sub>이다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">feedback</span>
+        <h3>Probes that measure the right error</h3>
+        <p class="t-en">Every <i>p</i> decode steps a few heads are evaluated twice — once compressed, once with a temporarily materialised higher-fidelity cache — and the discrepancy is measured <b>after attention aggregation</b>, not in KV space. That choice is the paper's sharpest argument: reconstruction error on cached vectors is a proxy, while error on Attn(Q,K̂,V̂) is the quantity that actually propagates into the next hidden state. No calibration set is needed.</p>
+        <p class="t-ko"><i>p</i> 디코드 스텝마다 일부 헤드를 두 번 평가한다. 한 번은 압축 상태로, 한 번은 일시적으로 고정밀 캐시를 실체화해서. 그리고 그 차이를 KV 공간이 아니라 <b>어텐션 집계 이후</b>에서 잰다. 이 선택이 논문에서 가장 날카로운 주장이다. 캐시 벡터의 복원 오차는 대리 지표일 뿐이고, Attn(Q,K̂,V̂)의 오차야말로 실제로 다음 hidden state로 전파되는 양이기 때문이다. 캘리브레이션 셋이 필요 없다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">systems</span>
+        <h3>A fused kernel, because bandwidth is the limit</h3>
+        <p class="t-en">Factorised caches normally lose their advantage at reconstruction time: you rebuild the full KV tensor, write it to global memory, then read it back for attention. The fused CUDA kernel does basis lookup, residual dequantization, coefficient multiplication and attention scoring in one pass so reconstructed tensors never round-trip through global memory. Ablating it leaves quality untouched (62.8 vs 62.9) but costs 15.0% of throughput — a clean separation of the algorithmic and systems contributions.</p>
+        <p class="t-ko">인수분해된 캐시는 보통 복원 시점에 이점을 잃는다. 전체 KV 텐서를 다시 만들어 글로벌 메모리에 쓰고, 어텐션을 위해 도로 읽어야 하기 때문이다. 융합 CUDA 커널은 기저 조회·잔차 역양자화·계수 곱·어텐션 스코어 계산을 한 번에 처리해 복원된 텐서가 글로벌 메모리를 왕복하지 않게 한다. 이것만 제거하면 품질은 그대로(62.8 vs 62.9)지만 처리량이 15.0% 빠진다. 알고리즘 기여와 시스템 기여가 깔끔하게 분리된다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Prefill — sketch the shared bases.</span><span class="t-ko">Prefill — 공유 기저를 스케치한다.</span></b><span class="t-en"> After the first compressed prefix block, a small randomised low-rank sketch of cached keys and values is computed per depth window, independently for each head and separately for K and V. Heads keep their specialisation; only redundant channel structure is pooled.</span><span class="t-ko"> 첫 압축 프리픽스 블록 이후, depth window별로 캐시된 키·값의 작은 무작위 저랭크 스케치를 계산한다. 헤드마다 독립적으로, K와 V는 따로. 헤드의 특화는 유지되고 중복된 채널 구조만 모인다.</span></li>
+      <li><b><span class="t-en">Route — decide who gets a residual.</span><span class="t-ko">Route — 누가 잔차를 받을지 정한다.</span></b><span class="t-en"> The router scores tokens and assigns ρ = 0 or 2 to continuation tokens, 4 to structural ones, 8 to retrieval-critical spans. Tokens routed to zero rank live entirely inside the shared basis — there is no hard eviction boundary anywhere in the design.</span><span class="t-ko"> 라우터가 토큰에 점수를 매겨 이어쓰기 토큰에는 ρ = 0 또는 2, 구조적 토큰에는 4, 검색에 결정적인 구간에는 8을 배정한다. 랭크 0으로 라우팅된 토큰은 전적으로 공유 기저 안에서만 존재한다. 설계 어디에도 딱딱한 eviction 경계가 없다.</span></li>
+      <li><b><span class="t-en">Store — quantize asymmetrically.</span><span class="t-ko">Store — 비대칭적으로 양자화한다.</span></b><span class="t-en"> Coefficient vectors go to 8-bit blockwise quantization, residuals to 4-bit group quantization at the routed rank. The compression ratio is therefore the product of three effects — basis sharing across depth, routed residual rank, and bit width — not one knob.</span><span class="t-ko"> 계수 벡터는 8비트 블록 단위 양자화로, 잔차는 라우팅된 랭크에서 4비트 그룹 양자화로 저장한다. 따라서 압축률은 하나의 손잡이가 아니라 깊이 방향 기저 공유·라우팅된 잔차 랭크·비트 폭이라는 세 효과의 곱이다.</span></li>
+      <li><b><span class="t-en">Decode — reconstruct inside the kernel.</span><span class="t-ko">Decode — 커널 안에서 복원한다.</span></b><span class="t-en"> The fused kernel loads shared basis rows, dequantizes only the routed residual channels, rebuilds the needed K/V fragments and feeds them straight into attention scoring, without materialising the cache in global memory.</span><span class="t-ko"> 융합 커널이 공유 기저 행을 읽고, 라우팅된 잔차 채널만 역양자화하고, 필요한 K/V 조각을 재구성해 곧바로 어텐션 스코어 계산에 넣는다. 캐시를 글로벌 메모리에 실체화하지 않는다.</span></li>
+      <li><b><span class="t-en">Probe — and retune mid-generation.</span><span class="t-ko">Probe — 그리고 생성 도중 다시 조율한다.</span></b><span class="t-en"> If post-attention error exceeds a window's tolerance, τ<sub>m</sub> drops and more tokens are promoted to higher rank; if it stays low across several intervals, τ<sub>m</sub> rises and residual storage shrinks. Only the residual gates and router parameters are ever trained — the base model weights are untouched.</span><span class="t-ko"> 어텐션 이후 오차가 window의 허용치를 넘으면 τ<sub>m</sub>을 낮춰 더 많은 토큰을 높은 랭크로 올리고, 여러 구간 동안 낮게 유지되면 τ<sub>m</sub>을 올려 잔차 저장량을 줄인다. 학습되는 것은 잔차 게이트와 라우터 파라미터뿐이며, 베이스 모델 가중치는 건드리지 않는다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The ablation that matters most is the one the authors half-bury: <b>shared bases only, no token residuals</b> reaches 10.2× — the highest compression in the paper — and collapses to 58.9% average score, worse than MiniCache, KVSharer, ChunkKV, TailorKV and Eigen Attention. Depth sharing alone is not a viable compression axis; it only works when something else is paying for the exceptions.</p><p class="t-ko">가장 중요한 ablation은 저자들이 반쯤 묻어둔 것이다. <b>공유 기저만, 토큰 잔차 없음</b> 변형은 논문 내 최고 압축률인 10.2×에 도달하지만 평균 점수 58.9%로 무너져 MiniCache·KVSharer·ChunkKV·TailorKV·Eigen Attention 모두보다 나쁘다. 깊이 공유만으로는 성립하는 압축 축이 아니며, 예외를 대신 지불해줄 무언가가 있을 때만 작동한다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Measuring error <i>after</i> attention aggregation rather than on cached vectors is the transferable idea here, and it is cheap. Any compression scheme with a tunable budget can adopt the same probe: reconstruct twice on a few heads, compare outputs, move the threshold. It costs no calibration corpus and directly targets the quantity that reaches the next layer.</p><p class="t-ko">캐시 벡터가 아니라 어텐션 집계 <i>이후</i>에서 오차를 재는 것이 여기서 이식 가능한 아이디어이고, 값도 싸다. 조절 가능한 예산을 가진 어떤 압축 기법이든 같은 프로브를 쓸 수 있다. 몇 개 헤드에서 두 번 복원해 출력을 비교하고 임계값을 옮기면 된다. 캘리브레이션 코퍼스가 필요 없고, 다음 레이어에 실제로 도달하는 양을 곧바로 겨냥한다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Rank allocation is becoming the shared vocabulary of this archive's compression thread. DynaCalKV (2607.24331) allocates rank across heads, STAR-KV (2606.08382) adapts it by soft thresholding, AnchorKV (2608.02901) splits anchor from residual, PuzzleKV (2608.23843) works page-wise. DepthWeave-KV adds the depth axis and, unusually, closes the loop online. The open question none of them settles: at a genuinely matched memory budget, does the extra machinery still win?</p><p class="t-ko">랭크 배분이 이 아카이브의 압축 계열에서 공통 어휘가 되어가고 있다. DynaCalKV(2607.24331)는 헤드 사이에, STAR-KV(2606.08382)는 soft thresholding으로, AnchorKV(2608.02901)는 앵커와 잔차를 분리해, PuzzleKV(2608.23843)는 페이지 단위로 랭크를 배분한다. DepthWeave-KV는 여기에 깊이 축을 더하고, 드물게도 그 루프를 온라인으로 닫는다. 어느 논문도 해결하지 못한 열린 질문은 이것이다. 진짜로 동일한 메모리 예산에서도 이 추가 기계장치가 여전히 이기는가?</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the headline comparison is not iso-memory, and the paper never acknowledges it. Baselines are configured "to target the strongest task score under a memory budget of at least 4× reduction" and land at 5.4–6.7×, while DepthWeave-KV is reported at 8.3× — so it claims to beat every baseline on quality <i>while also compressing 25–50% harder</i>, and no run exists where TailorKV or MiniCache is pushed to 8.3× (or DepthWeave-KV pulled back to 6.5×) to separate method from budget. The paper's own ablation shows how much that matters: the one configuration that does push compression higher, "shared bases only" at 10.2×, drops below every baseline. Two further gaps compound it — the base model, its size and the GPU are <b>never named anywhere in the paper</b>, which makes the 72.8 tok/s and 4.89 s TTFT figures unreproducible in principle; and the ablation prose in §4 contradicts Table 2 outright, quoting 61.1%/91.8% for the router variant that the table lists as 61.2%/92.4%, 89.9% needle for the probe variant the table puts at 93.5%, and a 6.9× memory figure for direct layer sharing that both Table 2 and §5 give as 5.9×. Whichever set of numbers is correct, they were not checked against each other.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 비교가 동일 메모리 조건이 아닌데 논문은 이를 전혀 인정하지 않는다. 베이스라인들은 "최소 4× 절감 예산 하에서 최고 점수를 목표로" 설정되어 5.4~6.7×에 놓이는 반면 DepthWeave-KV는 8.3×로 보고된다. 즉 <i>25~50% 더 세게 압축하면서 동시에</i> 모든 베이스라인을 품질로 이겼다고 주장하는 것인데, TailorKV나 MiniCache를 8.3×까지 밀거나 DepthWeave-KV를 6.5×로 되돌려 기법과 예산을 분리한 실험은 하나도 없다. 이것이 왜 중요한지는 논문 자신의 ablation이 보여준다. 압축률을 실제로 더 밀어붙인 유일한 설정인 10.2×의 "shared bases only"는 모든 베이스라인 아래로 떨어진다. 여기에 두 가지 구멍이 겹친다. 베이스 모델과 그 크기, GPU가 <b>논문 어디에도 명시되지 않아</b> 72.8 tok/s와 4.89 s TTFT는 원리적으로 재현이 불가능하다. 그리고 §4의 ablation 서술이 Table 2와 정면으로 어긋난다 — 라우터 변형을 61.1%/91.8%로 적었으나 표는 61.2%/92.4%이고, 프로브 변형의 needle을 89.9%로 적었으나 표는 93.5%이며, 직접 레이어 공유의 메모리를 6.9×로 적었으나 Table 2와 §5는 모두 5.9×로 준다. 어느 쪽이 맞든, 서로 대조되지 않은 채 출판되었다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2607.06523">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2607.06523">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2607.06523">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2607.06523">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is drained, so this came from the fallback search; of the thirteen candidates returned, only three were absent from the archive and this one sits squarely on two of the tracked axes at once — Model Compression and Low-rank Decomposition. It is also the natural counterpart to yesterday's CacheScout (2608.14624): that paper asked which cached bytes to keep, this one asks how faithfully to keep each one, and both conclude the budget must be conditioned on structure rather than applied uniformly. Preprint, no venue — note that the PDF carries an "ICML 2024 / PMLR 235" line, but that is unedited template boilerplate from the icml2024 style file, absent from the arXiv HTML and three years out of date relative to the July 2026 submission; it is not an acceptance</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-09.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 소진되어 폴백 검색으로 넘어갔다. 반환된 13편 중 아카이브에 없는 것은 세 편뿐이었고, 그중 이 논문이 추적 중인 축 두 개 — Model Compression과 Low-rank Decomposition — 에 정확히 동시에 걸친다. 어제의 CacheScout(2608.14624)와도 자연스러운 짝을 이룬다. 그쪽은 캐시된 바이트 중 무엇을 남길지를 물었고, 이쪽은 남긴 것을 얼마나 충실하게 보관할지를 묻는다. 둘 다 예산을 균일하게 적용할 것이 아니라 구조에 조건부로 주어야 한다는 결론에 이른다. 프리프린트이며 학회 없음 — PDF에 "ICML 2024 / PMLR 235" 줄이 찍혀 있으나 이는 icml2024 스타일 파일의 편집되지 않은 템플릿 기본값으로, arXiv HTML에는 없고 2026년 7월 투고 기준으로 3년이나 지난 표기다. accept이 아니다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-09.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
