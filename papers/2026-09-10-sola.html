@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · SoLA: Soft Activation Sparsity + Low-Rank Decomposition for LLM Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank · Activation Sparsity</span><span class="t-ko">Model Compression · Low-rank · Activation Sparsity</span></span>
+      <span>2026.09.10</span>
+    </div>
+    <h1>SoLA: Leveraging Soft Activation Sparsity and Low-Rank Decomposition for Large Language Model Compression<br>
+      <span class="glow t-en">— SiLU didn't kill activation sparsity, it made it soft: keep the loud 15% dense, factor the rest</span>
+      <span class="glow t-ko">— SiLU는 활성 희소성을 없앤 게 아니라 부드럽게 만들었다: 두드러지는 15%는 그대로 두고 나머지만 분해한다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Xinhao Huang</b> <span class="t-en">· You-Liang Huang · Zeyi Wen (corresponding)</span><span class="t-ko">· You-Liang Huang · Zeyi Wen (교신저자)</span></span>
+      <span>🏛 HKUST (Guangzhou) · HKUST</span>
+      <span>🗓 2026-03-12</span>
+      <span>🏆 AAAI 2025</span>
+      <span>📄 <a href="https://arxiv.org/abs/2604.03258">arXiv:2604.03258</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Modern LLMs replaced ReLU with SiLU/GeLU and lost the exact zeros that used to make activation sparsity free. SoLA argues the sparsity is still there, just <i>soft</i>: in LLaMA-2's FFNs a small set of "prime neurons" carries almost all of the activation norm (the top 15% hold 95% in LLaMA-2-13B). So SoLA keeps those neurons' weights dense and compresses the remaining "marginal" neurons, plus the attention projections, with activation-whitened SVD. It also picks a separate truncation rank for each weight type under a memory budget. No training is needed and it runs on dense kernels only. At 30% compression, LLaMA-2-70B reaches WikiText2 perplexity 4.44, against 6.95 for SVD-LLM. At 7B/13B, though, its accuracy lead over Bolaco ranges from −0.4 to +1.5 points, and some baseline rows in the paper look copy-pasted.</p>
+    <p class="t-ko">현대 LLM은 ReLU를 SiLU/GeLU로 바꾸면서 활성 희소성을 공짜로 쓰게 해주던 정확한 0을 잃었다. SoLA는 희소성이 사라진 게 아니라 <i>부드러워졌을</i> 뿐이라고 주장한다. LLaMA-2의 FFN에서는 소수의 "prime neuron"이 활성 노름의 거의 전부를 차지한다(LLaMA-2-13B에서 상위 15%가 95%). 그래서 SoLA는 이 뉴런들의 가중치를 밀집 그대로 두고, 나머지 "marginal" 뉴런과 어텐션 projection만 활성 화이트닝 SVD로 압축한다. 또 메모리 예산 안에서 가중치 종류마다 truncation 랭크를 따로 고른다. 학습이 필요 없고 밀집 커널만으로 돌아간다. 30% 압축에서 LLaMA-2-70B의 WikiText2 perplexity는 4.44로, SVD-LLM의 6.95보다 훨씬 낮다. 다만 7B/13B에서 Bolaco 대비 정확도 우위는 −0.4~+1.5점에 그치고, 논문의 일부 베이스라인 행은 복사·붙여넣기된 것으로 보인다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Low-rank compression has a well-known ceiling: LLM weights are not actually low-rank, so a uniform SVD truncation cuts into the few directions that matter. SoLA's answer is not a better SVD. It first decides which part of each matrix should never be decomposed at all.</p>
+    <p class="lead t-ko">저랭크 압축에는 잘 알려진 한계가 있다. LLM 가중치는 실제로 저랭크가 아니어서, 균일한 SVD truncation은 정말 중요한 소수의 방향까지 잘라낸다. SoLA의 답은 더 좋은 SVD가 아니다. 먼저 각 행렬에서 애초에 분해하지 말아야 할 부분을 가려낸다.</p>
+    <p class="t-en">ReLU-era models gave you activation sparsity for free. Deja Vu could skip whole slices of the FFN because most activations were exactly zero. SiLU and GeLU closed that door: negative inputs still produce small non-zero outputs, so there is nothing to skip, and unstructured sparsity needs hardware support that commodity GPUs lack. SoLA's observation is that the long tail survives in <i>magnitude</i>. Sort FFN neurons by activation norm and the cumulative curve saturates almost immediately (Figure 2 in the paper). Pruning just the top 1% of neurons in LLaMA-2-13B sends perplexity from 4.57 to 9665.4, while pruning the bottom 10% costs only 0.26. SoLA turns that asymmetry into a compression recipe that needs neither sparse kernels nor fine-tuning: the matrices stay dense and are simply split in two. It is also a timely read for this archive. Although it is an AAAI 2025 paper, it only reached arXiv in March 2026, and it is effectively a common ancestor of the 2026 SVD papers covered here (Swift-SVD, SigmaScale, UniRank). It uses SVD-LLM's truncation-aware whitening directly as its decomposition backbone.</p>
+    <p class="t-ko">ReLU 시대의 모델은 활성 희소성을 공짜로 줬다. 대부분의 활성값이 정확히 0이었기 때문에 Deja Vu는 FFN의 한 덩어리를 통째로 건너뛸 수 있었다. SiLU와 GeLU가 그 문을 닫았다. 음수 입력도 작은 0이 아닌 값을 내므로 건너뛸 게 없고, 비정형 희소성은 일반 GPU에 없는 하드웨어 지원을 필요로 한다. SoLA가 관찰한 것은 긴 꼬리 분포가 <i>크기</i>에서는 여전히 살아 있다는 점이다. FFN 뉴런을 활성 노름 순으로 정렬하면 누적 곡선이 거의 곧바로 포화한다(논문 Figure 2). LLaMA-2-13B에서 상위 1% 뉴런만 제거해도 perplexity가 4.57에서 9665.4로 폭발하지만, 하위 10%를 제거하면 0.26만 오른다. SoLA는 이 비대칭을 희소 커널도 파인튜닝도 필요 없는 압축 레시피로 바꾼다. 행렬은 밀집 그대로이고 두 조각으로 나뉠 뿐이다. 이 아카이브 입장에서도 시의적절하다. AAAI 2025 논문이지만 arXiv에는 2026년 3월에야 올라왔고, 여기서 다룬 2026년 SVD 논문들(Swift-SVD, SigmaScale, UniRank)의 사실상 공통 조상이다. 분해 백본으로는 SVD-LLM의 truncation-aware 화이트닝을 그대로 쓴다.</p>
+    <figure class="fig">
+      <img src="fig/2604.03258/overview.png" alt="SoLA framework: an original model's layers pass through an activation-pattern analysis that slices each FFN weight into a prime-neuron block W_alpha and a marginal block W_beta; W_beta is decomposed by SVD into U, Sigma, V with a truncation strategy that maximizes the retained singular-value energy; calibration data feeds both the slicing and the decomposition, producing the compressed model.">
+      <figcaption class="t-en"><b>Figure 1.</b> The SoLA pipeline. Calibration data drives two things. First, an activation-norm profile of each FFN (left inset: norms of ~11K neurons sorted by size, with the cumulative proportion saturating early) splits every FFN weight into a dense prime-neuron slice W<sub>α</sub> and a marginal slice W<sub>β</sub>. Second, an SVD of the whitened W<sub>β</sub> is truncated per component at the rank that maximizes the retained energy Σσ<sub>i</sub>²/Σσ². Only W<sub>β</sub> and the attention projections are factorized; W<sub>α</sub> is left untouched. (The "Trunction" typo is in the original figure.)</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> SoLA 파이프라인. 캘리브레이션 데이터가 두 가지를 결정한다. 첫째, 각 FFN의 활성 노름 프로파일(왼쪽 삽입 그림: 약 1.1만 개 뉴런의 노름을 크기순으로 정렬한 것으로, 누적 비율이 일찍 포화한다)이 모든 FFN 가중치를 밀집 prime-neuron 조각 W<sub>α</sub>와 marginal 조각 W<sub>β</sub>로 나눈다. 둘째, 화이트닝된 W<sub>β</sub>의 SVD를 컴포넌트별로 보존 에너지 Σσ<sub>i</sub>²/Σσ²를 최대화하는 랭크에서 자른다. 분해되는 것은 W<sub>β</sub>와 어텐션 projection뿐이고, W<sub>α</sub>는 손대지 않는다. ("Trunction" 오타는 원본 그림 그대로다.)</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.03258</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">4.44</div><div class="l"><span class="t-en">WikiText2 perplexity of LLaMA-2-70B at 30% compression (SVD-LLM 6.95 · dense 3.12)</span><span class="t-ko">30% 압축 LLaMA-2-70B의 WikiText2 perplexity (SVD-LLM 6.95 · 원본 3.12)</span></div></div>
+      <div class="stat"><div class="n">15%</div><div class="l"><span class="t-en">FFN neurons kept dense as "prime neurons" — they hold 95% of squared activation norm in LLaMA-2-13B</span><span class="t-ko">"prime neuron"으로 밀집 유지하는 FFN 뉴런 비율 — LLaMA-2-13B에서 제곱 활성 노름의 95%를 차지</span></div></div>
+      <div class="stat"><div class="n">9665.4</div><div class="l"><span class="t-en">LLaMA-2-13B perplexity after removing only the top-1% norm neurons (removing the bottom 10%: 4.83)</span><span class="t-ko">상위 1% 노름 뉴런만 제거했을 때 LLaMA-2-13B perplexity (하위 10% 제거 시 4.83)</span></div></div>
+      <div class="stat"><div class="n">94.5%</div><div class="l"><span class="t-en">of dense average accuracy kept by LLaMA-2-70B at 20% compression (0.6892 vs 0.7294)</span><span class="t-ko">20% 압축 LLaMA-2-70B가 유지한 원본 평균 정확도 비율 (0.6892 vs 0.7294)</span></div></div>
+      <div class="stat"><div class="n">1.77×</div><div class="l"><span class="t-en">matmul speedup for LLaMA-2-13B at 30% (isolated GEMMs on an RTX 4090, not end-to-end)</span><span class="t-ko">30% 압축 LLaMA-2-13B의 행렬곱 가속 (RTX 4090 단독 GEMM 측정, end-to-end 아님)</span></div></div>
+      <div class="stat"><div class="n">+0.04 pt</div><div class="l"><span class="t-en">SoLA's average-accuracy margin over Bolaco on LLaMA-2-13B at 20% (0.6142 vs 0.6138)</span><span class="t-ko">20% 압축 LLaMA-2-13B에서 Bolaco 대비 SoLA의 평균 정확도 우위 (0.6142 vs 0.6138)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Main results at 30% compression</span><span class="t-ko">30% 압축 주요 결과</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 2 &amp; 3 (excerpt).</b> WikiText2 perplexity (↓) and average accuracy over MMLU (5-shot) plus seven zero-shot tasks (↑). SoLA wins every cell at 30%. Two caveats: LLM-Pruner and Bolaco cannot run on the GQA-based LLaMA-2-70B, so the large-model wins come against FLAP, SliceGPT and SVD-LLM, which is SoLA's own decomposition backbone. And at 20% on LLaMA-2-7B, Bolaco beats SoLA on accuracy (0.5733 vs 0.5692).</caption>
+        <caption class="t-ko"><b>Table 2 &amp; 3 (발췌).</b> WikiText2 perplexity(↓)와 MMLU(5-shot) + 제로샷 7개 과제의 평균 정확도(↑). 30%에서는 SoLA가 모든 칸에서 이긴다. 주의할 점이 두 가지 있다. LLM-Pruner와 Bolaco는 GQA 기반 LLaMA-2-70B에서 돌지 않으므로, 대형 모델에서의 승리는 FLAP·SliceGPT·SVD-LLM(SoLA 자신의 분해 백본) 상대의 결과다. 또 LLaMA-2-7B 20%에서는 정확도에서 Bolaco가 SoLA를 이긴다(0.5733 vs 0.5692).</caption>
+        <thead><tr><th>Method</th><th>13B PPL</th><th>13B Avg. Acc.</th><th>70B PPL</th><th>70B Avg. Acc.</th></tr></thead>
+        <tbody>
+          <tr><td>Dense (0%)</td><td>4.57</td><td>0.6756</td><td>3.12</td><td>0.7294</td></tr>
+          <tr><td>LLM-Pruner</td><td>17.59</td><td>0.5090</td><td>–</td><td>–</td></tr>
+          <tr><td>FLAP</td><td>7.08</td><td>0.5429</td><td>10.80</td><td>0.4962</td></tr>
+          <tr><td>SliceGPT</td><td>12.68</td><td>0.3954</td><td>8.09</td><td>0.4635</td></tr>
+          <tr><td>Bolaco</td><td>8.83</td><td>0.5608</td><td>–</td><td>–</td></tr>
+          <tr><td>SVD-LLM</td><td>7.93</td><td>0.4854</td><td>6.95</td><td>0.6091</td></tr>
+          <tr><td><b>SoLA</b></td><td class="up"><b>6.31</b></td><td class="up"><b>0.5756</b></td><td class="up"><b>4.44</b></td><td class="up"><b>0.6625</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in three pieces</span><span class="t-ko">아이디어를 세 조각으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">observation</span>
+        <h3>Soft activation sparsity</h3>
+        <p class="t-en">SiLU/GeLU FFNs have no exact zeros, but their per-neuron activation norms ‖XW‖ are sharply long-tailed on both WikiText2 and C4, in both LLaMA-2-7B and 13B. The test the paper runs is the right one: remove neurons and measure perplexity. The asymmetry is extreme, with the top 1% catastrophic and the bottom 10% nearly free. That makes activation norm a usable importance score without any gradients.</p>
+        <p class="t-ko">SiLU/GeLU FFN에는 정확한 0이 없지만, 뉴런별 활성 노름 ‖XW‖는 WikiText2와 C4 모두에서, LLaMA-2-7B와 13B 모두에서 극단적인 긴 꼬리 분포를 보인다. 논문이 하는 검증도 적절하다. 뉴런을 제거하고 perplexity를 잰다. 비대칭은 극단적이어서, 상위 1%를 빼면 파국이고 하위 10%는 거의 공짜다. 덕분에 활성 노름을 그래디언트 없이 쓸 수 있는 중요도 점수로 삼을 수 있다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">split</span>
+        <h3>Decompose only the tail</h3>
+        <p class="t-en">The FFN is rewritten exactly as σ(XW<sup>in</sup><sub>α</sub>)W<sup>out</sup><sub>α</sub> + σ(XW<sup>in</sup><sub>β</sub>)W<sup>out</sup><sub>β</sub>, split by neuron. The prime slice α stays dense. The marginal slice β is whitened with the matching block S<sub>β</sub> of the Cholesky factor of XX<sup>T</sup> and then truncated by SVD. Attention has no activation function to exploit, so q/k/o are decomposed wholesale (v is never compressed).</p>
+        <p class="t-ko">FFN을 뉴런 기준으로 σ(XW<sup>in</sup><sub>α</sub>)W<sup>out</sup><sub>α</sub> + σ(XW<sup>in</sup><sub>β</sub>)W<sup>out</sup><sub>β</sub>로 정확히 다시 쓴다. prime 조각 α는 밀집으로 남는다. marginal 조각 β는 XX<sup>T</sup>의 Cholesky 인자 중 대응 블록 S<sub>β</sub>로 화이트닝한 뒤 SVD로 자른다. 어텐션에는 활용할 활성 함수가 없으므로 q/k/o를 통째로 분해한다(v는 절대 압축하지 않는다).</p>
+      </div>
+      <div class="m">
+        <span class="tag">allocation</span>
+        <h3>Component-wise truncation rank</h3>
+        <p class="t-en">After whitening, the compression loss of dropping singular values is just the sum of their squares, a result SoLA borrows from SVD-LLM. SoLA scores each component by its retained energy f(r) = Σ<sub>i≤r</sub>σ<sub>i</sub>²/Σσ² and maximizes Σf(r<sub>c</sub>) subject to a total memory budget B. This is an integer program, which they solve approximately with a greedy heuristic, with ranks restricted to multiples of 16 to benefit from NVIDIA hardware acceleration.</p>
+        <p class="t-ko">화이트닝 이후에는 특이값을 버릴 때의 압축 손실이 그 특이값들의 제곱합과 같아진다. SoLA가 SVD-LLM에서 빌려온 결과다. SoLA는 각 컴포넌트를 보존 에너지 f(r) = Σ<sub>i≤r</sub>σ<sub>i</sub>²/Σσ²로 점수화하고, 전체 메모리 예산 B 아래에서 Σf(r<sub>c</sub>)를 최대화한다. 이는 정수계획 문제여서 그리디 휴리스틱으로 근사해를 구하며, NVIDIA 하드웨어 가속을 활용하도록 랭크는 16의 배수로 제한한다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Calibrate.</span><span class="t-ko">캘리브레이션.</span></b><span class="t-en"> Run 256 random samples of 4,096 tokens from WikiText2 and C4 through the model, recording each layer's input X and every FFN neuron's activation norm.</span><span class="t-ko"> WikiText2와 C4에서 무작위로 뽑은 4,096토큰 샘플 256개를 모델에 통과시키며 각 레이어의 입력 X와 모든 FFN 뉴런의 활성 노름을 기록한다.</span></li>
+      <li><b><span class="t-en">Rank the neurons.</span><span class="t-ko">뉴런에 순위를 매긴다.</span></b><span class="t-en"> Sort neurons by norm and mark the top γ = 15% as prime. Their columns of W<sup>in</sup> (gate/up) and rows of W<sup>out</sup> (down) are frozen in full precision. The mask is static: it is chosen once from calibration data and does not depend on the input.</span><span class="t-ko"> 노름 순으로 정렬해 상위 γ = 15%를 prime으로 표시한다. 이들에 해당하는 W<sup>in</sup>(gate/up)의 열과 W<sup>out</sup>(down)의 행은 원래 정밀도 그대로 고정된다. 마스크는 정적이다. 캘리브레이션 데이터로 한 번 정하며 입력에 따라 바뀌지 않는다.</span></li>
+      <li><b><span class="t-en">Whiten and factor the rest.</span><span class="t-ko">나머지를 화이트닝하고 분해한다.</span></b><span class="t-en"> Take the Cholesky factor S of XX<sup>T</sup>, partition it along the neuron split, and run SVD on W<sub>β</sub>S<sub>β</sub><sup>−1</sup>. q/k/o get the same treatment. The exclusions: v is never compressed; o is kept at 20% for 7B/13B; k and v are both kept on the GQA models (70B, Mistral); and the first and last two layers are untouched.</span><span class="t-ko"> XX<sup>T</sup>의 Cholesky 인자 S를 구해 뉴런 분할에 맞춰 나누고, W<sub>β</sub>S<sub>β</sub><sup>−1</sup>에 SVD를 한다. q/k/o도 같은 방식으로 처리한다. 예외는 이렇다. v는 절대 압축하지 않고, 7B/13B의 20% 설정에서는 o도 남기며, GQA 모델(70B, Mistral)에서는 k와 v를 모두 남기고, 처음과 마지막 두 레이어는 건드리지 않는다.</span></li>
+      <li><b><span class="t-en">Allocate ranks under the budget.</span><span class="t-ko">예산 안에서 랭크를 배분한다.</span></b><span class="t-en"> A greedy search moves each component's truncation position to maximize total retained energy until the model's memory size hits the target ratio. Here "compression ratio" means stored bytes, so SliceGPT's extra Q matrices are counted against it.</span><span class="t-ko"> 그리디 탐색으로 컴포넌트별 truncation 위치를 옮겨 가며, 모델 메모리 크기가 목표 비율에 닿을 때까지 전체 보존 에너지를 최대화한다. 여기서 "압축률"은 저장 바이트 기준이므로 SliceGPT의 추가 Q 행렬도 계산에 포함된다.</span></li>
+      <li><b><span class="t-en">Serve with dense kernels.</span><span class="t-ko">밀집 커널로 서빙한다.</span></b><span class="t-en"> Each FFN becomes one dense prime-neuron matmul plus two thin low-rank matmuls. There is no sparse format, no custom kernel and no fine-tuning, so any stock GEMM runs it.</span><span class="t-ko"> 각 FFN은 밀집 prime-neuron 행렬곱 하나와 얇은 저랭크 행렬곱 두 개가 된다. 희소 포맷도 커스텀 커널도 파인튜닝도 없으므로 일반 GEMM이면 어디서든 돌아간다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The benefit grows with scale, and the paper never asks why. At 70B/30% SoLA cuts SVD-LLM's perplexity by 36% (6.95 → 4.44) and adds 5.3 accuracy points. At 7B/13B, against the strongest baseline Bolaco, the accuracy margins are −0.41, +0.19, +0.04 and +1.48 points. The perplexity gains are large everywhere, so the question is whether the prime-neuron concentration gets sharper in bigger models. That would be worth measuring before trusting the method on a model family it wasn't tuned for.</p><p class="t-ko">이득은 규모와 함께 커지는데, 논문은 그 이유를 묻지 않는다. 70B/30%에서 SoLA는 SVD-LLM의 perplexity를 36% 줄이고(6.95 → 4.44) 정확도를 5.3점 올린다. 반면 7B/13B에서 가장 강한 베이스라인 Bolaco 대비 정확도 차이는 −0.41, +0.19, +0.04, +1.48점이다. perplexity 이득은 어디서나 크므로, 남는 질문은 prime-neuron 집중도가 큰 모델일수록 더 날카로워지는가다. 튜닝되지 않은 모델 계열에 이 기법을 믿고 쓰기 전에 재볼 가치가 있다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">"Keep a few components exact, approximate the rest" keeps turning up in this archive's compression thread. R-Sparse (2504.19449, a must-read here) applies it to activations at inference time with a rank-aware split; SoLA applies it statically to weights, one neuron at a time; AnchorKV and DepthWeave-KV apply it to the KV cache as anchor plus residual. SoLA's version is the cheapest because the mask is fixed offline, but it is also input-agnostic: a neuron that is marginal on WikiText can be prime on code. The only calibration-domain test in the paper is WikiText2 vs C4, and there is no code or math evaluation.</p><p class="t-ko">"소수만 정확히 남기고 나머지는 근사한다"는 패턴이 이 아카이브의 압축 계열에서 계속 등장한다. R-Sparse(2504.19449, 여기 머스트리드)는 추론 시점의 활성값에 랭크 인식 분할로 적용하고, SoLA는 가중치에 뉴런 단위로 정적으로 적용하며, AnchorKV와 DepthWeave-KV는 KV 캐시에 앵커 + 잔차로 적용한다. SoLA 방식은 마스크가 오프라인에서 고정되어 가장 싸지만, 입력에 무관하다는 한계도 있다. WikiText에서 marginal인 뉴런이 코드에서는 prime일 수 있다. 논문의 캘리브레이션 도메인 실험은 WikiText2 vs C4뿐이고, 코드나 수학 평가는 없다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Read the speedup table component by component. On LLaMA-2-7B at 20%, the down projection gets <i>slower</i> after compression (6.66 ms vs 5.09 ms dense), because the split adds a dense prime-neuron matmul on top of two thin factors. The headline 1.22–1.77× totals also leave out the v projection, attention itself and every non-GEMM op, and no end-to-end latency or tokens/s is reported (the limitations section lists it as future work). Treat SoLA as a memory-compression result with a plausible, unproven speed story.</p><p class="t-ko">가속 표는 컴포넌트별로 읽어야 한다. LLaMA-2-7B 20%에서 down projection은 압축 후 오히려 <i>느려진다</i>(6.66 ms vs 원본 5.09 ms). 분할 때문에 얇은 인수 두 개 위에 밀집 prime-neuron 행렬곱이 하나 더 붙기 때문이다. 대표 수치인 1.22~1.77× 합계에는 v projection, 어텐션 연산 자체, GEMM이 아닌 모든 연산이 빠져 있고, end-to-end 지연이나 tokens/s는 보고되지 않는다(한계 절에서 향후 과제로 남겼다). SoLA는 메모리 압축 결과로 보되, 속도 이야기는 그럴듯하지만 입증되지 않은 것으로 받아들이자.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the baseline tables don't survive a cross-check. The Mistral-7B FLAP rows in Table 6 are digit-for-digit identical to the LLaMA-2-70B FLAP rows in Table 2, across all eight task scores at both 20% and 30% (e.g. BoolQ 0.6226, PIQA 0.7231, ARC-c 0.3191 at 20%). Yet Table 3 gives the two models different FLAP perplexities (7.11 vs 8.76). Two different models cannot land on the same eight numbers twice, so one set of rows was copied. The ablation in Table 4 has the same problem. Its "uniform" perplexities are exactly SVD-LLM's Table 3 numbers, and its Mistral "adaptive" accuracies (0.578, 0.491) are exactly SVD-LLM's Table 6 accuracies. Its LLaMA-2-13B/20% row also shows adaptive allocation making perplexity <i>worse</i> (6.18 → 6.52), while the text summarises the ablation as "improves perplexity by 8%–18%". Two smaller points: the abstract's "10%" accuracy gain at 70B/30% is actually +5.3 points (0.6091 → 0.6625, +8.8% relative), and the 70B comparison omits Bolaco, the one baseline that matches or beats SoLA at 7B/13B, because it lacks GQA support. The mechanism is plausible and the perplexity gaps are large, but treat the exact accuracy margins as unverified until someone reproduces them with the released code.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 베이스라인 표들이 교차 검증을 통과하지 못한다. Table 6의 Mistral-7B FLAP 행은 Table 2의 LLaMA-2-70B FLAP 행과 20%·30% 모두에서 과제 점수 8개가 소수점까지 똑같다(예: 20%에서 BoolQ 0.6226, PIQA 0.7231, ARC-c 0.3191). 그런데 Table 3은 두 모델의 FLAP perplexity를 서로 다르게(7.11 vs 8.76) 적는다. 서로 다른 두 모델이 같은 숫자 8개에 두 번이나 도달할 수는 없으니, 어느 한쪽 행이 복사된 것이다. Table 4의 ablation에도 같은 문제가 있다. "uniform" 열의 perplexity는 Table 3의 SVD-LLM 수치와 정확히 같고, Mistral의 "adaptive" 정확도(0.578, 0.491)는 Table 6의 SVD-LLM 정확도와 정확히 같다. LLaMA-2-13B/20% 행에서는 adaptive 배분이 perplexity를 오히려 <i>악화</i>시키는데(6.18 → 6.52), 본문은 ablation을 "perplexity를 8%~18% 개선"이라고 요약한다. 작은 문제도 두 가지 있다. 초록의 70B/30% 정확도 "10%" 향상은 실제로는 +5.3점(0.6091 → 0.6625, 상대 +8.8%)이고, 70B 비교에는 7B/13B에서 SoLA와 대등하거나 앞서는 유일한 베이스라인 Bolaco가 GQA 미지원으로 빠져 있다. 메커니즘은 그럴듯하고 perplexity 격차도 크지만, 정확한 정확도 차이는 누군가 공개 코드로 재현하기 전까지는 검증되지 않은 것으로 보자.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2604.03258">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2604.03258">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2604.03258">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2604.03258">🔎 alphaXiv</a>
+      <a href="https://github.com/xinhaoH/SoLA">💻 Code</a>
+    </div>
+    <span class="t-en">Why picked — <b>venue: AAAI 2025. The 2026-08 wishlist queue is drained and the must-read queue is empty, so this came from the fallback search. Of the 14 compression / low-rank candidates it returned, 9 were already in the archive, and among the rest SoLA was the only one with a verifiable acceptance. arXiv lists no venue, but the PDF's first page carries the AAAI copyright line and the authors' repository is titled "[AAAI 2025]". It sits on two tracked axes at once, Model Compression and Low-rank Decomposition. It is also older than its arXiv date suggests, which makes it the natural predecessor to the 2026 SVD cards here and the weight-space counterpart of the must-read R-Sparse (2504.19449)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-10.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>venue: AAAI 2025. 2026-08 위시리스트 큐가 소진되고 머스트리드 큐도 비어 있어 폴백 검색에서 골랐다. 반환된 압축/저랭크 후보 14편 중 9편은 이미 아카이브에 있었고, 나머지 중 학회 accept를 확인할 수 있는 것은 SoLA 하나뿐이었다. arXiv에는 학회 표기가 없지만, PDF 첫 페이지에 AAAI 저작권 줄이 있고 저자 저장소 제목도 "[AAAI 2025]"다. 추적 중인 두 축, Model Compression과 Low-rank Decomposition에 동시에 걸친다. arXiv 날짜보다 오래된 논문이라는 점도 있어서, 여기 있는 2026년 SVD 카드들의 자연스러운 선행 연구이자 머스트리드 R-Sparse(2504.19449)의 가중치 공간 버전이 된다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-10.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
